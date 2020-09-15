@@ -5,7 +5,7 @@ import uuid
 
 import telebot
 from telebot import types
-
+from db import init_db
 
 from config import token
 
