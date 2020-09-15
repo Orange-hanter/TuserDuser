@@ -6,7 +6,7 @@ import uuid
 import telebot
 from telebot import types
 
-from config import sdir
+
 from config import token
 
 
