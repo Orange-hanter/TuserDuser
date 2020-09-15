@@ -53,5 +53,5 @@ def in_text(message):
 
 
 if __name__ == '__main__': 
-    #init_db()
+    init_db()
     bot.polling()
