@@ -8,7 +8,7 @@ from telebot import types
 
 from config import sdir
 from config import token
-#from db import read_data_in_task, init_db, change_tz, get_user_tz
+
 
 
 bot = telebot.TeleBot(token)
