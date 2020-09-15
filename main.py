@@ -22,6 +22,8 @@ add_event = types.KeyboardButton('Добавить эвент')
 keyboard.add(events_today, events_tommorow,events_onWeek,add_event)
 
 
+event_dict = {}
+
 class Event:
     def __init__(self, description):
         self.description = description
@@ -56,17 +58,21 @@ def in_text(message):
     elif message.text == 'Добавить эвент':
         
         bot.send_message(message.chat.id, "Введите описание", reply_markup=markup)
-        bot.register_next_step_handler(msg, process_descr_step)
+        
+        bot.register_next_step_handler(message, process_descr_step)
         
 
 
 
 def process_descr_step(message):
     try:
+        
         chat_id = message.chat.id
         description = message.text
-        msg = bot.reply_to(message, 'Описание')
-        bot.register_next_step_handler(msg, process_age_step)
+        event = Event(description)
+        event_dict[chat_id] = event
+        msg = bot.reply_to(message, 'Введите дату')
+        bot.register_next_step_handler(msg, process_date_step)
     except Exception as e:
         bot.reply_to(message, 'oooops')
 
@@ -75,10 +81,15 @@ def process_descr_step(message):
 def process_date_step(message):
     try:
         chat_id = message.chat.id
-        description = message.text
-        msg = bot.reply_to(message, 'Описание')
-        bot.register_next_step_handler(msg, process_age_step)
+        event = event_dict[chat_id]
+        date = message.text
+        event.date  =date  
+         
+        
+        
+        bot.send_message(chat_id, 'Хорошо ' + event.description + '\n в:' + str(event.date))
     except Exception as e:
+        print(e)
         bot.reply_to(message, 'oooops')
 
 
