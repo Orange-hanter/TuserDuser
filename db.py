@@ -10,6 +10,6 @@ def init_db():
 
     
 def add_event(description, date, id):
-    c.execute("INSERT INTO employeer (description,date,id) VALUES ('%s','%d','%i')" % (
+    c.execute("INSERT INTO events (description,date,id) VALUES ('%s','%d','%i')" % (
     description, date, id))
     conn.commit()
