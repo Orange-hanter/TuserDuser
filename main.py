@@ -5,7 +5,7 @@ import uuid
 
 import telebot
 from telebot import types
-from db import init_db, get_events_today_db
+from db import init_db, get_events_today_db, add_event_db
 
 from config import token
 
@@ -18,6 +18,14 @@ events_onWeek = types.KeyboardButton('Эвенты на неделе')
 add_event = types.KeyboardButton('Добавить эвент')
 # keyboard1.row(events_today, events_tomorrow,events_onWeek)
 keyboard.add(events_today, events_tomorrow, events_onWeek, add_event)
+
+
+event_dict = {}
+
+class Event:
+    def __init__(self, description):
+        self.description = description
+        self.date = None
 
 
 @bot.message_handler(commands=['start', 'help'])  # Функция отвечает на команды 'start', 'help'
@@ -47,6 +55,39 @@ def in_text(message):
     elif message.text == 'Добавить эвент':
         bot.send_message(message.chat.id, "Что за мероприятие?", reply_markup=markup)
     # Усталь :(
+
+        bot.register_next_step_handler(message, process_descr_step)
+        
+
+
+
+def process_descr_step(message):
+    try:
+        
+        chat_id = message.chat.id
+        description = message.text
+        event = Event(description)
+        event_dict[chat_id] = event
+        msg = bot.reply_to(message, 'Введите дату')
+        bot.register_next_step_handler(msg, process_date_step)
+    except Exception as e:
+        bot.reply_to(message, 'oooops')
+
+        
+
+def process_date_step(message):
+    try:
+        chat_id = message.chat.id
+        event = event_dict[chat_id]
+        date = message.text
+        event.date  =date  
+         
+        bot.send_message(chat_id, 'Хорошо \n' + event.description + '\n когда:' + str(event.date))
+        add_event_db(event.description,event.date)
+    except Exception as e:
+        print(e)
+        bot.reply_to(message, 'oooops')
+
 
 
 if __name__ == '__main__':
