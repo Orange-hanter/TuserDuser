@@ -1,7 +1,7 @@
 import sqlite3
 import datetime
 
-conn = sqlite3.connect("./DB/db.db")
+conn = sqlite3.connect("./DB/db.db", check_same_thread=False)
 print("DB connected")
 
 

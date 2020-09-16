@@ -13,6 +13,7 @@ from config import token
 bot = telebot.TeleBot(token)
 
 keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+
 events_today = types.KeyboardButton('Эвенты на сегодня')
 events_tomorrow = types.KeyboardButton('Эвенты на завтра')
 events_onWeek = types.KeyboardButton('Эвенты на неделе')
@@ -66,7 +67,7 @@ def process_descr_step(message):
     try:
         
         chat_id = message.chat.id
-        description = message.text
+        description = str(message.text)
         event = Event(description)
         event_dict[chat_id] = event
         msg = bot.reply_to(message, 'Введите дату')
@@ -81,7 +82,7 @@ def process_date_step(message):
         chat_id = message.chat.id
         event = event_dict[chat_id]
         date = message.text
-        event.date  = parse(date)
+        event.date  = parse(str(date))
 
         bot.send_message(chat_id, 'Хорошо \n' + event.description + '\n когда:' + str(event.date))
         add_event_db(event.description,event.date)
