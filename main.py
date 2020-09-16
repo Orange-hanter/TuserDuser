@@ -1,4 +1,5 @@
 import datetime
+from dateutil.parser import parse
 import re
 import subprocess
 import uuid
@@ -80,13 +81,13 @@ def process_date_step(message):
         chat_id = message.chat.id
         event = event_dict[chat_id]
         date = message.text
-        event.date  =date  
-         
+        event.date  = parse(date)
+
         bot.send_message(chat_id, 'Хорошо \n' + event.description + '\n когда:' + str(event.date))
         add_event_db(event.description,event.date)
     except Exception as e:
         print(e)
-        bot.reply_to(message, 'oooops')
+        bot.reply_to(message, 'введите дату в формате')
 
 
 
