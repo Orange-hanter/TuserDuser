@@ -1,4 +1,5 @@
 import datetime
+from datetime import date
 from dateutil.parser import parse
 import re
 import subprocess
@@ -9,7 +10,7 @@ from db import init_db, \
                 get_events_today_db, \
                 add_event_db, \
                 get_events_by_day_db, \
-                get_events_by_period_db
+                get_events_by_period_db, add_to_db_tasklist
 from config import token
 
 
@@ -64,12 +65,61 @@ def process_date_step(message):
         bot.reply_to(message, 'Введите дату в формате')     # Что за странная обработка ошибки?
 
 
+# def render_events(events):
+#     rendered_text = ''
+#     for event in events:
+#         rendered_text += f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
+#     return rendered_text
+
 def render_events(events):
-    rendered_text = ''
+    rendered_text = []
     for event in events:
-        rendered_text += f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
+        rendered_text.append( f"Когда: {event[2]}\nЧто: {event[1]}\n\n")
     return rendered_text
 
+def send_messgage_with_reminder(response,user_id,request):
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
+    keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
+    if request != 'Эвенты на сегодня':
+        keyboard.add(types.InlineKeyboardButton(text='Напомнить завтра', callback_data=' завтра'))
+
+    for msg in response:
+        bot.send_message(user_id, msg, reply_markup=keyboard)
+
+
+def get_datetime(call):
+    text = call.message.text
+    match = re.search(r'\d{4}-\d{2}-\d{2}', text)
+    date = datetime.datetime.strptime(match.group(), '%Y-%m-%d').date()
+    return date
+
+
+
+#TODO доделать, работать будет только в linux
+
+# def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
+#     uid = uuid.uuid4()
+#     print(str(date_time))
+#     cmd = f"""echo "send_message.py {id}  \'{text}\' {uid} '' " | at {date_time}"""
+#     out = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+#     stdout = str(out.communicate())
+#     print(stdout)
+#     number = re.search('job(.+?) at', stdout).group(1)
+#     add_to_db_tasklist(id, number, date_time, text, uid)
+
+@bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
+def callback(call):
+
+
+    if call.data == ' за 15 минут':
+        date_time = get_datetime(call)
+        date_time = date_time - datetime.timedelta(minutes=5)
+        #add_task(call.from_user.id,call.message.text,date_time)
+
+
+    # if call.data == ' за час':
+    # if call.data == ' завтра':
 
 @bot.message_handler(commands=['start', 'help'])
 def start_message(message):
@@ -85,6 +135,8 @@ def start_message(message):
     bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
 
 
+
+
 @bot.message_handler(content_types=['text'])
 def command_handler(message):
     """
@@ -97,17 +149,20 @@ def command_handler(message):
     request = message.text
     print("INPUT MESSAGE: " + message.text)
 
-    if request == 'События сегодня':
+    if request == 'Эвенты на сегодня':
         events = get_events_today_db()
         response = render_events(events) if not events == [] else "Сегодня ничего не проиходит"
-        bot.send_message(user_id, response, reply_markup=markup)
+        #print(response)
+        send_messgage_with_reminder(response, user_id,request)
 
-    elif request == 'События завтра':
+
+
+    elif request == 'Эвенты на завтра':
         events = get_events_by_day_db(tomorrow_date())
         response = render_events(events) if not events == [] else "Завтра ничего не проиходит"
         bot.send_message(user_id, response, reply_markup=markup)
 
-    elif request == 'События на неделе':
+    elif request == 'Эвенты на неделе':
         events = get_events_by_period_db(tomorrow_date(), datetime.timedelta(days=7))
         response = render_events(events) if not events == [] else "На неделе ничего не проиходит"
         bot.send_message(user_id, response, reply_markup=markup)

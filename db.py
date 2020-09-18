@@ -14,6 +14,10 @@ def init_db():
                                             );"""
     cursor = conn.cursor()
     cursor.execute(request)
+    cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE)""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS 'tasklist'
+                                  (id text, number text, time text, text text, uid text)
+                               """)
     conn.commit()
     # filling the data storage by random test values
     # put_test_data_to_db()
@@ -58,6 +62,12 @@ def put_test_data_to_db():
         conn.commit()
     cursor.close()
 
+def add_to_db_tasklist(chatid, number, time, text, uid):  # Функция добавляет данные в таблицу 'tasklist'
+    conn = sqlite3.connect("./DB/db.db")
+    cursor = conn.cursor()
+    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{number}', '{time}', '{text}', '{uid}')"""
+    cursor.execute(ins)
+    conn.commit()
 
 if __name__ == '__main__':
     # put_test_data_to_db()
