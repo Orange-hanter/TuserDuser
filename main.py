@@ -68,11 +68,7 @@ def process_date_step(message):
         bot.reply_to(message, 'Введите дату в формате')     # Что за странная обработка ошибки?
 
 
-# def render_events(events):
-#     rendered_text = ''
-#     for event in events:
-#         rendered_text += f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
-#     return rendered_text
+
 
 def render_events(events):
     rendered_text = []
