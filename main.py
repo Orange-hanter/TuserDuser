@@ -176,8 +176,8 @@ def command_handler(message):
         bot.register_next_step_handler(message, add_new_event_proc)
         #print(get_user_role(user_id)[0][0]=='admin')
 
-
-        # if get_user_role(user_id)[0][0] == 'admin':
+        role = get_user_role(user_id)[0][0]
+        # if role == 'admin' or role == 'client:
         #     bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
         #     bot.register_next_step_handler(message, add_new_event_proc)
         # else:
