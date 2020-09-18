@@ -27,7 +27,7 @@ def init_db():
 
 def add_event_db(description, date, url):
     cursor = conn.cursor()
-    cursor.execute(f"INSERT INTO events (description, date) VALUES ('{description}', '{date}')")
+    cursor.execute(f"INSERT INTO events (description, date, url) VALUES ('{description}', '{date}', '{url}')")
     conn.commit()
     cursor.close()
 
@@ -92,4 +92,5 @@ def get_user_role(id):
 
 if __name__ == '__main__':
     # put_test_data_to_db()
+    init_db()
     add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(), 'https://somegans.site/') # немного крипипаст

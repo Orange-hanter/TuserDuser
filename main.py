@@ -88,7 +88,7 @@ def render_events(events):
     return rendered_text
 
 
-def send_messgage_with_reminder(response, user_id, request, event_url):
+def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url):
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
     keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
@@ -98,8 +98,18 @@ def send_messgage_with_reminder(response, user_id, request, event_url):
 
     url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
     keyboard.add(url_button)
-    for msg in response:
-        bot.send_message(user_id, msg, reply_markup=keyboard)
+
+    bot.send_message(user_id, messgage, reply_markup=keyboard)
+
+def process_messages(events, user_id, request):
+    for event in events:
+        print(event)
+        event_url = event[3]
+        messgage = f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
+
+        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url)
+
+
 
 
 def get_datetime(call):
@@ -145,6 +155,7 @@ def start_message(message):
     bot_description = f"Привет, я бот котрый напомнит тебе о мероприятиях Бреста. " \
                       f"Если хочешь узнать что сегодня будет интересного нажми кнопку {button_name['Start']}\n"
     bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
+
     add_user(message.chat.id, 'user')
 
 
@@ -162,11 +173,12 @@ def command_handler(message):
 
     if request == 'События сегодня':
         events = get_events_today_db()
-        event_url = events[3]
-        event_date = events[2]
+        print(events)
+        event_url = 'https://somegans.site/'
+
         response = render_events(events) if not events == [] else "Сегодня ничего не проиходит"
         # print(response)
-        send_messgage_with_reminder(response, user_id, request, event_url)
+        process_messages(events, user_id, request)
 
 
 
