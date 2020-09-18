@@ -10,7 +10,7 @@ from db import init_db, \
                 get_events_today_db, \
                 add_event_db, \
                 get_events_by_day_db, \
-                get_events_by_period_db, add_to_db_tasklist
+                get_events_by_period_db, add_to_db_tasklist, add_user,get_user_role
 from config import token
 
 
@@ -31,16 +31,19 @@ def tomorrow_date():
 
 def init_bot():
     global keyboard
+    global admin_keyboard
     keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    admin_keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
 
     events_today = types.KeyboardButton('События сегодня')
     events_tomorrow = types.KeyboardButton('События завтра')
     events_on_week = types.KeyboardButton('События на неделе')
+
     add_event = types.KeyboardButton('Добавить эвент')
 
     # keyboard1.row(events_today, events_tomorrow,events_onWeek)
     keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
-
+    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
 
 def add_new_event_proc(message):
     try:
@@ -133,7 +136,7 @@ def start_message(message):
     bot_description = f"Привет, я бот котрый напомнит тебе о мероприятиях Бреста. " \
                       f"Если хочешь узнать что сегодня будет интересного нажми кнопку {button_name['Start']}\n"
     bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
-
+    add_user(message.chat.id,'user')
 
 
 
@@ -149,7 +152,7 @@ def command_handler(message):
     request = message.text
     print("INPUT MESSAGE: " + message.text)
 
-    if request == 'Эвенты на сегодня':
+    if request == 'События сегодня':
         events = get_events_today_db()
         response = render_events(events) if not events == [] else "Сегодня ничего не проиходит"
         #print(response)
@@ -157,20 +160,28 @@ def command_handler(message):
 
 
 
-    elif request == 'Эвенты на завтра':
+    elif request == 'События  завтра':
         events = get_events_by_day_db(tomorrow_date())
         response = render_events(events) if not events == [] else "Завтра ничего не проиходит"
         bot.send_message(user_id, response, reply_markup=markup)
 
-    elif request == 'Эвенты на неделе':
+    elif request == 'События на неделе':
         events = get_events_by_period_db(tomorrow_date(), datetime.timedelta(days=7))
         response = render_events(events) if not events == [] else "На неделе ничего не проиходит"
         bot.send_message(user_id, response, reply_markup=markup)
 
     elif request == 'Добавить эвент':
+        # Пока оставлю так
         bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
         bot.register_next_step_handler(message, add_new_event_proc)
+        #print(get_user_role(user_id)[0][0]=='admin')
 
+
+        # if get_user_role(user_id)[0][0] == 'admin':
+        #     bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
+        #     bot.register_next_step_handler(message, add_new_event_proc)
+        # else:
+        #     bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
 
 if __name__ == '__main__':
     init_db()

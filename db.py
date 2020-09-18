@@ -14,7 +14,7 @@ def init_db():
                                             );"""
     cursor = conn.cursor()
     cursor.execute(request)
-    cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE)""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE, role TEXT)""")
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'tasklist'
                                   (id text, number text, time text, text text, uid text)
                                """)
@@ -68,6 +68,26 @@ def add_to_db_tasklist(chatid, number, time, text, uid):  # Функция до�
     ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{number}', '{time}', '{text}', '{uid}')"""
     cursor.execute(ins)
     conn.commit()
+
+
+def add_user(id, role):
+    conn = sqlite3.connect("./DB/db.db")
+    cursor = conn.cursor()
+    ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}')"""
+    cursor.execute(ins)
+    conn.commit()
+
+def get_user_role(id):
+    request = f"""SELECT role 
+                        FROM users 
+                        WHERE id = '{id}'
+                    """
+    cursor = conn.cursor()
+    cursor.execute(request)
+    user_role = cursor.fetchall()
+    cursor.close()
+    return user_role
+
 
 if __name__ == '__main__':
     # put_test_data_to_db()
