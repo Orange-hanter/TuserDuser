@@ -96,7 +96,7 @@ def send_messgage_with_reminder(response, user_id, request, event_url):
     if request != 'Эвенты на сегодня':
         keyboard.add(types.InlineKeyboardButton(text='Напомнить завтра', callback_data=' завтра'))
 
-    url_button = types.InlineKeyboardButton(text="Ссылка", url="https://somegans.site")  # немного крипипаст
+    url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
     keyboard.add(url_button)
     for msg in response:
         bot.send_message(user_id, msg, reply_markup=keyboard)
@@ -126,6 +126,7 @@ def callback(call):
     if call.data == ' за 15 минут':
         date_time = get_datetime(call)
         date_time = date_time - datetime.timedelta(minutes=5)
+        print(call)
         # add_task(call.from_user.id,call.message.text,date_time)
 
     # if call.data == ' за час':
