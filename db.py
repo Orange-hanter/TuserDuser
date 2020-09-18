@@ -10,7 +10,8 @@ def init_db():
                                             id          INTEGER  UNIQUE
                                             PRIMARY KEY AUTOINCREMENT,
                                             description TEXT,
-                                            date        DATETIME
+                                            date        DATETIME,
+                                            url         TEXT
                                             );"""
     cursor = conn.cursor()
     cursor.execute(request)
@@ -24,7 +25,7 @@ def init_db():
     cursor.close()
 
 
-def add_event_db(description, date):
+def add_event_db(description, date, url):
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO events (description, date) VALUES ('{description}', '{date}')")
     conn.commit()

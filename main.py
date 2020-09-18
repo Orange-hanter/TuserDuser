@@ -7,10 +7,10 @@ import uuid
 import telebot
 from telebot import types
 from db import init_db, \
-                get_events_today_db, \
-                add_event_db, \
-                get_events_by_day_db, \
-                get_events_by_period_db, add_to_db_tasklist, add_user,get_user_role
+    get_events_today_db, \
+    add_event_db, \
+    get_events_by_day_db, \
+    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role
 from config import token
 
 
@@ -18,6 +18,7 @@ class Event:
     def __init__(self, description):
         self.description = description
         self.date = None
+        self.url = None
 
 
 bot = telebot.TeleBot(token)
@@ -45,6 +46,7 @@ def init_bot():
     keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
     admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
 
+
 def add_new_event_proc(message):
     try:
         event = Event(str(message.text))
@@ -61,28 +63,41 @@ def process_date_step(message):
         event = event_dict[chat_id]
         event.date = parse(str(message.text)).date()
         print(parse(str(message.text)))
-        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + str(event.date))
-        add_event_db(event.description, event.date)
+
+
     except Exception as e:
         print("Exception: " + str(e))
-        bot.reply_to(message, 'Введите дату в формате')     # Что за странная обработка ошибки?
+        bot.reply_to(message, 'Введите дату в формате')  # Что за странная обработка ошибки?
 
 
+def add_new_event_url(message):
+    try:
+        chat_id = message.chat.id
+        event = event_dict[chat_id]
+        event.url = str(message.text)
+        add_event_db(event.description, event.date, event.url)
+        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + str(event.date))
+    except Exception as e:
+        bot.reply_to(message, 'Oooops: ' + str(e))
 
 
 def render_events(events):
     rendered_text = []
     for event in events:
-        rendered_text.append( f"Когда: {event[2]}\nЧто: {event[1]}\n\n")
+        rendered_text.append(f"Когда: {event[2]}\nЧто: {event[1]}\n\n")
     return rendered_text
 
-def send_messgage_with_reminder(response,user_id,request):
+
+def send_messgage_with_reminder(response, user_id, request, event_url):
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
     keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
+
     if request != 'Эвенты на сегодня':
         keyboard.add(types.InlineKeyboardButton(text='Напомнить завтра', callback_data=' завтра'))
 
+    url_button = types.InlineKeyboardButton(text="Ссылка", url="https://somegans.site")  # немного крипипаст
+    keyboard.add(url_button)
     for msg in response:
         bot.send_message(user_id, msg, reply_markup=keyboard)
 
@@ -94,8 +109,7 @@ def get_datetime(call):
     return date
 
 
-
-#TODO доделать, работать будет только в linux
+# TODO доделать, работать будет только в linux
 
 # def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
 #     uid = uuid.uuid4()
@@ -109,16 +123,14 @@ def get_datetime(call):
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def callback(call):
-
-
     if call.data == ' за 15 минут':
         date_time = get_datetime(call)
         date_time = date_time - datetime.timedelta(minutes=5)
-        #add_task(call.from_user.id,call.message.text,date_time)
-
+        # add_task(call.from_user.id,call.message.text,date_time)
 
     # if call.data == ' за час':
     # if call.data == ' завтра':
+
 
 @bot.message_handler(commands=['start', 'help'])
 def start_message(message):
@@ -132,8 +144,7 @@ def start_message(message):
     bot_description = f"Привет, я бот котрый напомнит тебе о мероприятиях Бреста. " \
                       f"Если хочешь узнать что сегодня будет интересного нажми кнопку {button_name['Start']}\n"
     bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
-    add_user(message.chat.id,'user')
-
+    add_user(message.chat.id, 'user')
 
 
 @bot.message_handler(content_types=['text'])
@@ -150,9 +161,11 @@ def command_handler(message):
 
     if request == 'События сегодня':
         events = get_events_today_db()
+        event_url = events[3]
+        event_date = events[2]
         response = render_events(events) if not events == [] else "Сегодня ничего не проиходит"
-        #print(response)
-        send_messgage_with_reminder(response, user_id,request)
+        # print(response)
+        send_messgage_with_reminder(response, user_id, request, event_url)
 
 
 
@@ -170,7 +183,7 @@ def command_handler(message):
         # Пока оставлю так
         bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
         bot.register_next_step_handler(message, add_new_event_proc)
-        #print(get_user_role(user_id)[0][0]=='admin')
+        # print(get_user_role(user_id)[0][0]=='admin')
 
         role = get_user_role(user_id)[0][0]
         # if role == 'admin' or role == 'client:
@@ -178,6 +191,7 @@ def command_handler(message):
         #     bot.register_next_step_handler(message, add_new_event_proc)
         # else:
         #     bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
+
 
 if __name__ == '__main__':
     init_db()
