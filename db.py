@@ -17,7 +17,7 @@ def init_db():
     cursor.execute(request)
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE, role TEXT)""")
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'tasklist'
-                                  (id text, number text, time text, text text, uid text)
+                                  (id text, time text, text text, uid text)
                                """)
     conn.commit()
     # filling the data storage by random test values
@@ -31,6 +31,16 @@ def add_event_db(description, date, url):
     conn.commit()
     cursor.close()
 
+def get_event_by_id(event_id):
+    request = f"""SELECT * 
+                        FROM events 
+                        WHERE id = '{event_id}'
+                    """
+    cursor = conn.cursor()
+    cursor.execute(request)
+    event = cursor.fetchall()
+    cursor.close()
+    return event
 
 def get_events_by_day_db(date):
     request = f"""SELECT * 
@@ -63,10 +73,10 @@ def put_test_data_to_db():
         conn.commit()
     cursor.close()
 
-def add_to_db_tasklist(chatid, number, time, text, uid):  # Функция добавляет данные в таблицу 'tasklist'
+def add_to_db_tasklist(chatid, time, text, uid):  # Функция добавляет данные в таблицу 'tasklist'
     conn = sqlite3.connect("./DB/db.db")
     cursor = conn.cursor()
-    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{number}', '{time}', '{text}', '{uid}')"""
+    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}', '{uid}')"""
     cursor.execute(ins)
     conn.commit()
 

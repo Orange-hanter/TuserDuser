@@ -1,5 +1,6 @@
 import datetime
 from datetime import date
+import os
 from dateutil.parser import parse
 import re
 import subprocess
@@ -10,7 +11,7 @@ from db import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
-    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role
+    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role,get_event_by_id
 from config import token
 
 
@@ -25,8 +26,9 @@ bot = telebot.TeleBot(token)
 event_dict = {}
 keyboard = None
 
-#для связи id эвента и id сообщения в будущем скорее всего будет в бд
+# для связи id эвента и id сообщения в будущем скорее всего будет в бд
 event_id_and_message_id = {}
+
 
 def tomorrow_date():
     return datetime.date.today() + datetime.timedelta(days=1)
@@ -102,20 +104,20 @@ def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, e
     keyboard.add(url_button)
 
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
-    event_id_and_message_id[event_id].append(message_id)
+    # event_id_and_message_id[event_id].append(message_id)
+    event_id_and_message_id.update({message_id: event_id})
 
 
 def process_messages(events, user_id, request):
     for event in events:
-        #print(event)
+        # print(event)
         event_id = event[0]
         event_url = event[3]
-        event_id_and_message_id.update({event_id:[]})
+        # event_id_and_message_id.update({event_id: []})
+
         messgage = f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
 
-        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url,event_id)
-
-
+        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id)
 
 
 def get_datetime(call):
@@ -125,25 +127,30 @@ def get_datetime(call):
     return date
 
 
-# TODO доделать, работать будет только в linux
 
-# def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
-#     uid = uuid.uuid4()
-#     print(str(date_time))
-#     cmd = f"""echo "send_message.py {id}  \'{text}\' {uid} '' " | at {date_time}"""
-#     out = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-#     stdout = str(out.communicate())
-#     print(stdout)
-#     number = re.search('job(.+?) at', stdout).group(1)
-#     add_to_db_tasklist(id, number, date_time, text, uid)
+
+def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
+    uid = uuid.uuid4()
+
+    # cmd = f"""echo "send_message.py {id}  \'{text}\' {uid} '' " | at {date_time}"""
+    cmd = ['python3', 'send_message.py', str(id), str(text), '| at', str(date_time)]
+    out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    stdout = str(out.communicate())
+    # number = re.search('job(.+?) at', stdout).group(1)
+    add_to_db_tasklist(id, date_time, text, uid)
+
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def callback(call):
     if call.data == ' за 15 минут':
-        date_time = get_datetime(call)
-        date_time = date_time - datetime.timedelta(minutes=5)
-        #print(call)
-        # add_task(call.from_user.id,call.message.text,date_time)
+        event_id = event_id_and_message_id[call.message.message_id]
+
+        date_time = parse(get_event_by_id(event_id)[0][2])
+        print(date_time)
+        date_time = date_time + datetime.timedelta(minutes=1)
+        date_time = date_time.strftime("%H:%M %m%d%y")
+        print(date_time)
+        add_task(call.from_user.id, call.message.text, date_time)
 
     # if call.data == ' за час':
     # if call.data == ' завтра':
@@ -179,8 +186,9 @@ def command_handler(message):
 
     if request == 'События сегодня':
         events = get_events_today_db()
+        print(events)
 
-        response = render_events(events) if not events == [] else "Сегодня ничего не проиходит"
+        render_events(events) if not events == [] else "Сегодня ничего не проиходит"
         # print(response)
         process_messages(events, user_id, request)
 
