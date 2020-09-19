@@ -162,7 +162,7 @@ def callback(call):
 
         date_time = parse(get_event_by_id(event_id)[0][2])
         print(date_time)
-        date_time = date_time + datetime.timedelta(minutes=1)
+        date_time = date_time - datetime.timedelta(minutes=15)
         date_time = date_time.strftime("%H:%M %m%d%y")
         print(date_time)
         add_task(call.from_user.id, call.message.text, date_time)
