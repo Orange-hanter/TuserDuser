@@ -20,6 +20,7 @@ class Event:
         self.description = description
         self.date = None
         self.url = None
+        self.time = None
 
 
 bot = telebot.TeleBot(token)
@@ -67,20 +68,34 @@ def process_date_step(message):
         event = event_dict[chat_id]
         event.date = parse(str(message.text)).date()
         print(parse(str(message.text)))
-
+        msg = bot.reply_to(message, 'Введите время (ЧЧ/ММ)')
+        bot.register_next_step_handler(msg, process_time_step)
 
     except Exception as e:
         print("Exception: " + str(e))
-        bot.reply_to(message, 'Введите дату в формате')  # Что за странная обработка ошибки?
+        bot.reply_to(message, 'Введите время в формате (ЧЧ/ММ)')
 
+def process_time_step(message):
+    try:
+        chat_id = message.chat.id
+        event = event_dict[chat_id]
+        event.time = parse(str(message.text)).time()
+        print(parse(str(message.text)))
+        msg = bot.reply_to(message, 'Введите ссылку')
+        bot.register_next_step_handler(msg, add_new_event_url)
+
+    except Exception as e:
+        print("Exception: " + str(e))
+        bot.reply_to(message, 'Oooops'+ str(e))
 
 def add_new_event_url(message):
     try:
         chat_id = message.chat.id
         event = event_dict[chat_id]
         event.url = str(message.text)
-        add_event_db(event.description, event.date, event.url)
-        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + str(event.date))
+        date_time_event = event.time +' '+ event.date
+        add_event_db(event.description, date_time_event, event.url)
+        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + str(date_time_event))
     except Exception as e:
         bot.reply_to(message, 'Oooops: ' + str(e))
 
