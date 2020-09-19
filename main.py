@@ -25,6 +25,8 @@ bot = telebot.TeleBot(token)
 event_dict = {}
 keyboard = None
 
+#для связи id эвента и id сообщения в будущем скорее всего будет в бд
+event_id_and_message_id = {}
 
 def tomorrow_date():
     return datetime.date.today() + datetime.timedelta(days=1)
@@ -88,7 +90,7 @@ def render_events(events):
     return rendered_text
 
 
-def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url):
+def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id):
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
     keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
@@ -99,15 +101,19 @@ def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url):
     url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
     keyboard.add(url_button)
 
-    bot.send_message(user_id, messgage, reply_markup=keyboard)
+    message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
+    event_id_and_message_id[event_id].append(message_id)
+
 
 def process_messages(events, user_id, request):
     for event in events:
-        print(event)
+        #print(event)
+        event_id = event[0]
         event_url = event[3]
+        event_id_and_message_id.update({event_id:[]})
         messgage = f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
 
-        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url)
+        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url,event_id)
 
 
 
@@ -136,7 +142,7 @@ def callback(call):
     if call.data == ' за 15 минут':
         date_time = get_datetime(call)
         date_time = date_time - datetime.timedelta(minutes=5)
-        print(call)
+        #print(call)
         # add_task(call.from_user.id,call.message.text,date_time)
 
     # if call.data == ' за час':
@@ -173,8 +179,6 @@ def command_handler(message):
 
     if request == 'События сегодня':
         events = get_events_today_db()
-        print(events)
-        event_url = 'https://somegans.site/'
 
         response = render_events(events) if not events == [] else "Сегодня ничего не проиходит"
         # print(response)
