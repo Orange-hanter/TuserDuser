@@ -104,4 +104,4 @@ def get_user_role(id):
 if __name__ == '__main__':
     # put_test_data_to_db()
     init_db()
-    add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(),'18:00', 'https://somegans.site/') # немного крипипаст
+    add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(),'20:00', 'https://somegans.site/') # немного крипипаст

@@ -157,9 +157,13 @@ def get_datetime(call):
 def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
     uid = uuid.uuid4()
 
-    cmd = ['at','python3', 'send_message.py', str(id), str(text), str(date_time)]
-    out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    stdout = str(out.communicate())
+    #cmd = ['python3', 'send_message.py', str(id), str(text),'|','at', str(date_time)]
+
+    #out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    cmd = f"python3 send_message.py {str(id)} {str(text)}"
+    subprocess.check_output(["at", str(date_time)], input=cmd.encode())
+    #stdout = str(out.communicate())
     # number = re.search('job(.+?) at', stdout).group(1)
     add_to_db_tasklist(id, date_time, text, uid)
 
