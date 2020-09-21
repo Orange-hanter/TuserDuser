@@ -157,7 +157,7 @@ def get_datetime(call):
 def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
     uid = uuid.uuid4()
 
-    cmd = ['python3', 'send_message.py', str(id), str(text), '| at', str(date_time)]
+    cmd = ['at','python3', 'send_message.py', str(id), str(text), str(date_time)]
     out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout = str(out.communicate())
     # number = re.search('job(.+?) at', stdout).group(1)
@@ -168,10 +168,10 @@ def remind_in(minutes,call):
 
     date_time = parse(get_event_by_id(event_id)[0][2])
     time = parse(get_event_by_id(event_id)[0][3])
-    print(time)
-    date_time = date_time - datetime.timedelta(minutes=minutes)
+    print('time: '+str(time))
+    date_time = time - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
-    # print(date_time)
+    print(date_time)
     add_task(call.from_user.id, call.message.text, date_time)
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
