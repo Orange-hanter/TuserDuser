@@ -11,6 +11,7 @@ def init_db():
                                             PRIMARY KEY AUTOINCREMENT,
                                             description TEXT,
                                             date        DATETIME,
+                                            time        DATETIME,
                                             url         TEXT
                                             );"""
     cursor = conn.cursor()
@@ -25,9 +26,9 @@ def init_db():
     cursor.close()
 
 
-def add_event_db(description, date, url):
+def add_event_db(description, date, time, url):
     cursor = conn.cursor()
-    cursor.execute(f"INSERT INTO events (description, date, url) VALUES ('{description}', '{date}', '{url}')")
+    cursor.execute(f"INSERT INTO events (description, date,time , url) VALUES ('{description}', '{date}','{time}', '{url}')")
     conn.commit()
     cursor.close()
 
@@ -103,4 +104,4 @@ def get_user_role(id):
 if __name__ == '__main__':
     # put_test_data_to_db()
     init_db()
-    add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(), 'https://somegans.site/') # немного крипипаст
+    add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(),'18:00', 'https://somegans.site/') # немного крипипаст

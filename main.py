@@ -49,6 +49,7 @@ def init_bot():
 
     # keyboard1.row(events_today, events_tomorrow,events_onWeek)
     keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
+
     admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
 
 
@@ -94,7 +95,7 @@ def add_new_event_url(message):
         event = event_dict[chat_id]
         event.url = str(message.text)
         date_time_event = event.time +' '+ event.date
-        add_event_db(event.description, date_time_event, event.url)
+        add_event_db(event.description, event.date, event.time, event.url)
         bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + str(date_time_event))
     except Exception as e:
         bot.reply_to(message, 'Oooops: ' + str(e))
@@ -107,13 +108,21 @@ def render_events(events):
     return rendered_text
 
 
-def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id):
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
-    keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
+def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id,date_time):
 
-    if request != 'Эвенты на сегодня':
-        keyboard.add(types.InlineKeyboardButton(text='Напомнить завтра', callback_data=' завтра'))
+    event_date = parse(get_event_by_id(event_id)[0][3])
+    print(date_time)
+    keyboard = types.InlineKeyboardMarkup()
+
+    now = datetime.datetime.now()  # Now
+    duration = event_date - now  # For build-in functions
+    duration_in_s = duration.total_seconds()
+    minutes = divmod(duration_in_s, 60)[0]
+
+    if minutes > 15:
+        keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
+    if minutes > 60:
+        keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
 
     url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
     keyboard.add(url_button)
@@ -127,12 +136,13 @@ def process_messages(events, user_id, request):
     for event in events:
         # print(event)
         event_id = event[0]
-        event_url = event[3]
+        event_url = event[4]
+        date_time = event[2]
         # event_id_and_message_id.update({event_id: []})
 
-        messgage = f"Когда: {event[2]}\nЧто: {event[1]}\n\n"
+        messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
 
-        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id)
+        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id,date_time)
 
 
 def get_datetime(call):
@@ -147,28 +157,30 @@ def get_datetime(call):
 def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
     uid = uuid.uuid4()
 
-    # cmd = f"""echo "send_message.py {id}  \'{text}\' {uid} '' " | at {date_time}"""
     cmd = ['python3', 'send_message.py', str(id), str(text), '| at', str(date_time)]
     out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout = str(out.communicate())
     # number = re.search('job(.+?) at', stdout).group(1)
     add_to_db_tasklist(id, date_time, text, uid)
 
+def remind_in(minutes,call):
+    event_id = event_id_and_message_id[call.message.message_id]
+
+    date_time = parse(get_event_by_id(event_id)[0][2])
+    time = parse(get_event_by_id(event_id)[0][3])
+    print(time)
+    date_time = date_time - datetime.timedelta(minutes=minutes)
+    date_time = date_time.strftime("%H:%M %m%d%y")
+    # print(date_time)
+    add_task(call.from_user.id, call.message.text, date_time)
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def callback(call):
     if call.data == ' за 15 минут':
-        event_id = event_id_and_message_id[call.message.message_id]
+        remind_in(15, call)
 
-        date_time = parse(get_event_by_id(event_id)[0][2])
-        print(date_time)
-        date_time = date_time - datetime.timedelta(minutes=15)
-        date_time = date_time.strftime("%H:%M %m%d%y")
-        print(date_time)
-        add_task(call.from_user.id, call.message.text, date_time)
-
-    # if call.data == ' за час':
-    # if call.data == ' завтра':
+    if call.data == ' за час':
+        remind_in(60, call)
 
 
 @bot.message_handler(commands=['start', 'help'])
