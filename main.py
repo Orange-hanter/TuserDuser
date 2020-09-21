@@ -162,9 +162,9 @@ def add_task(id, text, date_time):  # Функция создают задачу
     #out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     cmd = f"python3 send_message.py {str(id)} {str(text)}"
-    subprocess.check_output(["at", str(date_time)], input=cmd.encode())
+    out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(),stderr=subprocess.STDOUT)
     #stdout = str(out.communicate())
-    # number = re.search('job(.+?) at', stdout).group(1)
+    number = int(re.search('job(.+?) at', out).group(1))
     add_to_db_tasklist(id, date_time, text, uid)
 
 def remind_in(minutes,call):
