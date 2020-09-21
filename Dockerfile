@@ -24,5 +24,5 @@ CMD [ "python", "/app/main.py" ]
 
 #how to run
 #docker build -t telegram_bot .
-#docker run --name bot --restart="always" telegram_bot
+#docker run -it --name bot --rm telegram_bot
 
