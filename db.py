@@ -62,7 +62,13 @@ def get_events_today_db():
 
 
 def get_events_by_period_db(date_start, date_end):
-    return []
+    numdays = date_end - date_start
+    events =[]
+    date_list = [date_start + datetime.timedelta(days=x) for x in range(numdays)]
+    for date in date_list:
+        events.append(get_events_by_day_db(date))
+
+    return events
 
 
 def put_test_data_to_db():

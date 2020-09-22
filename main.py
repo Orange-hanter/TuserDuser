@@ -262,18 +262,25 @@ def command_handler(message):
         else:
             bot.send_message(user_id, "Сегодня ничего не проиходит", reply_markup=markup)
 
-
-
-
     elif request == 'События  завтра':
         events = get_events_by_day_db(tomorrow_date())
-        response = render_events(events) if not events == [] else "Завтра ничего не проиходит"
-        bot.send_message(user_id, response, reply_markup=markup)
+        if not events == []:
+            # print(response)
+            process_messages(events, user_id, request)
+        else:
+            bot.send_message(user_id, "Сегодня ничего не проиходит", reply_markup=markup)
 
     elif request == 'События на неделе':
-        events = get_events_by_period_db(tomorrow_date(), datetime.timedelta(days=7))
-        response = render_events(events) if not events == [] else "На неделе ничего не проиходит"
-        bot.send_message(user_id, response, reply_markup=markup)
+        dt = tomorrow_date()
+        weekstart = dt - datetime.timedelta(days=dt.weekday())
+        weekend = weekstart + datetime.timedelta(days=6)
+        events = get_events_by_period_db(tomorrow_date(), weekend)
+        if not events == []:
+            # print(response)
+            process_messages(events, user_id, request)
+        else:
+            bot.send_message(user_id, "На неделе ничего не проиходит", reply_markup=markup)
+
 
     elif request == 'Добавить эвент':
         # Пока оставлю так
@@ -283,10 +290,10 @@ def command_handler(message):
 
         role = get_user_role(user_id)[0][0]
         if role == 'admin' or role == 'client':
-             bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
-             bot.register_next_step_handler(message, add_new_event_proc)
+            bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
+            bot.register_next_step_handler(message, add_new_event_proc)
         else:
-             bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
+            bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
 
 
 if __name__ == '__main__':
