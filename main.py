@@ -229,9 +229,14 @@ def start_message(message):
                    }
     bot_description = f"Привет, я бот котрый напомнит тебе о мероприятиях Бреста. " \
                       f"Если хочешь узнать что сегодня будет интересного нажми кнопку {button_name['Start']}\n"
-    bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
 
-    add_user(message.chat.id, 'user')
+    role = get_user_role(message.chat.id)[0][0]
+    if role == 'admin' or role == 'client':
+        bot.send_message(message.chat.id, bot_description, reply_markup=admin_keyboard)
+    elif role == 'user':
+        bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
+    else:
+        add_user(message.chat.id, 'user')
 
 
 @bot.message_handler(content_types=['text'])
@@ -276,12 +281,12 @@ def command_handler(message):
         bot.register_next_step_handler(message, add_new_event_proc)
         # print(get_user_role(user_id)[0][0]=='admin')
 
-        # role = get_user_role(user_id)[0][0]
-        # if role == 'admin' or role == 'client:
-        #     bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
-        #     bot.register_next_step_handler(message, add_new_event_proc)
-        # else:
-        #     bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
+        role = get_user_role(user_id)[0][0]
+        if role == 'admin' or role == 'client':
+             bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
+             bot.register_next_step_handler(message, add_new_event_proc)
+        else:
+             bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
 
 
 if __name__ == '__main__':

@@ -85,22 +85,29 @@ def add_to_db_tasklist(chatid, time, text, uid, number):  # Функция до�
 
 
 def add_user(id, role):
-    conn = sqlite3.connect("./DB/db.db")
-    cursor = conn.cursor()
-    ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}')"""
-    cursor.execute(ins)
-    conn.commit()
+    try:
+        conn = sqlite3.connect("./DB/db.db")
+        cursor = conn.cursor()
+        ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}')"""
+        cursor.execute(ins)
+        conn.commit()
+    except Exception as e:
+        print("Exception: " + str(e))
 
 def get_user_role(id):
-    request = f"""SELECT role 
-                        FROM users 
-                        WHERE id = '{id}'
-                    """
-    cursor = conn.cursor()
-    cursor.execute(request)
-    user_role = cursor.fetchall()
-    cursor.close()
-    return user_role
+    try:
+        request = f"""SELECT role 
+                            FROM users 
+                            WHERE id = '{id}'
+                        """
+        cursor = conn.cursor()
+        cursor.execute(request)
+        user_role = cursor.fetchall()
+        cursor.close()
+        return user_role
+    except Exception as e:
+        print("Exception: " + str(e))
+        return None
 
 #it's useless for now
 def convert_to_binary_data(filename):
