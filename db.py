@@ -12,13 +12,14 @@ def init_db():
                                             description TEXT,
                                             date        DATETIME,
                                             time        DATETIME,
-                                            url         TEXT
+                                            url         TEXT,
+                                            image_id       TEXT
                                             );"""
     cursor = conn.cursor()
     cursor.execute(request)
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE, role TEXT)""")
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'tasklist'
-                                  (id text, time text, text text, uid text)
+                                  (id text, time text, text text, uid text, number INTEGER)
                                """)
     conn.commit()
     # filling the data storage by random test values
@@ -26,9 +27,10 @@ def init_db():
     cursor.close()
 
 
-def add_event_db(description, date, time, url):
+def add_event_db(description, date, time, url,image_id):
     cursor = conn.cursor()
-    cursor.execute(f"INSERT INTO events (description, date,time , url) VALUES ('{description}', '{date}','{time}', '{url}')")
+
+    cursor.execute(f"INSERT INTO events (description, date,time , url, image_id) VALUES ('{description}', '{date}','{time}', '{url}','{image_id}')")
     conn.commit()
     cursor.close()
 
@@ -74,10 +76,10 @@ def put_test_data_to_db():
         conn.commit()
     cursor.close()
 
-def add_to_db_tasklist(chatid, time, text, uid):  # Функция добавляет данные в таблицу 'tasklist'
+def add_to_db_tasklist(chatid, time, text, uid, number):  # Функция добавляет данные в таблицу 'tasklist'
     conn = sqlite3.connect("./DB/db.db")
     cursor = conn.cursor()
-    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}', '{uid}')"""
+    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}', '{uid}','{number}')"""
     cursor.execute(ins)
     conn.commit()
 
@@ -100,8 +102,15 @@ def get_user_role(id):
     cursor.close()
     return user_role
 
+#it's useless for now
+def convert_to_binary_data(filename):
+    #Convert digital data to binary format
+    with open(filename, 'rb') as file:
+        blobData = file.read()
+    return blobData
+
 
 if __name__ == '__main__':
     # put_test_data_to_db()
     init_db()
-    add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(),'20:00', 'https://somegans.site/') # немного крипипаст
+    add_event_db("Надеюсь получить фидбек :3 ", datetime.date.today(),'20:00', 'https://somegans.site/','AgACAgQAAxkBAAID-V9pspXlh09fm_U3CCk8-hGGyYw2AALqtTEb9l5IUybZYmLv_8eRGLCPIl0AAwEAAwIAA20AA3SeBwABGwQ') # немного крипипаст

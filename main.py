@@ -11,8 +11,10 @@ from db import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
-    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role,get_event_by_id
+    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id
 from config import token
+
+from PIL import Image
 
 
 class Event:
@@ -24,11 +26,20 @@ class Event:
 
 
 bot = telebot.TeleBot(token)
+
 event_dict = {}
 keyboard = None
 
 # для связи id эвента и id сообщения в будущем скорее всего будет в бд
 event_id_and_message_id = {}
+
+
+def listener(messages):
+    for m in messages:
+        print(m)
+
+
+bot.set_update_listener(listener)  # register listener
 
 
 def tomorrow_date():
@@ -76,6 +87,7 @@ def process_date_step(message):
         print("Exception: " + str(e))
         bot.reply_to(message, 'Введите время в формате (ЧЧ/ММ)')
 
+
 def process_time_step(message):
     try:
         chat_id = message.chat.id
@@ -87,16 +99,34 @@ def process_time_step(message):
 
     except Exception as e:
         print("Exception: " + str(e))
-        bot.reply_to(message, 'Oooops'+ str(e))
+        bot.reply_to(message, 'Oooops' + str(e))
+
 
 def add_new_event_url(message):
     try:
         chat_id = message.chat.id
         event = event_dict[chat_id]
         event.url = str(message.text)
-        date_time_event = event.time +' '+ event.date
-        add_event_db(event.description, event.date, event.time, event.url)
-        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + str(date_time_event))
+        msg = bot.reply_to(message, 'Добавьте изображение')
+        bot.register_next_step_handler(msg, add_new_event_image)
+
+    except Exception as e:
+        bot.reply_to(message, 'Oooops: ' + str(e))
+
+
+def add_new_event_image(message):
+    try:
+        chat_id = message.chat.id
+        event = event_dict[chat_id]
+
+        print(message.photo[0].file_id)
+        image_id = None
+        if message.content_type == 'photo':
+            image_id = message.photo[0].file_id
+
+        date_time_event = str(event.time) + ' ' + str(event.date)
+        add_event_db(event.description, event.date, event.time, event.url, image_id)
+        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event)
     except Exception as e:
         bot.reply_to(message, 'Oooops: ' + str(e))
 
@@ -108,8 +138,7 @@ def render_events(events):
     return rendered_text
 
 
-def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id,date_time):
-
+def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id):
     event_date = parse(get_event_by_id(event_id)[0][3])
     print(date_time)
     keyboard = types.InlineKeyboardMarkup()
@@ -126,8 +155,9 @@ def send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, e
 
     url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
     keyboard.add(url_button)
-
+    bot.send_photo(user_id, photo=image_id)
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
+
     # event_id_and_message_id[event_id].append(message_id)
     event_id_and_message_id.update({message_id: event_id})
 
@@ -138,11 +168,12 @@ def process_messages(events, user_id, request):
         event_id = event[0]
         event_url = event[4]
         date_time = event[2]
+        image_id = event[5]
         # event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
 
-        send_messgage_with_reminder_and_url(messgage, user_id, request, event_url, event_id,date_time)
+        send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id)
 
 
 def get_datetime(call):
@@ -152,31 +183,31 @@ def get_datetime(call):
     return date
 
 
-
-
 def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
     uid = uuid.uuid4()
 
-    #cmd = ['python3', 'send_message.py', str(id), str(text),'|','at', str(date_time)]
+    # cmd = ['python3', 'send_message.py', str(id), str(text),'|','at', str(date_time)]
 
-    #out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     cmd = f"python3 send_message.py {str(id)} {str(text)}"
-    out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(),stderr=subprocess.STDOUT)
-    #stdout = str(out.communicate())
+    out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
+    # stdout = str(out.communicate())
     number = int(re.search('job(.+?) at', out).group(1))
-    add_to_db_tasklist(id, date_time, text, uid)
+    add_to_db_tasklist(id, date_time, text, uid, number)
 
-def remind_in(minutes,call):
+
+def remind_in(minutes, call):
     event_id = event_id_and_message_id[call.message.message_id]
 
     date_time = parse(get_event_by_id(event_id)[0][2])
     time = parse(get_event_by_id(event_id)[0][3])
-    print('time: '+str(time))
+    print('time: ' + str(time))
     date_time = time - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
     print(date_time)
     add_task(call.from_user.id, call.message.text, date_time)
+
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def callback(call):
@@ -219,9 +250,13 @@ def command_handler(message):
         events = get_events_today_db()
         print(events)
 
-        render_events(events) if not events == [] else "Сегодня ничего не проиходит"
-        # print(response)
-        process_messages(events, user_id, request)
+        if not events == []:
+            # print(response)
+            process_messages(events, user_id, request)
+
+        else:
+            bot.send_message(user_id, "Сегодня ничего не проиходит", reply_markup=markup)
+
 
 
 
@@ -241,7 +276,7 @@ def command_handler(message):
         bot.register_next_step_handler(message, add_new_event_proc)
         # print(get_user_role(user_id)[0][0]=='admin')
 
-        role = get_user_role(user_id)[0][0]
+        # role = get_user_role(user_id)[0][0]
         # if role == 'admin' or role == 'client:
         #     bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
         #     bot.register_next_step_handler(message, add_new_event_proc)
