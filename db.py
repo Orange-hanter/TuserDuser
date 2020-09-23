@@ -19,7 +19,7 @@ def init_db():
     cursor.execute(request)
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE, role TEXT)""")
     cursor.execute("""CREATE TABLE IF NOT EXISTS 'tasklist'
-                                  (id text, time text, text text, uid text, number INTEGER)
+                                  (id text, time text, text text, uid text, number INTEGER, event_id text)
                                """)
     conn.commit()
     # filling the data storage by random test values
@@ -82,10 +82,10 @@ def put_test_data_to_db():
         conn.commit()
     cursor.close()
 
-def add_to_db_tasklist(chatid, time, text, uid, number):  # Функция добавляет данные в таблицу 'tasklist'
+def add_to_db_tasklist(chatid, time, text, uid, number,event_id):  # Функция добавляет данные в таблицу 'tasklist'
     conn = sqlite3.connect("./DB/db.db")
     cursor = conn.cursor()
-    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}', '{uid}','{number}')"""
+    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}', '{uid}','{number}', '{event_id}')"""
     cursor.execute(ins)
     conn.commit()
 
@@ -114,6 +114,20 @@ def get_user_role(id):
     except Exception as e:
         print("Exception: " + str(e))
         return None
+
+def get_chatid_and_task_number(event_id):
+    request = f"""SELECT chatid,
+                        number  
+                        FROM tasklist 
+                        WHERE event_id = '{event_id}'
+                    """
+    cursor = conn.cursor()
+    cursor.execute(request)
+
+    chatid,number = cursor.fetchall()
+    return chatid,number
+
+
 
 #it's useless for now
 def convert_to_binary_data(filename):

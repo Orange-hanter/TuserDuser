@@ -11,7 +11,7 @@ from db import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
-    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id
+    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, get_chatid_and_task_number
 from config import token
 
 from PIL import Image
@@ -183,7 +183,7 @@ def get_datetime(call):
     return date
 
 
-def add_task(id, text, date_time):  # Функция создают задачу в AT и добавляет ее в бд
+def add_task(id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
     uid = uuid.uuid4()
 
     # cmd = ['python3', 'send_message.py', str(id), str(text),'|','at', str(date_time)]
@@ -194,7 +194,7 @@ def add_task(id, text, date_time):  # Функция создают задачу
     out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
     # stdout = str(out.communicate())
     number = int(re.search('job(.+?) at', out).group(1))
-    add_to_db_tasklist(id, date_time, text, uid, number)
+    add_to_db_tasklist(id, date_time, text, uid, number, event_id)
 
 
 def remind_in(minutes, call):
@@ -206,7 +206,18 @@ def remind_in(minutes, call):
     date_time = time - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
     print(date_time)
-    add_task(call.from_user.id, call.message.text, date_time)
+    add_task(call.from_user.id, call.message.text, date_time, event_id)
+
+
+def cancel_event(event_id):
+    chatids, numbers = get_chatid_and_task_number(event_id)
+
+    for number in numbers:
+        cmd = ['atrm', str(number)]
+        subprocess.check_output(cmd)
+    for chatid in chatids:
+        description = get_event_by_id(event_id[0][0])
+        bot.send_message(chatid, 'Событие отменено:\n' + description)
 
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
