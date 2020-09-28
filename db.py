@@ -34,6 +34,13 @@ def add_event_db(description, date, time, url,image_id):
     conn.commit()
     cursor.close()
 
+def update_photo_id(path,photo_id):
+    cursor = conn.cursor()
+
+    cursor.execute(f"INSERT INTO events (description, date,time , url, image_id) VALUES ('{description}', '{date}','{time}', '{url}','{image_id}')")
+    conn.commit()
+    cursor.close()
+
 def get_event_by_id(event_id):
     request = f"""SELECT * 
                         FROM events 

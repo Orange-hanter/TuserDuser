@@ -79,7 +79,6 @@ def process_date_step(message):
         chat_id = message.chat.id
         event = event_dict[chat_id]
         event.date = parse(str(message.text)).date()
-        print(parse(str(message.text)))
         msg = bot.reply_to(message, 'Введите время (ЧЧ/ММ)')
         bot.register_next_step_handler(msg, process_time_step)
 
@@ -93,7 +92,6 @@ def process_time_step(message):
         chat_id = message.chat.id
         event = event_dict[chat_id]
         event.time = parse(str(message.text)).time()
-        print(parse(str(message.text)))
         msg = bot.reply_to(message, 'Введите ссылку')
         bot.register_next_step_handler(msg, add_new_event_url)
 
@@ -119,7 +117,6 @@ def add_new_event_image(message):
         chat_id = message.chat.id
         event = event_dict[chat_id]
 
-        print(message.photo[0].file_id)
         image_id = None
         if message.content_type == 'photo':
             image_id = message.photo[0].file_id
@@ -140,7 +137,6 @@ def render_events(events):
 
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id):
     event_date = parse(get_event_by_id(event_id)[0][3])
-    print(date_time)
     keyboard = types.InlineKeyboardMarkup()
 
     now = datetime.datetime.now()  # Now
@@ -156,6 +152,7 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
     url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
     keyboard.add(url_button)
     bot.send_photo(user_id, photo=image_id)
+    # print(api_ret)
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
 
     # event_id_and_message_id[event_id].append(message_id)
@@ -244,15 +241,17 @@ def start_message(message):
                    }
     bot_description = f"Привет, я бот котрый напомнит тебе о мероприятиях Бреста. " \
                       f"Если хочешь узнать что сегодня будет интересного нажми кнопку {button_name['Start']}\n"
-    bot.send_message(message.chat.id, bot_description, reply_markup=admin_keyboard)
 
-    # role = get_user_role(message.chat.id)[0][0]
-    # if role == 'admin' or role == 'client':
-    #     bot.send_message(message.chat.id, bot_description, reply_markup=admin_keyboard)
-    # elif role == 'user':
-    #     bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
-    # else:
-    #     add_user(message.chat.id, 'user')
+    try:
+        role = get_user_role(message.chat.id)[0][0]
+        if role == 'admin' or role == 'client':
+            bot.send_message(message.chat.id, bot_description, reply_markup=admin_keyboard)
+        elif role == 'user':
+            bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
+
+    except:
+        add_user(message.chat.id, 'user')
+        bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
 
 
 @bot.message_handler(content_types=['text'])

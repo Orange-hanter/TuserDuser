@@ -5,7 +5,11 @@ import datetime
 import re
 from db import add_event_db
 import urllib.request
+import telebot
+from PIL import Image
+from config import token,test_user
 
+bot = telebot.TeleBot(token)
 
 def get_datetime(call):
     match_date = re.search(r'\d{4}-\d{2}-\d{2}', call)
@@ -26,15 +30,19 @@ def parse_kvitki():
                        str(event))[0]
         name_event = re.findall('<span class="event_short_title"> (.*?)</span></span></span>', str(event))[0]
         match = re.findall('datetime=.*"><span class="mobile_layout_list_mobile_hidden">', str(event))[0]
-        img_url = re.findall(' data-lazysrc=(.*?)src', str(raw_html[0]))[0]
+        img_url = re.findall(' data-lazysrc=(.*?)src', str(event))[0]
 
         date, time = get_datetime(match)
         print(url_event)
         img_path  = f'DB/images/{name_event}.jpg'
         urllib.request.urlretrieve(img_url[1:-2], img_path )
+        print(img_path)
 
+
+        api_ret = bot.send_photo(test_user, open(img_path,'rb'))
+        photo_id = api_ret.photo[0].file_id
         #срезы url это временное решение
-        add_event_db(name_event, date, time, url_event[1:-1], img_path)
+        add_event_db(name_event, date, time, url_event[1:-1], photo_id)
 
 if __name__ == '__main__':
     parse_kvitki()
