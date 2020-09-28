@@ -8,7 +8,7 @@ import urllib.request
 import telebot
 from PIL import Image
 from config import token,test_user
-
+import os
 bot = telebot.TeleBot(token)
 
 def get_datetime(call):
@@ -41,6 +41,7 @@ def parse_kvitki():
 
         api_ret = bot.send_photo(test_user, open(img_path,'rb'))
         photo_id = api_ret.photo[0].file_id
+        os.remove(img_path)
         #срезы url это временное решение
         add_event_db(name_event, date, time, url_event[1:-1], photo_id)
 
