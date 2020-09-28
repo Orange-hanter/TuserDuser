@@ -169,6 +169,10 @@ def process_messages(events, user_id, request):
         event_url = event[4]
         date_time = event[2]
         image_id = event[5]
+
+        if image_id.startswith('DB'):
+            image_id = open(image_id, "rb")
+
         # event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
@@ -273,8 +277,9 @@ def command_handler(message):
         else:
             bot.send_message(user_id, "Сегодня ничего не проиходит", reply_markup=markup)
 
-    elif request == 'События  завтра':
+    elif request == 'События завтра':
         events = get_events_by_day_db(tomorrow_date())
+        print(events)
         if not events == []:
             # print(response)
             process_messages(events, user_id, request)
