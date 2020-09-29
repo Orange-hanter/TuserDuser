@@ -195,10 +195,10 @@ def remind_in(minutes, call):
 
     date_time = parse(get_event_by_id(event_id)[0][2])
     time = parse(get_event_by_id(event_id)[0][3])
-    print('time: ' + str(time))
+    #print('time: ' + str(time))
     date_time = time - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
-    print(date_time)
+    #print(date_time)
     add_task(call.from_user.id, call.message.text, date_time, event_id)
 
 
@@ -260,7 +260,7 @@ def command_handler(message):
 
     if request == 'События сегодня':
         events = get_events_today_db()
-        print(events)
+        #print(events)
 
         if not events == []:
             # print(response)
@@ -271,7 +271,7 @@ def command_handler(message):
 
     elif request == 'События завтра':
         events = get_events_by_day_db(tomorrow_date())
-        print(events)
+        #print(events)
         if not events == []:
             # print(response)
             process_messages(events, user_id, request)
