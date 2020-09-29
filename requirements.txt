@@ -9,5 +9,6 @@ six == 1.15.0
 urllib3 == 1.25.10
 requests == 2.24.0
 pyTelegramBotAPI == 3.7.3
-beautifulsoup4 == 4.9.2
+beautifulsoup4 >= 4.9.2
 lxml
+Pillow~=7.2.0
