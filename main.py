@@ -183,12 +183,11 @@ def get_datetime(call):
 
 
 def add_task(user_id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
-    uid = uuid.uuid4()
     cmd = f"python3 send_message.py {str(user_id)} {str(text)}"
     out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
     # stdout = str(out.communicate())
     number = int(re.search('job(.+?) at', out).group(1))
-    add_to_db_tasklist(user_id, date_time, text, uid, number, event_id)
+    add_to_db_tasklist(user_id, date_time, text, number, event_id)
 
 
 def remind_in(minutes, call):

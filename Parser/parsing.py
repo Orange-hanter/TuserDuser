@@ -10,6 +10,9 @@ from bs4 import BeautifulSoup
 from config import token, test_user
 from db import add_event_db
 
+# этот импорт нужен
+from PIL import Image
+
 bot = telebot.TeleBot(token)
 
 

@@ -6,9 +6,14 @@ try:
     print("DB connected")
 except Exception as e:
     print("DB not connected")
+    print(str(e))
+
 
 
 def init_db():
+    """
+    number номер процесса at к которому можно обратиться для отмены
+    """
     requests = ["""CREATE TABLE IF NOT EXISTS Events (
                                             id          INTEGER  UNIQUE
                                             PRIMARY KEY AUTOINCREMENT,
@@ -19,10 +24,10 @@ def init_db():
                                             image_id    TEXT
                                             );""",
                 "CREATE TABLE IF NOT EXISTS Users (id TEXT UNIQUE, role TEXT);",
-                # TODO: Оставь коменты какое поле за что отвечает в таблице?
-                "CREATE TABLE IF NOT EXISTS TaskList (id text, time text, text text, "  
-                "uid text, number INTEGER, event_id text);",
+                "CREATE TABLE IF NOT EXISTS TaskList (user_id text, time text, text text, "  
+                "number INTEGER, event_id text);",
                 ]
+
     cursor = db_connector.cursor()
     for request in requests:
         cursor.execute(request)
@@ -30,20 +35,24 @@ def init_db():
     # filling the data storage by random test values
     # put_test_data_to_db()
     # проверка на дублирование
-    # request = """CREATE UNIQUE INDEX IDX_M ON events(description, date);"""
-    # cursor = conn.cursor()
-    # cursor.execute(request)
+    request = """CREATE UNIQUE INDEX IDX_EVENT ON events(description, date);"""
+    cursor = db_connector.cursor()
+    cursor.execute(request)
     cursor.close()
 
 
 def add_event_db(description, date, time, url, image_id):
-    cursor = conn.cursor()
+    cursor = db_connector.cursor()
+    try:
+        cursor.execute(
+            f"INSERT INTO events (description, date,time , url, image_id) VALUES ('{description}', '{date}','{time}', "
+            f"'{url}','{image_id}')")
 
-    cursor.execute(
-        f"INSERT INTO events (description, date,time , url, image_id) VALUES ('{description}', '{date}','{time}', "
-        f"'{url}','{image_id}')")
-    conn.commit()
-    cursor.close()
+        db_connector.commit()
+        cursor.close()
+    except Exception as e:
+        print("такое поле уже есть")
+        print(str(e))
 
 
 def get_event_by_id(event_id):
@@ -51,7 +60,7 @@ def get_event_by_id(event_id):
                         FROM events 
                         WHERE id = '{event_id}'
                     """
-    cursor = conn.cursor()
+    cursor = db_connector.cursor()
     cursor.execute(request)
     event = cursor.fetchall()
     cursor.close()
@@ -63,7 +72,7 @@ def get_events_by_day_db(date):
                         FROM events 
                         WHERE date = '{date}'
                     """
-    cursor = conn.cursor()
+    cursor = db_connector.cursor()
     cursor.execute(request)
     event_list = cursor.fetchall()
     cursor.close()
@@ -90,16 +99,16 @@ def put_test_data_to_db():
         for line in file.readlines():
             description = line
             date += datetime.timedelta(days=1)
-            cursor = conn.cursor()
+            cursor = db_connector.cursor()
             cursor.execute(f"INSERT INTO events (description, date) VALUES ('{description}', '{date}')")
-        conn.commit()
+        db_connector.commit()
     cursor.close()
 
 
-def add_to_db_tasklist(chatid, time, text, uid, number, event_id):
+def add_to_db_tasklist(chatid, time, text, number, event_id):
     conn = sqlite3.connect("./DB/db.db")
     cursor = conn.cursor()
-    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}', '{uid}','{number}', '{event_id}')"""
+    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}')"""
     cursor.execute(ins)
     conn.commit()
 
@@ -121,7 +130,7 @@ def get_user_role(id):
                             FROM users 
                             WHERE id = '{id}'
                         """
-        cursor = conn.cursor()
+        cursor = db_connector.cursor()
         cursor.execute(request)
         user_role = cursor.fetchall()
         cursor.close()
@@ -137,7 +146,7 @@ def get_chatid_and_task_number(event_id):
                         FROM tasklist 
                         WHERE event_id = '{event_id}'
                     """
-    cursor = conn.cursor()
+    cursor = db_connector.cursor()
     cursor.execute(request)
 
     chatid, number = cursor.fetchall()
