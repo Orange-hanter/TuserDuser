@@ -1,15 +1,17 @@
-from bs4 import BeautifulSoup
-import requests as req
-import lxml
 import datetime
-import re
-from db import add_event_db
-import urllib.request
-import telebot
-from PIL import Image
-from config import token,test_user
 import os
+import re
+import urllib.request
+
+import requests as req
+import telebot
+from bs4 import BeautifulSoup
+
+from config import token, test_user
+from db import add_event_db
+
 bot = telebot.TeleBot(token)
+
 
 def get_datetime(call):
     match_date = re.search(r'\d{4}-\d{2}-\d{2}', call)
@@ -22,7 +24,7 @@ def parse_kvitki():
     resp = req.get("https://www.kvitki.by/rus/bileti/all/status:insales/city:24814/order:date,asc")
 
     soup = BeautifulSoup(resp.text, "lxml")
-    #raw_html = soup.findAll("div", {"class": "concertslist_page"})[0]
+    # raw_html = soup.findAll("div", {"class": "concertslist_page"})[0]
     raw_html = soup.findAll("div", {"class": "event_short"})
     for event in raw_html:
         url_event = \
@@ -34,16 +36,16 @@ def parse_kvitki():
 
         date, time = get_datetime(match)
         print(url_event)
-        img_path  = f'DB/images/{name_event}.jpg'
-        urllib.request.urlretrieve(img_url[1:-2], img_path )
+        img_path = f'DB/images/{name_event}.jpg'
+        urllib.request.urlretrieve(img_url[1:-2], img_path)
         print(img_path)
 
-
-        api_ret = bot.send_photo(test_user, open(img_path,'rb'))
+        api_ret = bot.send_photo(test_user, open(img_path, 'rb'))
         photo_id = api_ret.photo[0].file_id
         os.remove(img_path)
-        #срезы url это временное решение
+        # срезы url это временное решение
         add_event_db(name_event, date, time, url_event[1:-1], photo_id)
+
 
 if __name__ == '__main__':
     parse_kvitki()

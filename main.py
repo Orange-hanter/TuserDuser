@@ -1,20 +1,18 @@
 import datetime
-from datetime import date
-import os
-from dateutil.parser import parse
 import re
 import subprocess
 import uuid
+
 import telebot
+from dateutil.parser import parse
 from telebot import types
+
+from config import token
 from db import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
     get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, get_chatid_and_task_number
-from config import token
-
-from PIL import Image
 
 
 class Event:
@@ -184,18 +182,13 @@ def get_datetime(call):
     return date
 
 
-def add_task(id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
+def add_task(user_id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
     uid = uuid.uuid4()
-
-    # cmd = ['python3', 'send_message.py', str(id), str(text),'|','at', str(date_time)]
-
-    # out = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-    cmd = f"python3 send_message.py {str(id)} {str(text)}"
+    cmd = f"python3 send_message.py {str(user_id)} {str(text)}"
     out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
     # stdout = str(out.communicate())
     number = int(re.search('job(.+?) at', out).group(1))
-    add_to_db_tasklist(id, date_time, text, uid, number, event_id)
+    add_to_db_tasklist(user_id, date_time, text, uid, number, event_id)
 
 
 def remind_in(minutes, call):
@@ -297,7 +290,6 @@ def command_handler(message):
         else:
             bot.send_message(user_id, "На неделе ничего не проиходит", reply_markup=markup)
 
-
     elif request == 'Добавить эвент':
         # Пока оставлю так
         bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
@@ -305,12 +297,12 @@ def command_handler(message):
         # print(get_user_role(user_id)[0][0]=='admin')
         bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
         bot.register_next_step_handler(message, add_new_event_proc)
-        # role = get_user_role(user_id)[0][0]
-        # if role == 'admin' or role == 'client':
-        #     bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
-        #     bot.register_next_step_handler(message, add_new_event_proc)
-        # else:
-        #     bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
+        role = get_user_role(user_id)[0][0]
+        if role == 'admin' or role == 'client':
+            bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
+            bot.register_next_step_handler(message, add_new_event_proc)
+        else:
+            bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
 
 
 if __name__ == '__main__':
