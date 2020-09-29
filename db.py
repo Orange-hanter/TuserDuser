@@ -1,27 +1,32 @@
 import sqlite3
 import datetime
 
-conn = sqlite3.connect("./DB/db.db", check_same_thread=False)
-print("DB connected")
+try:
+    db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+    print("DB connected")
+except Exception as e:
+    print("DB not connected")
 
 
 def init_db():
-    request = """CREATE TABLE IF NOT EXISTS events (
+    requests = ["""CREATE TABLE IF NOT EXISTS Events (
                                             id          INTEGER  UNIQUE
                                             PRIMARY KEY AUTOINCREMENT,
                                             description TEXT,
                                             date        DATETIME,
                                             time        DATETIME,
                                             url         TEXT,
-                                            image_id       TEXT
-                                            );"""
-    cursor = conn.cursor()
-    cursor.execute(request)
-    cursor.execute("""CREATE TABLE IF NOT EXISTS 'users'(id TEXT UNIQUE, role TEXT)""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS 'tasklist'
-                                  (id text, time text, text text, uid text, number INTEGER, event_id text)
-                               """)
-    conn.commit()
+                                            image_id    TEXT
+                                            );""",
+                "CREATE TABLE IF NOT EXISTS Users (id TEXT UNIQUE, role TEXT);",
+                # TODO: Оставь коменты какое поле за что отвечает в таблице?
+                "CREATE TABLE IF NOT EXISTS TaskList (id text, time text, text text, "  
+                "uid text, number INTEGER, event_id text);",
+                ]
+    cursor = db_connector.cursor()
+    for request in requests:
+        cursor.execute(request)
+    db_connector.commit()
     # filling the data storage by random test values
     # put_test_data_to_db()
     # проверка на дублирование
