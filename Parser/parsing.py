@@ -1,18 +1,19 @@
 import datetime
 import os
+os.chdir('..')
 import re
 import urllib.request
+
 
 import requests as req
 import telebot
 from bs4 import BeautifulSoup
 
 from config import token, test_user
-from db import add_event_db
 
+from db import add_event_db
 # этот импорт нужен
 from PIL import Image
-
 bot = telebot.TeleBot(token)
 
 
@@ -39,7 +40,7 @@ def parse_kvitki():
 
         date, time = get_datetime(match)
         print(url_event)
-        img_path = f'DB/images/{name_event}.jpg'
+        img_path = f'{name_event}.jpg'
         urllib.request.urlretrieve(img_url[1:-2], img_path)
         print(img_path)
 

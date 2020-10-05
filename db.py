@@ -1,13 +1,13 @@
 import sqlite3
 import datetime
-
+import os
 try:
+    print(os.getcwd())
     db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
     print("DB connected")
 except Exception as e:
     print("DB not connected")
     print(str(e))
-
 
 
 def init_db():
@@ -35,7 +35,7 @@ def init_db():
     # filling the data storage by random test values
     # put_test_data_to_db()
     # проверка на дублирование
-    request = """CREATE UNIQUE INDEX IDX_EVENT ON events(description, date);"""
+    request = """CREATE UNIQUE INDEX IF NOT EXISTS IDX_EVENT ON events(description, date);"""
     cursor = db_connector.cursor()
     cursor.execute(request)
     cursor.close()
@@ -86,9 +86,11 @@ def get_events_today_db():
 def get_events_by_period_db(date_start, date_end):
     numdays = date_end - date_start
     events = []
-    date_list = [date_start + datetime.timedelta(days=x) for x in range(numdays)]
+    date_list = [date_start + datetime.timedelta(days=x) for x in range(numdays.days)]
     for date in date_list:
         events.append(get_events_by_day_db(date))
+
+    events = [item for sublist in events for item in sublist]
 
     return events
 

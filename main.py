@@ -53,57 +53,100 @@ def init_bot():
     events_today = types.KeyboardButton('События сегодня')
     events_tomorrow = types.KeyboardButton('События завтра')
     events_on_week = types.KeyboardButton('События на неделе')
-
     add_event = types.KeyboardButton('Добавить эвент')
+    add_client = types.KeyboardButton('Добавить клиента')
 
-    # keyboard1.row(events_today, events_tomorrow,events_onWeek)
-    keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
+    # keyboard1.row(events_today, events_tomorrow,events_on_week)
+    keyboard.add(events_today, events_tomorrow, events_on_week)
 
-    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
+    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event, add_client)
 
 
 def add_new_event_proc(message):
     try:
-        event = Event(str(message.text))
+        description = str(message.text)
+        if description == 'Отмена':
+            cancel_adding_event(message.chat.id)
+            return
+
+        event = Event(description)
         event_dict[message.chat.id] = event
-        msg = bot.reply_to(message, 'Введите дату (ДД/ММ/ГГГГ)')
+        msg = bot.reply_to(message, 'Введите дату в формате  (ДД/ММ/ГГГГ)')
         bot.register_next_step_handler(msg, process_date_step)
     except Exception as e:
-        bot.reply_to(message, 'Oooops: ' + str(e))
+        print(str(e))
+        msg = bot.reply_to(message, 'Введите описание')
+        bot.register_next_step_handler(msg, process_date_step)
+
+
 
 
 def process_date_step(message):
     try:
+        date = message.text
+        if date == 'Отмена':
+            cancel_adding_event(message.chat.id)
+            return
         chat_id = message.chat.id
         event = event_dict[chat_id]
-        event.date = parse(str(message.text)).date()
+
+        date = parse(str(date)).date()
+        if date < datetime.date.today():
+            msg = bot.reply_to(message, 'Это прошлое. Введите дату в формате (ДД/ММ/ГГГГ)')
+            bot.register_next_step_handler(msg, process_date_step)
+            return
+
+        event.date = date
+
         msg = bot.reply_to(message, 'Введите время (ЧЧ/ММ)')
         bot.register_next_step_handler(msg, process_time_step)
+
+    except Exception as e:
+        msg = bot.reply_to(message, 'Введите дату в формате (ДД/ММ/ГГГГ)')
+        bot.register_next_step_handler(msg, process_date_step)
+        print(str(e))
+
+
+def process_time_step(message):
+    try:
+        time = message.text
+        if time == 'Отмена':
+            cancel_adding_event(message.chat.id)
+            return
+        chat_id = message.chat.id
+        event = event_dict[chat_id]
+        time = re.search(r'\d{2}[:|/|-|.| ]\d{2}', time)
+        if time == None:
+            msg = bot.reply_to(message, 'Введите время в формате (ЧЧ/ММ)')
+            bot.register_next_step_handler(msg, process_date_step)
+
+        event.time = time.group()
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        markup.add('Нет ссылки', 'Отмена')
+        msg = bot.reply_to(message, 'Введите ссылку', reply_markup=markup)
+        bot.register_next_step_handler(msg, add_new_event_url)
 
     except Exception as e:
         print("Exception: " + str(e))
         bot.reply_to(message, 'Введите время в формате (ЧЧ/ММ)')
 
 
-def process_time_step(message):
-    try:
-        chat_id = message.chat.id
-        event = event_dict[chat_id]
-        event.time = parse(str(message.text)).time()
-        msg = bot.reply_to(message, 'Введите ссылку')
-        bot.register_next_step_handler(msg, add_new_event_url)
-
-    except Exception as e:
-        print("Exception: " + str(e))
-        bot.reply_to(message, 'Oooops' + str(e))
-
-
 def add_new_event_url(message):
     try:
+        url = str(message.text)
+        if url == 'Отмена':
+            cancel_adding_event(message.chat.id)
+            return
         chat_id = message.chat.id
         event = event_dict[chat_id]
-        event.url = str(message.text)
-        msg = bot.reply_to(message, 'Добавьте изображение')
+
+        if url == 'Нет ссылки':
+            url = ''
+        event.url = url
+
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        markup.add('Нет изображения', 'Отмена')
+        msg = bot.reply_to(message, 'Добавьте изображение', reply_markup=markup)
         bot.register_next_step_handler(msg, add_new_event_image)
 
     except Exception as e:
@@ -112,6 +155,11 @@ def add_new_event_url(message):
 
 def add_new_event_image(message):
     try:
+
+        if message.text == 'Отмена':
+            cancel_adding_event(message.chat.id)
+            return
+
         chat_id = message.chat.id
         event = event_dict[chat_id]
 
@@ -122,8 +170,23 @@ def add_new_event_image(message):
         date_time_event = str(event.time) + ' ' + str(event.date)
         add_event_db(event.description, event.date, event.time, event.url, image_id)
         bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event)
+        del event_dict[chat_id]
     except Exception as e:
         bot.reply_to(message, 'Oooops: ' + str(e))
+
+
+def add_new_client(message):
+    chat_id = message.chat.id
+    if message.text == 'Отмена':
+        return
+
+    add_user(chat_id, 'client')
+    bot.send_message(chat_id, 'Клиент добавлен')
+
+
+def cancel_adding_event(chat_id):
+    bot.send_message(chat_id, 'Хорошо, добавление отменено.', reply_markup=keyboard)
+    del event_dict[chat_id]
 
 
 def render_events(events):
@@ -146,10 +209,11 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
         keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
     if minutes > 60:
         keyboard.add(types.InlineKeyboardButton(text='Напомнить за час', callback_data=' за час'))
-
-    url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
-    keyboard.add(url_button)
-    bot.send_photo(user_id, photo=image_id)
+    if event_url != '':
+        url_button = types.InlineKeyboardButton(text="Ссылка", url=event_url)
+        keyboard.add(url_button)
+    if image_id != 'None':
+        bot.send_photo(user_id, photo=image_id)
     # print(api_ret)
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
 
@@ -159,7 +223,9 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
 
 def process_messages(events, user_id, request):
     for event in events:
-        # print(event)
+        if not event:
+            continue
+        #print(event)
         event_id = event[0]
         event_url = event[4]
         date_time = event[2]
@@ -195,10 +261,10 @@ def remind_in(minutes, call):
 
     date_time = parse(get_event_by_id(event_id)[0][2])
     time = parse(get_event_by_id(event_id)[0][3])
-    #print('time: ' + str(time))
+    # print('time: ' + str(time))
     date_time = time - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
-    #print(date_time)
+    # print(date_time)
     add_task(call.from_user.id, call.message.text, date_time, event_id)
 
 
@@ -235,7 +301,13 @@ def start_message(message):
                       f"Если хочешь узнать что сегодня будет интересного нажми кнопку {button_name['Start']}\n"
 
     try:
-        role = get_user_role(message.chat.id)[0][0]
+        role = get_user_role(message.chat.id)
+        if not role:
+            add_user(message.chat.id, 'user')
+            bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
+        else:
+            role = role[0][0]
+
         if role == 'admin' or role == 'client':
             bot.send_message(message.chat.id, bot_description, reply_markup=admin_keyboard)
         elif role == 'user':
@@ -260,9 +332,9 @@ def command_handler(message):
 
     if request == 'События сегодня':
         events = get_events_today_db()
-        #print(events)
+        print(events)
 
-        if not events == []:
+        if events:
             # print(response)
             process_messages(events, user_id, request)
 
@@ -271,37 +343,44 @@ def command_handler(message):
 
     elif request == 'События завтра':
         events = get_events_by_day_db(tomorrow_date())
-        #print(events)
-        if not events == []:
+        print(events)
+        if events:
             # print(response)
             process_messages(events, user_id, request)
         else:
-            bot.send_message(user_id, "Сегодня ничего не проиходит", reply_markup=markup)
+            bot.send_message(user_id, "Завтра ничего не проиходит", reply_markup=markup)
 
     elif request == 'События на неделе':
         dt = tomorrow_date()
         weekstart = dt - datetime.timedelta(days=dt.weekday())
         weekend = weekstart + datetime.timedelta(days=6)
         events = get_events_by_period_db(tomorrow_date(), weekend)
-        if not events == []:
+        print(events)
+
+        if events:
             # print(response)
             process_messages(events, user_id, request)
         else:
             bot.send_message(user_id, "На неделе ничего не проиходит", reply_markup=markup)
 
     elif request == 'Добавить эвент':
-        # Пока оставлю так
-        bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
-        bot.register_next_step_handler(message, add_new_event_proc)
-        # print(get_user_role(user_id)[0][0]=='admin')
-        bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
-        bot.register_next_step_handler(message, add_new_event_proc)
+
         role = get_user_role(user_id)[0][0]
         if role == 'admin' or role == 'client':
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Отмена')
             bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
             bot.register_next_step_handler(message, add_new_event_proc)
         else:
             bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
+
+    elif request == 'Добавить клиента':
+        role = get_user_role(user_id)[0][0]
+        if role == 'admin':
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add('Отмена')
+            bot.send_message(user_id, "Введи айди", reply_markup=markup)
+            bot.register_next_step_handler(message, add_new_client)
 
 
 if __name__ == '__main__':
