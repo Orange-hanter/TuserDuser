@@ -39,10 +39,9 @@ def parse_kvitki():
         img_url = re.findall(' data-lazysrc=(.*?)src', str(event))[0]
 
         date, time = get_datetime(match)
-        print(url_event)
+        name_event = name_event.replace("'","")
         img_path = f'{name_event}.jpg'
         urllib.request.urlretrieve(img_url[1:-2], img_path)
-        print(img_path)
 
         api_ret = bot.send_photo(test_user, open(img_path, 'rb'))
         photo_id = api_ret.photo[0].file_id

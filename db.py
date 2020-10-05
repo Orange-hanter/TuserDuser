@@ -23,9 +23,16 @@ def init_db():
                                             url         TEXT,
                                             image_id    TEXT
                                             );""",
-                "CREATE TABLE IF NOT EXISTS Users (id TEXT UNIQUE, role TEXT);",
-                "CREATE TABLE IF NOT EXISTS TaskList (user_id text, time text, text text, "  
-                "number INTEGER, event_id text);",
+                """CREATE TABLE IF NOT EXISTS Users (id TEXT UNIQUE, role TEXT);""",
+                """CREATE TABLE IF NOT EXISTS TaskList (
+                                            id          INTEGER  UNIQUE 
+                                            PRIMARY KEY AUTOINCREMENT,
+                                            user_id     text, 
+                                            time        text, 
+                                            text        text,
+                                            number      INTEGER, 
+                                            event_id    text
+                                            );""",
                 ]
 
     cursor = db_connector.cursor()
@@ -110,7 +117,8 @@ def put_test_data_to_db():
 def add_to_db_tasklist(chatid, time, text, number, event_id):
     conn = sqlite3.connect("./DB/db.db")
     cursor = conn.cursor()
-    ins = f"""INSERT INTO 'tasklist'  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}')"""
+    print(text)
+    ins = f"""INSERT INTO tasklist (user_id ,time , text, number, event_id)  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}')"""
     cursor.execute(ins)
     conn.commit()
 

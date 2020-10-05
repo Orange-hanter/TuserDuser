@@ -197,7 +197,9 @@ def render_events(events):
 
 
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id):
-    event_date = parse(get_event_by_id(event_id)[0][3])
+    event = get_event_by_id(event_id)[0]
+    event_date = parse(' '.join([event[2], event[3]]))
+
     keyboard = types.InlineKeyboardMarkup()
 
     now = datetime.datetime.now()  # Now
@@ -252,17 +254,21 @@ def add_task(user_id, text, date_time, event_id):  # Функция создаю
     cmd = f"python3 send_message.py {str(user_id)} {str(text)}"
     out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
     # stdout = str(out.communicate())
-    number = int(re.search('job(.+?) at', out).group(1))
-    add_to_db_tasklist(user_id, date_time, text, number, event_id)
+    print(out)
+    number = int(re.search('job(.+?) at', str(out)).group(1))
+    add_to_db_tasklist(user_id, str(date_time), text, number, event_id)
 
 
 def remind_in(minutes, call):
     event_id = event_id_and_message_id[call.message.message_id]
 
-    date_time = parse(get_event_by_id(event_id)[0][2])
-    time = parse(get_event_by_id(event_id)[0][3])
+    #date = parse(get_event_by_id(event_id)[0][2])
+    #time = parse(get_event_by_id(event_id)[0][3])
     # print('time: ' + str(time))
-    date_time = time - datetime.timedelta(minutes=minutes)
+    event = get_event_by_id(event_id)[0]
+    event_date = parse(' '.join([event[2], event[3]]))
+
+    date_time = event_date - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
     # print(date_time)
     add_task(call.from_user.id, call.message.text, date_time, event_id)
