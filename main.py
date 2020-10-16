@@ -2,6 +2,7 @@ import datetime
 import re
 import subprocess
 import uuid
+import logging
 
 import telebot
 from dateutil.parser import parse
@@ -14,6 +15,8 @@ from db import init_db, \
     get_events_by_day_db, \
     get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, get_chatid_and_task_number
 
+
+logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
 class Event:
     def __init__(self, description):
@@ -35,6 +38,7 @@ event_id_and_message_id = {}
 def listener(messages):
     for m in messages:
         print(m)
+        logging.info(m)
 
 
 bot.set_update_listener(listener)  # register listener
@@ -150,7 +154,8 @@ def add_new_event_url(message):
         bot.register_next_step_handler(msg, add_new_event_image)
 
     except Exception as e:
-        bot.reply_to(message, 'Oooops: ' + str(e))
+        #bot.reply_to(message, 'Oooops: ' + str(e))
+        print(e)
 
 
 def add_new_event_image(message):
@@ -172,7 +177,8 @@ def add_new_event_image(message):
         bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event)
         del event_dict[chat_id]
     except Exception as e:
-        bot.reply_to(message, 'Oooops: ' + str(e))
+        print(e)
+        #bot.reply_to(message, 'Oooops: ' + str(e))
 
 
 def add_new_client(message):
@@ -252,7 +258,7 @@ def get_datetime(call):
 
 def add_task(user_id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
     cmd = f"python3 send_message.py {str(user_id)} '{text}'"
-    print(cmd)
+    #print(cmd)
     out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
     # stdout = str(out.communicate())
     number = int(re.search('job(.+?) at', str(out)).group(1))
@@ -270,7 +276,7 @@ def remind_in(minutes, call):
 
     date_time = event_date - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
-    print(call.message.text)
+    #print(call.message.text)
     add_task(call.from_user.id, call.message.text, date_time, event_id)
     bot.send_message(call.from_user.id, f'Я напомню за {minutes} минут до начала')
 
@@ -336,10 +342,10 @@ def command_handler(message):
     user_id = message.chat.id
     request = message.text
     print("INPUT MESSAGE: " + message.text)
-
+    logging.info(message)
     if request == 'События сегодня':
         events = get_events_today_db()
-        print(events)
+        #print(events)
 
         if events:
             # print(response)
@@ -350,7 +356,7 @@ def command_handler(message):
 
     elif request == 'События завтра':
         events = get_events_by_day_db(tomorrow_date())
-        print(events)
+        #print(events)
         if events:
             # print(response)
             process_messages(events, user_id, request)
@@ -362,7 +368,7 @@ def command_handler(message):
         weekstart = dt - datetime.timedelta(days=dt.weekday())
         weekend = weekstart + datetime.timedelta(days=6)
         events = get_events_by_period_db(tomorrow_date(), weekend)
-        print(events)
+        #print(events)
 
         if events:
             # print(response)
