@@ -51,8 +51,10 @@ def tomorrow_date():
 def init_bot():
     global keyboard
     global admin_keyboard
+    global client_keyboard
     keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     admin_keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    client_keyboard = telebot.types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
 
     events_today = types.KeyboardButton('События сегодня')
     events_tomorrow = types.KeyboardButton('События завтра')
@@ -62,7 +64,7 @@ def init_bot():
 
     # keyboard1.row(events_today, events_tomorrow,events_on_week)
     keyboard.add(events_today, events_tomorrow, events_on_week)
-
+    client_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
     admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event, add_client)
 
 
@@ -79,8 +81,8 @@ def add_new_event_proc(message):
         bot.register_next_step_handler(msg, process_date_step)
     except Exception as e:
         print(str(e))
-        msg = bot.reply_to(message, 'Введите описание')
-        bot.register_next_step_handler(msg, process_date_step)
+        #msg = bot.reply_to(message, 'Введите описание')
+        #bot.register_next_step_handler(msg, process_date_step)
 
 
 
@@ -191,7 +193,8 @@ def add_new_client(message):
 
 
 def cancel_adding_event(chat_id):
-    bot.send_message(chat_id, 'Хорошо, добавление отменено.', reply_markup=keyboard)
+    keyboard_keyboard = get_keyboard_by_id(chat_id)
+    bot.send_message(chat_id, 'Хорошо, добавление отменено.', reply_markup=keyboard_keyboard)
     del event_dict[chat_id]
 
 
@@ -255,6 +258,19 @@ def get_datetime(call):
     date = datetime.datetime.strptime(match.group(), '%Y-%m-%d').date()
     return date
 
+def get_keyboard_by_id(user_id):
+    markup_keyboard = None
+
+    if get_user_role(user_id)[0][0] == 'admin':
+        markup_keyboard = admin_keyboard
+
+    elif get_user_role(user_id)[0][0] == 'client':
+        markup_keyboard = client_keyboard
+
+    elif get_user_role(user_id)[0][0] == 'user':
+        markup_keyboard = keyboard
+
+    return markup_keyboard
 
 def add_task(user_id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
     cmd = f"python3 send_message.py {str(user_id)} '{text}'"
@@ -317,14 +333,10 @@ def start_message(message):
         role = get_user_role(message.chat.id)
         if not role:
             add_user(message.chat.id, 'user')
-            bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
-        else:
-            role = role[0][0]
 
-        if role == 'admin' or role == 'client':
-            bot.send_message(message.chat.id, bot_description, reply_markup=admin_keyboard)
-        elif role == 'user':
-            bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
+        keyboard_markup = get_keyboard_by_id(message.chat.id)
+
+        bot.send_message(message.chat.id, bot_description, reply_markup=keyboard_markup)
 
     except:
         add_user(message.chat.id, 'user')
