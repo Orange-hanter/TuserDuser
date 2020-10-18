@@ -35,15 +35,6 @@ keyboard = None
 event_id_and_message_id = {}
 
 
-def listener(messages):
-    for m in messages:
-        print(m)
-        logging.info(m)
-
-
-bot.set_update_listener(listener)  # register listener
-
-
 def tomorrow_date():
     return datetime.date.today() + datetime.timedelta(days=1)
 
@@ -81,8 +72,6 @@ def add_new_event_proc(message):
         print(str(e))
         msg = bot.reply_to(message, 'Введите описание')
         bot.register_next_step_handler(msg, process_date_step)
-
-
 
 
 def process_date_step(message):
@@ -204,7 +193,7 @@ def render_events(events):
 
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id):
     event = get_event_by_id(event_id)[0]
-    event_date = parse(' '.join([event[2], event[3]]))
+    event_date = parse(' '.join([event[2], event[3].replace('/',':')]))
 
     keyboard = types.InlineKeyboardMarkup()
 
@@ -293,7 +282,7 @@ def cancel_event(event_id):
 
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
-def callback(call):
+def button_callback(call):
     if call.data == ' за 15 минут':
         remind_in(15, call)
 
