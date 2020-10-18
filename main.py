@@ -15,8 +15,8 @@ from db import init_db, \
     get_events_by_day_db, \
     get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, get_chatid_and_task_number
 
-
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
+
 
 class Event:
     def __init__(self, description):
@@ -33,15 +33,6 @@ keyboard = None
 
 # для связи id эвента и id сообщения в будущем скорее всего будет в бд
 event_id_and_message_id = {}
-
-
-def listener(messages):
-    for m in messages:
-        print(m)
-        logging.info(m)
-
-
-bot.set_update_listener(listener)  # register listener
 
 
 def tomorrow_date():
@@ -81,10 +72,8 @@ def add_new_event_proc(message):
         bot.register_next_step_handler(msg, process_date_step)
     except Exception as e:
         print(str(e))
-        #msg = bot.reply_to(message, 'Введите описание')
-        #bot.register_next_step_handler(msg, process_date_step)
-
-
+        # msg = bot.reply_to(message, 'Введите описание')
+        # bot.register_next_step_handler(msg, process_date_step)
 
 
 def process_date_step(message):
@@ -156,7 +145,7 @@ def add_new_event_url(message):
         bot.register_next_step_handler(msg, add_new_event_image)
 
     except Exception as e:
-        #bot.reply_to(message, 'Oooops: ' + str(e))
+        # bot.reply_to(message, 'Oooops: ' + str(e))
         print(e)
 
 
@@ -180,7 +169,7 @@ def add_new_event_image(message):
         del event_dict[chat_id]
     except Exception as e:
         print(e)
-        #bot.reply_to(message, 'Oooops: ' + str(e))
+        # bot.reply_to(message, 'Oooops: ' + str(e))
 
 
 def add_new_client(message):
@@ -207,7 +196,7 @@ def render_events(events):
 
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id):
     event = get_event_by_id(event_id)[0]
-    event_date = parse(' '.join([event[2], event[3]]))
+    event_date = parse(' '.join([event[2], event[3].replace('/', ':')]))
 
     keyboard = types.InlineKeyboardMarkup()
 
@@ -236,7 +225,7 @@ def process_messages(events, user_id, request):
     for event in events:
         if not event:
             continue
-        #print(event)
+        # print(event)
         event_id = event[0]
         event_url = event[4]
         date_time = event[2]
@@ -245,7 +234,7 @@ def process_messages(events, user_id, request):
         if image_id.startswith('DB'):
             image_id = open(image_id, "rb")
 
-        # event_id_and_message_id.update({event_id: []})
+        event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
 
@@ -257,6 +246,7 @@ def get_datetime(call):
     match = re.search(r'\d{4}-\d{2}-\d{2}', text)
     date = datetime.datetime.strptime(match.group(), '%Y-%m-%d').date()
     return date
+
 
 def get_keyboard_by_id(user_id):
     markup_keyboard = None
@@ -272,9 +262,10 @@ def get_keyboard_by_id(user_id):
 
     return markup_keyboard
 
+
 def add_task(user_id, text, date_time, event_id):  # Функция создают задачу в AT и добавляет ее в бд
     cmd = f"python3 send_message.py {str(user_id)} '{text}'"
-    #print(cmd)
+    # print(cmd)
     out = subprocess.check_output(["at", str(date_time)], input=cmd.encode(), stderr=subprocess.STDOUT)
     # stdout = str(out.communicate())
     number = int(re.search('job(.+?) at', str(out)).group(1))
@@ -284,15 +275,15 @@ def add_task(user_id, text, date_time, event_id):  # Функция создаю
 def remind_in(minutes, call):
     event_id = event_id_and_message_id[call.message.message_id]
 
-    #date = parse(get_event_by_id(event_id)[0][2])
-    #time = parse(get_event_by_id(event_id)[0][3])
+    # date = parse(get_event_by_id(event_id)[0][2])
+    # time = parse(get_event_by_id(event_id)[0][3])
     # print('time: ' + str(time))
     event = get_event_by_id(event_id)[0]
     event_date = parse(' '.join([event[2], event[3]]))
 
     date_time = event_date - datetime.timedelta(minutes=minutes)
     date_time = date_time.strftime("%H:%M %m%d%y")
-    #print(call.message.text)
+    # print(call.message.text)
     add_task(call.from_user.id, call.message.text, date_time, event_id)
     bot.send_message(call.from_user.id, f'Я напомню за {minutes} минут до начала')
 
@@ -357,7 +348,7 @@ def command_handler(message):
     logging.info(message)
     if request == 'События сегодня':
         events = get_events_today_db()
-        #print(events)
+        # print(events)
 
         if events:
             # print(response)
@@ -368,7 +359,7 @@ def command_handler(message):
 
     elif request == 'События завтра':
         events = get_events_by_day_db(tomorrow_date())
-        #print(events)
+        # print(events)
         if events:
             # print(response)
             process_messages(events, user_id, request)
@@ -380,7 +371,7 @@ def command_handler(message):
         weekstart = dt - datetime.timedelta(days=dt.weekday())
         weekend = weekstart + datetime.timedelta(days=6)
         events = get_events_by_period_db(tomorrow_date(), weekend)
-        #print(events)
+        # print(events)
 
         if events:
             # print(response)
@@ -397,7 +388,7 @@ def command_handler(message):
             bot.send_message(user_id, "Что за мероприятие?", reply_markup=markup)
             bot.register_next_step_handler(message, add_new_event_proc)
         else:
-            bot.send_message(user_id, 'Вы не админ', reply_markup=markup)
+            bot.send_message(user_id, 'Вы не админ', reply_markup=keyboard)
 
     elif request == 'Добавить клиента':
         role = get_user_role(user_id)[0][0]
