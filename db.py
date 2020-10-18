@@ -1,6 +1,8 @@
 import sqlite3
 import datetime
 import os
+from config import admins
+
 try:
     print(os.getcwd())
     db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
@@ -34,6 +36,8 @@ def init_db():
                                             event_id    text
                                             );""",
                 ]
+    for admin_id in admins:
+        requests.append(f"INSERT OR IGNORE INTO users (id, role) VALUES ('{admin_id}', 'admin');")
 
     cursor = db_connector.cursor()
     for request in requests:
@@ -115,21 +119,21 @@ def put_test_data_to_db():
 
 
 def add_to_db_tasklist(chatid, time, text, number, event_id):
-    conn = sqlite3.connect("./DB/db.db")
-    cursor = conn.cursor()
-    print(text)
+    db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+    cursor = db_connector.cursor()
+
     ins = f"""INSERT INTO tasklist (user_id ,time , text, number, event_id)  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}')"""
     cursor.execute(ins)
-    conn.commit()
+    db_connector.commit()
 
 
 def add_user(id, role):
     try:
-        conn = sqlite3.connect("./DB/db.db")
-        cursor = conn.cursor()
+        db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+        cursor = db_connector.cursor()
         ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}')"""
         cursor.execute(ins)
-        conn.commit()
+        db_connector.commit()
     except Exception as e:
         print("Exception: " + str(e))
 
