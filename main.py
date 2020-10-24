@@ -40,6 +40,7 @@ event_id_and_message_id = {}
 # Creates a unique calendar
 calendar_1 = CallbackData("calendar_1", "action", "year", "month", "day")
 
+
 def tomorrow_date():
     return datetime.date.today() + datetime.timedelta(days=1)
 
@@ -73,7 +74,7 @@ def add_new_event_proc(message):
 
         event = Event(description)
         event_dict[message.chat.id] = event
-        #msg = bot.reply_to(message, 'Введите дату в формате  (ДД/ММ/ГГГГ)')
+        # msg = bot.reply_to(message, 'Введите дату в формате  (ДД/ММ/ГГГГ)')
         now = datetime.datetime.now()  # Get the current date
         bot.reply_to(
             message,
@@ -84,7 +85,7 @@ def add_new_event_proc(message):
                 month=now.month,  # Specify the NAME of your calendar
             ),
         )
-        #bot.register_next_step_handler(msg, process_date_step)
+        # bot.register_next_step_handler(msg, process_date_step)
     except Exception as e:
         print(str(e))
 
@@ -92,32 +93,6 @@ def add_new_event_proc(message):
         # bot.register_next_step_handler(msg, process_date_step)
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_1.prefix))
-def callback_inline(call: CallbackQuery):
-    """
-    Обработка inline callback запросов
-    :param call:
-    :return:
-    """
-
-    # At this point, we are sure that this calendar is ours. So we cut the line by the separator of our calendar
-    name, action, year, month, day = call.data.split(calendar_1.sep)
-    # Processing the calendar. Get either the date or None if the buttons are of a different type
-    date = telebot_calendar.calendar_query_handler(
-        bot=bot, call=call, name=name, action=action, year=year, month=month, day=day
-    )
-    # There are additional steps. Let's say if the date DAY is selected, you can execute your code. I sent a message.
-    if action == "DAY":
-        msg = bot.send_message(
-            chat_id=call.from_user.id,
-            text=f"{date.strftime('%Y.%m.%d')}",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        process_date_step(msg)
-
-    elif action == "CANCEL":
-        cancel_adding_event(call.from_user.id)
-        #print(f"{calendar_1}: Cancellation")
 
 def process_date_step(message):
     try:
@@ -129,9 +104,8 @@ def process_date_step(message):
         event = event_dict[chat_id]
 
         date = parse(str(date)).date()
-        print(date, datetime.date.today())
         if date < datetime.date.today():
-            #msg = bot.reply_to(message, 'Это прошлое. Введите дату в формате (ДД/ММ/ГГГГ)')
+            # msg = bot.reply_to(message, 'Это прошлое. Введите дату в формате (ДД/ММ/ГГГГ)')
             now = datetime.datetime.now()  # Get the current date
             bot.reply_to(
                 message,
@@ -151,11 +125,9 @@ def process_date_step(message):
         bot.register_next_step_handler(msg, process_time_step)
 
     except Exception as e:
-        #msg = bot.reply_to(message, 'Введите дату в формате (ДД/ММ/ГГГГ)')
-        #bot.register_next_step_handler(msg, process_date_step)
+        # msg = bot.reply_to(message, 'Введите дату в формате (ДД/ММ/ГГГГ)')
+        # bot.register_next_step_handler(msg, process_date_step)
         print(str(e))
-
-
 
 
 def process_time_step(message):
@@ -360,6 +332,32 @@ def cancel_event(event_id):
         description = get_event_by_id(event_id[0][0])
         bot.send_message(chatid, 'Событие отменено:\n' + description)
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_1.prefix))
+def callback_inline(call: CallbackQuery):
+    """
+    Обработка inline callback запросов
+    :param call:
+    :return:
+    """
+
+    # At this point, we are sure that this calendar is ours. So we cut the line by the separator of our calendar
+    name, action, year, month, day = call.data.split(calendar_1.sep)
+    # Processing the calendar. Get either the date or None if the buttons are of a different type
+    date = telebot_calendar.calendar_query_handler(
+        bot=bot, call=call, name=name, action=action, year=year, month=month, day=day
+    )
+    # There are additional steps. Let's say if the date DAY is selected, you can execute your code. I sent a message.
+    if action == "DAY":
+        msg = bot.send_message(
+            chat_id=call.from_user.id,
+            text=f"{date.strftime('%Y.%m.%d')}",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        process_date_step(msg)
+
+    elif action == "CANCEL":
+        cancel_adding_event(call.from_user.id)
+        # print(f"{calendar_1}: Cancellation")
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def button_callback(call):
