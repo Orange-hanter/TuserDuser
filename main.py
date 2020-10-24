@@ -174,11 +174,16 @@ def add_new_event_image(message):
 
 def add_new_client(message):
     chat_id = message.chat.id
+    keyboard_keyboard = get_keyboard_by_id(chat_id)
     if message.text == 'Отмена':
         return
 
-    add_user(chat_id, 'client')
-    bot.send_message(chat_id, 'Клиент добавлен')
+    if message.forward_from != None:
+        add_user(message.forward_from.id, 'client')
+    else:
+        add_user(chat_id, 'client')
+
+    bot.send_message(chat_id, 'Клиент добавлен', reply_markup=keyboard_keyboard)
 
 
 def cancel_adding_event(chat_id):
@@ -331,7 +336,7 @@ def start_message(message):
 
     except:
         add_user(message.chat.id, 'user')
-        bot.send_message(message.chat.id, bot_description, reply_markup=keyboard)
+        bot.send_message(message.chat.id, bot_description, reply_markup=keyboard_markup)
 
 
 @bot.message_handler(content_types=['text'])
@@ -395,7 +400,7 @@ def command_handler(message):
         if role == 'admin':
             markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
             markup.add('Отмена')
-            bot.send_message(user_id, "Введи айди", reply_markup=markup)
+            bot.send_message(user_id, "Введи айди или перешли сообщение", reply_markup=markup)
             bot.register_next_step_handler(message, add_new_client)
 
 
