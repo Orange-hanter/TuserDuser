@@ -16,7 +16,8 @@ from db import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
-    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, get_chatid_and_task_number
+    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id,\
+    get_chatid_and_task_number,delete_event_db
 
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
@@ -227,7 +228,7 @@ def render_events(events):
     return rendered_text
 
 
-def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id):
+def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id, cancel_button=False):
     event = get_event_by_id(event_id)[0]
 
     event_date = parse(' '.join([event[2], event[3].replace('/', ':')]))
@@ -248,6 +249,8 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
         keyboard.add(url_button)
     if image_id != 'None':
         bot.send_photo(user_id, photo=image_id)
+    if cancel_button:
+        keyboard.add(types.InlineKeyboardButton(text='Отменить эвент', callback_data=' Отменить эвент'))
     # print(api_ret)
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
 
@@ -271,8 +274,9 @@ def process_messages(events, user_id, request):
         event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
-
-        send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id)
+        if get_user_role(user_id)[0][0] == 'admin':
+            cancel_button = True
+        send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id,cancel_button)
 
 
 def get_datetime(call):
@@ -331,6 +335,7 @@ def cancel_event(event_id):
     for chatid in chatids:
         description = get_event_by_id(event_id[0][0])
         bot.send_message(chatid, 'Событие отменено:\n' + description)
+    delete_event_db(event_id)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_1.prefix))
 def callback_inline(call: CallbackQuery):
