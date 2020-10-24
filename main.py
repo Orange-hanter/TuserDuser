@@ -110,7 +110,7 @@ def callback_inline(call: CallbackQuery):
     if action == "DAY":
         msg = bot.send_message(
             chat_id=call.from_user.id,
-            text=f"{date.strftime('%d.%m.%Y')}",
+            text=f"{date.strftime('%Y.%m.%d')}",
             reply_markup=ReplyKeyboardRemove(),
         )
         process_date_step(msg)
@@ -129,9 +129,20 @@ def process_date_step(message):
         event = event_dict[chat_id]
 
         date = parse(str(date)).date()
+        print(date, datetime.date.today())
         if date < datetime.date.today():
-            msg = bot.reply_to(message, 'Это прошлое. Введите дату в формате (ДД/ММ/ГГГГ)')
-            bot.register_next_step_handler(msg, process_date_step)
+            #msg = bot.reply_to(message, 'Это прошлое. Введите дату в формате (ДД/ММ/ГГГГ)')
+            now = datetime.datetime.now()  # Get the current date
+            bot.reply_to(
+                message,
+                "Это прошлое. Выбери дату",
+                reply_markup=telebot_calendar.create_calendar(
+                    name=calendar_1.prefix,
+                    year=now.year,
+                    month=now.month,
+                ),
+            )
+
             return
 
         event.date = date
@@ -140,8 +151,8 @@ def process_date_step(message):
         bot.register_next_step_handler(msg, process_time_step)
 
     except Exception as e:
-        msg = bot.reply_to(message, 'Введите дату в формате (ДД/ММ/ГГГГ)')
-        bot.register_next_step_handler(msg, process_date_step)
+        #msg = bot.reply_to(message, 'Введите дату в формате (ДД/ММ/ГГГГ)')
+        #bot.register_next_step_handler(msg, process_date_step)
         print(str(e))
 
 
