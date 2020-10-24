@@ -7,6 +7,9 @@ import logging
 import telebot
 from dateutil.parser import parse
 from telebot import types
+import telebot_calendar
+from telebot_calendar import CallbackData
+from telebot.types import ReplyKeyboardRemove, CallbackQuery
 
 from config import token
 from db import init_db, \
@@ -34,6 +37,8 @@ keyboard = None
 # для связи id эвента и id сообщения в будущем скорее всего будет в бд
 event_id_and_message_id = {}
 
+# Creates a unique calendar
+calendar_1 = CallbackData("calendar_1", "action", "year", "month", "day")
 
 def tomorrow_date():
     return datetime.date.today() + datetime.timedelta(days=1)
@@ -68,14 +73,51 @@ def add_new_event_proc(message):
 
         event = Event(description)
         event_dict[message.chat.id] = event
-        msg = bot.reply_to(message, 'Введите дату в формате  (ДД/ММ/ГГГГ)')
-        bot.register_next_step_handler(msg, process_date_step)
+        #msg = bot.reply_to(message, 'Введите дату в формате  (ДД/ММ/ГГГГ)')
+        now = datetime.datetime.now()  # Get the current date
+        bot.reply_to(
+            message,
+            "Выбери дату",
+            reply_markup=telebot_calendar.create_calendar(
+                name=calendar_1.prefix,
+                year=now.year,
+                month=now.month,  # Specify the NAME of your calendar
+            ),
+        )
+        #bot.register_next_step_handler(msg, process_date_step)
     except Exception as e:
         print(str(e))
 
         # msg = bot.reply_to(message, 'Введите описание')
         # bot.register_next_step_handler(msg, process_date_step)
 
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_1.prefix))
+def callback_inline(call: CallbackQuery):
+    """
+    Обработка inline callback запросов
+    :param call:
+    :return:
+    """
+
+    # At this point, we are sure that this calendar is ours. So we cut the line by the separator of our calendar
+    name, action, year, month, day = call.data.split(calendar_1.sep)
+    # Processing the calendar. Get either the date or None if the buttons are of a different type
+    date = telebot_calendar.calendar_query_handler(
+        bot=bot, call=call, name=name, action=action, year=year, month=month, day=day
+    )
+    # There are additional steps. Let's say if the date DAY is selected, you can execute your code. I sent a message.
+    if action == "DAY":
+        msg = bot.send_message(
+            chat_id=call.from_user.id,
+            text=f"{date.strftime('%d.%m.%Y')}",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        process_date_step(msg)
+
+    elif action == "CANCEL":
+        cancel_adding_event(call.from_user.id)
+        #print(f"{calendar_1}: Cancellation")
 
 def process_date_step(message):
     try:
@@ -101,6 +143,8 @@ def process_date_step(message):
         msg = bot.reply_to(message, 'Введите дату в формате (ДД/ММ/ГГГГ)')
         bot.register_next_step_handler(msg, process_date_step)
         print(str(e))
+
+
 
 
 def process_time_step(message):
