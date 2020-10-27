@@ -65,6 +65,14 @@ def add_event_db(description, date, time, url, image_id):
         print("такое поле уже есть")
         print(str(e))
 
+def delete_event_db(event_id):
+    request = f"""DELETE FROM artists_backup
+                    WHERE event_id = '{event_id}';"""
+    cursor = db_connector.cursor()
+    cursor.execute(request)
+    cursor.fetchall()
+    cursor.close()
+
 
 def get_event_by_id(event_id):
     request = f"""SELECT * 
