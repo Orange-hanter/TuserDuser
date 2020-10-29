@@ -193,7 +193,9 @@ def add_new_event_image(message):
 
         date_time_event = str(event.time) + ' ' + str(event.date)
         add_event_db(event.description, event.date, event.time, event.url, image_id)
-        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event)
+        keyboard_keyboard = get_keyboard_by_id(chat_id)
+        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event,
+                         reply_markup=keyboard_keyboard)
         del event_dict[chat_id]
     except Exception as e:
         print(e)
@@ -230,8 +232,8 @@ def render_events(events):
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id,
                                 cancel_button=False):
     event = get_event_by_id(event_id)[0]
-
-    event_date = parse(' '.join([event[2], event[3].replace('/', ':')]))
+    print(str(event[3]))
+    event_date = parse(' '.join([str(event[2]), str(event[3])]))
 
     keyboard = types.InlineKeyboardMarkup()
 
