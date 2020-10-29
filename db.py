@@ -9,7 +9,7 @@ try:
     print(os.getcwd())
     #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
     db_connector = psycopg2.connect(dbname='postgres', user='postgres',
-                            password='postgres', host='localhost', port=5432)
+                            password='postgres', host='db', port=5432)
     print("DB connected")
 except Exception as e:
     print("DB not connected")

@@ -8,11 +8,8 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_HOST_AUTH_METHOD=trust
-      - POSTGRES_HOST=localhost
 
-    ports:
-      - "5432:5432"
+
   web:
     build: .
     command: python main.py
