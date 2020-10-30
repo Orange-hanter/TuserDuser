@@ -16,8 +16,8 @@ from db import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
-    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id,\
-    get_chatid_and_task_number,delete_event_db
+    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, \
+    get_chatid_and_task_number, delete_event_db
 
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
@@ -92,7 +92,6 @@ def add_new_event_proc(message):
 
         # msg = bot.reply_to(message, 'Введите описание')
         # bot.register_next_step_handler(msg, process_date_step)
-
 
 
 def process_date_step(message):
@@ -194,7 +193,9 @@ def add_new_event_image(message):
 
         date_time_event = str(event.time) + ' ' + str(event.date)
         add_event_db(event.description, event.date, event.time, event.url, image_id)
-        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event)
+        keyboard_keyboard = get_keyboard_by_id(chat_id)
+        bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event,
+                         reply_markup=keyboard_keyboard)
         del event_dict[chat_id]
     except Exception as e:
         print(e)
@@ -228,10 +229,11 @@ def render_events(events):
     return rendered_text
 
 
-def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id, cancel_button=False):
+def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id,
+                                cancel_button=False):
     event = get_event_by_id(event_id)[0]
-
-    event_date = parse(' '.join([event[2], event[3].replace('/', ':')]))
+    print(str(event[3]))
+    event_date = parse(' '.join([str(event[2]), str(event[3])]))
 
     keyboard = types.InlineKeyboardMarkup()
 
@@ -276,7 +278,7 @@ def process_messages(events, user_id, request):
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
         if get_user_role(user_id)[0][0] == 'admin':
             cancel_button = True
-        send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id,cancel_button)
+        send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id, cancel_button)
 
 
 def get_datetime(call):
@@ -337,6 +339,7 @@ def cancel_event(event_id):
         bot.send_message(chatid, 'Событие отменено:\n' + description)
     delete_event_db(event_id)
 
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_1.prefix))
 def callback_inline(call: CallbackQuery):
     """
@@ -363,6 +366,7 @@ def callback_inline(call: CallbackQuery):
     elif action == "CANCEL":
         cancel_adding_event(call.from_user.id)
         # print(f"{calendar_1}: Cancellation")
+
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def button_callback(call):

@@ -2,10 +2,14 @@ import sqlite3
 import datetime
 import os
 from config import admins
+import psycopg2
+
 
 try:
     print(os.getcwd())
-    db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+    #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+    db_connector = psycopg2.connect(dbname='postgres', user='postgres',
+                            password='postgres', host='localhost', port=5432)
     print("DB connected")
 except Exception as e:
     print("DB not connected")
@@ -17,18 +21,16 @@ def init_db():
     number номер процесса at к которому можно обратиться для отмены
     """
     requests = ["""CREATE TABLE IF NOT EXISTS Events (
-                                            id          INTEGER  UNIQUE
-                                            PRIMARY KEY AUTOINCREMENT,
+                                            id          SERIAL,
                                             description TEXT,
-                                            date        DATETIME,
-                                            time        DATETIME,
+                                            date        date,
+                                            time        time,
                                             url         TEXT,
                                             image_id    TEXT
                                             );""",
                 """CREATE TABLE IF NOT EXISTS Users (id TEXT UNIQUE, role TEXT);""",
                 """CREATE TABLE IF NOT EXISTS TaskList (
-                                            id          INTEGER  UNIQUE 
-                                            PRIMARY KEY AUTOINCREMENT,
+                                            id          SERIAL,
                                             user_id     text, 
                                             time        text, 
                                             text        text,
@@ -37,7 +39,7 @@ def init_db():
                                             );""",
                 ]
     for admin_id in admins:
-        requests.append(f"INSERT OR IGNORE INTO users (id, role) VALUES ('{admin_id}', 'admin');")
+        requests.append(f"INSERT INTO users (id, role) VALUES ('{admin_id}', 'admin') ON CONFLICT  DO NOTHING;")
 
     cursor = db_connector.cursor()
     for request in requests:
