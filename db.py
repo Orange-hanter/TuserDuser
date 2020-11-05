@@ -129,7 +129,7 @@ def put_test_data_to_db():
 
 
 def add_to_db_tasklist(chatid, time, text, number, event_id):
-    db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+    #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
     cursor = db_connector.cursor()
 
     ins = f"""INSERT INTO tasklist (user_id ,time , text, number, event_id)  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}')"""
@@ -139,7 +139,7 @@ def add_to_db_tasklist(chatid, time, text, number, event_id):
 
 def add_user(id, role):
     try:
-        db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
+        #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
         cursor = db_connector.cursor()
         ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}')"""
         cursor.execute(ins)
