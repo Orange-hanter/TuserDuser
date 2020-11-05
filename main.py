@@ -29,7 +29,7 @@ class Event:
         self.url = None
         self.time = None
 
-
+init_db()
 bot = telebot.TeleBot(token)
 
 event_dict = {}
@@ -206,6 +206,8 @@ def add_new_client(message):
     chat_id = message.chat.id
     keyboard_keyboard = get_keyboard_by_id(chat_id)
     if message.text == 'Отмена':
+        cancel_adding_event(message.chat.id)
+
         return
 
     if message.forward_from != None:

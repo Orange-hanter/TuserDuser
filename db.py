@@ -59,7 +59,7 @@ def add_event_db(description, date, time, url, image_id):
     try:
         cursor.execute(
             f"INSERT INTO events (description, date,time , url, image_id) VALUES ('{description}', '{date}','{time}', "
-            f"'{url}','{image_id}')")
+            f"'{url}','{image_id}');")
 
         db_connector.commit()
         cursor.close()
@@ -69,7 +69,7 @@ def add_event_db(description, date, time, url, image_id):
 
 def delete_event_db(event_id):
     request = f"""DELETE FROM artists_backup
-                    WHERE event_id = '{event_id}';"""
+                    WHERE event_id = '{event_id}'"""
     cursor = db_connector.cursor()
     cursor.execute(request)
     cursor.fetchall()
@@ -116,23 +116,23 @@ def get_events_by_period_db(date_start, date_end):
     return events
 
 
-def put_test_data_to_db():
-    date = datetime.date.today()
-    with open("./DB/events.test", 'r') as file:
-        for line in file.readlines():
-            description = line
-            date += datetime.timedelta(days=1)
-            cursor = db_connector.cursor()
-            cursor.execute(f"INSERT INTO events (description, date) VALUES ('{description}', '{date}')")
-        db_connector.commit()
-    cursor.close()
+# def put_test_data_to_db():
+#     date = datetime.date.today()
+#     with open("./DB/events.test", 'r') as file:
+#         for line in file.readlines():
+#             description = line
+#             date += datetime.timedelta(days=1)
+#             cursor = db_connector.cursor()
+#             cursor.execute(f"INSERT INTO events (description, date) VALUES ('{description}', '{date}');")
+#         db_connector.commit()
+#     cursor.close()
 
 
 def add_to_db_tasklist(chatid, time, text, number, event_id):
     #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
     cursor = db_connector.cursor()
 
-    ins = f"""INSERT INTO tasklist (user_id ,time , text, number, event_id)  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}')"""
+    ins = f"""INSERT INTO tasklist (user_id ,time , text, number, event_id)  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}');"""
     cursor.execute(ins)
     db_connector.commit()
 
@@ -141,7 +141,7 @@ def add_user(id, role):
     try:
         #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
         cursor = db_connector.cursor()
-        ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}')"""
+        ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}');"""
         cursor.execute(ins)
         db_connector.commit()
     except Exception as e:
