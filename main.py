@@ -221,7 +221,7 @@ def add_new_client(message):
 def cancel_adding_event(chat_id):
     keyboard_keyboard = get_keyboard_by_id(chat_id)
     bot.send_message(chat_id, 'Хорошо, добавление отменено.', reply_markup=keyboard_keyboard)
-    if event_dict[chat_id] is not None:
+    if chat_id in event_dict:
         del event_dict[chat_id]
 
 
