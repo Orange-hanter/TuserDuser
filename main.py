@@ -121,7 +121,7 @@ def process_date_step(message):
 
         event.date = date
 
-        msg = bot.reply_to(message, 'Введите время (ЧЧ/ММ)')
+        msg = bot.reply_to(message, 'Введите время (ЧЧ:ММ)')
         bot.register_next_step_handler(msg, process_time_step)
 
     except Exception as e:
@@ -140,10 +140,10 @@ def process_time_step(message):
         event = event_dict[chat_id]
         time = re.search(r'\d{2}[:|/|-|.| ]\d{2}', time)
         if time == None:
-            msg = bot.reply_to(message, 'Введите время в формате (ЧЧ/ММ)')
+            msg = bot.reply_to(message, 'Введите время в формате (ЧЧ:ММ)')
             bot.register_next_step_handler(msg, process_date_step)
 
-        event.time = time.group()
+        event.time = re.sub(r'[:|/|-|.| ]', ':', time.group())
         markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
         markup.add('Нет ссылки', 'Отмена')
         msg = bot.reply_to(message, 'Введите ссылку', reply_markup=markup)
