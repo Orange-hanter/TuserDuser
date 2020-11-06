@@ -443,8 +443,7 @@ def command_handler(message):
         weekstart = dt - datetime.timedelta(days=dt.weekday())
         weekend = weekstart + datetime.timedelta(days=6)
         events = get_events_by_period_db(tomorrow_date(), weekend)
-        # print(events)
-
+        #print(events)
         if events:
             # print(response)
             process_messages(events, user_id, request)

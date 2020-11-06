@@ -23,8 +23,8 @@ def init_db():
     requests = ["""CREATE TABLE IF NOT EXISTS Events (
                                             id          SERIAL,
                                             description TEXT,
-                                            date        date,
-                                            time        time,
+                                            date        TEXT,
+                                            time        TEXT,
                                             url         TEXT,
                                             image_id    TEXT
                                             );""",
@@ -91,7 +91,7 @@ def get_event_by_id(event_id):
 def get_events_by_day_db(date):
     request = f"""SELECT * 
                         FROM events 
-                        WHERE date = '{date}'
+                        WHERE date = '{str(date)}'
                     """
     cursor = db_connector.cursor()
     cursor.execute(request)
@@ -105,7 +105,7 @@ def get_events_today_db():
 
 
 def get_events_by_period_db(date_start, date_end):
-    numdays = date_end - date_start
+    numdays = (date_end + datetime.timedelta(days=1)) - date_start
     events = []
     date_list = [date_start + datetime.timedelta(days=x) for x in range(numdays.days)]
     for date in date_list:
