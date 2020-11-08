@@ -3,7 +3,7 @@ import datetime
 import os
 from config import admins
 import psycopg2
-
+from psycopg2.extras import Json, DictCursor
 
 try:
     print(os.getcwd())
@@ -35,8 +35,12 @@ def init_db():
                                             time        text, 
                                             text        text,
                                             number      INTEGER, 
-                                            event_id    text
+                                            event_id    INTEGER
                                             );""",
+                """CREATE TABLE IF NOT EXISTS event_id_and_message_id (
+                                            event_id INTEGER,
+                                            message_id INTEGER
+                                        );""",
                 ]
     for admin_id in admins:
         requests.append(f"INSERT INTO users (id, role) VALUES ('{admin_id}', 'admin') ON CONFLICT  DO NOTHING;")
@@ -68,12 +72,12 @@ def add_event_db(description, date, time, url, image_id):
         print(str(e))
 
 def delete_event_db(event_id):
-    request = f"""DELETE FROM artists_backup
-                    WHERE event_id = '{event_id}'"""
+    request = f"""DELETE FROM Events
+                    WHERE id = '{event_id}'"""
     cursor = db_connector.cursor()
     cursor.execute(request)
-    cursor.fetchall()
     cursor.close()
+    db_connector.commit()
 
 
 def get_event_by_id(event_id):
@@ -136,6 +140,13 @@ def add_to_db_tasklist(chatid, time, text, number, event_id):
     cursor.execute(ins)
     db_connector.commit()
 
+def delete_task(number):
+    request = f"""DELETE FROM tasklist
+                    WHERE number = '{number}'"""
+    cursor = db_connector.cursor()
+    cursor.execute(request)
+    cursor.close()
+    db_connector.commit()
 
 def add_user(id, role):
     try:
@@ -143,6 +154,7 @@ def add_user(id, role):
         cursor = db_connector.cursor()
         ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}');"""
         cursor.execute(ins)
+        cursor.close()
         db_connector.commit()
     except Exception as e:
         print("Exception: " + str(e))
@@ -165,7 +177,8 @@ def get_user_role(id):
 
 
 def get_chatid_and_task_number(event_id):
-    request = f"""SELECT chatid,
+    print(event_id)
+    request = f"""SELECT user_id,
                         number  
                         FROM tasklist 
                         WHERE event_id = '{event_id}'
@@ -173,8 +186,33 @@ def get_chatid_and_task_number(event_id):
     cursor = db_connector.cursor()
     cursor.execute(request)
 
-    chatid, number = cursor.fetchall()
-    return chatid, number
+    fetched = cursor.fetchall()
+    print(fetched)
+    if fetched:
+        chatids = [i[0] for i in fetched]
+        numbers = [i[1] for i in fetched]
+        return chatids, numbers
+    else:
+        return None,None
+
+def put_event_id_and_message_id(message_id, event_id):
+    cursor = db_connector.cursor()
+
+    request = f"""INSERT INTO event_id_and_message_id (message_id, event_id )  VALUES ('{message_id}', '{event_id}');"""
+    cursor.execute(request)
+    db_connector.commit()
+
+def get_event_id_and_message_id(message_id):
+    request = f"""SELECT event_id
+                        FROM event_id_and_message_id 
+                        WHERE message_id = '{message_id}'
+                    """
+    cursor = db_connector.cursor()
+    cursor.execute(request)
+
+    event_id = cursor.fetchall()[0][0]
+    return event_id
+
 
 
 # it's useless for now
