@@ -17,7 +17,7 @@ from db import init_db, \
     add_event_db, \
     get_events_by_day_db, \
     get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, \
-    get_chatid_and_task_number, delete_event_db
+    get_chatid_and_task_number, delete_event_db, put_event_id_and_message_id, get_event_id_and_message_id, delete_task
 
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
@@ -121,7 +121,7 @@ def process_date_step(message):
 
         event.date = date
 
-        msg = bot.reply_to(message, 'Введите время (ЧЧ/ММ)')
+        msg = bot.reply_to(message, 'Введите время (ЧЧ:ММ)')
         bot.register_next_step_handler(msg, process_time_step)
 
     except Exception as e:
@@ -140,10 +140,10 @@ def process_time_step(message):
         event = event_dict[chat_id]
         time = re.search(r'\d{2}[:|/|-|.| ]\d{2}', time)
         if time == None:
-            msg = bot.reply_to(message, 'Введите время в формате (ЧЧ/ММ)')
+            msg = bot.reply_to(message, 'Введите время в формате (ЧЧ:ММ)')
             bot.register_next_step_handler(msg, process_date_step)
 
-        event.time = time.group()
+        event.time = re.sub(r'[:|/|-|.| ]', ':', time.group())
         markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
         markup.add('Нет ссылки', 'Отмена')
         msg = bot.reply_to(message, 'Введите ссылку', reply_markup=markup)
@@ -235,7 +235,7 @@ def render_events(events):
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id,
                                 cancel_button=False):
     event = get_event_by_id(event_id)[0]
-    print(str(event[3]))
+    #print(str(event[3]))
     event_date = parse(' '.join([str(event[2]), str(event[3])]))
 
     keyboard = types.InlineKeyboardMarkup()
@@ -244,7 +244,8 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
     duration = event_date - now  # For build-in functions
     duration_in_s = duration.total_seconds()
     minutes = divmod(duration_in_s, 60)[0]
-
+    if minutes < 0:
+        return
     if minutes > 15:
         keyboard.add(types.InlineKeyboardButton(text='Напомнить за 15 минут', callback_data=' за 15 минут'))
     if minutes > 60:
@@ -260,7 +261,8 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
 
     # event_id_and_message_id[event_id].append(message_id)
-    event_id_and_message_id.update({message_id: event_id})
+    #event_id_and_message_id.update({message_id: event_id})
+    put_event_id_and_message_id(message_id, event_id)
 
 
 def process_messages(events, user_id, request):
@@ -276,7 +278,7 @@ def process_messages(events, user_id, request):
         if image_id.startswith('DB'):
             image_id = open(image_id, "rb")
 
-        event_id_and_message_id.update({event_id: []})
+        #event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
         if get_user_role(user_id)[0][0] == 'admin':
@@ -316,7 +318,9 @@ def add_task(user_id, text, date_time, event_id):  # Функция создаю
 
 
 def remind_in(minutes, call):
-    event_id = event_id_and_message_id[call.message.message_id]
+    #event_id = event_id_and_message_id[call.message.message_id]
+    event_id = get_event_id_and_message_id(call.message.message_id)
+    print(event_id)
 
     # date = parse(get_event_by_id(event_id)[0][2])
     # time = parse(get_event_by_id(event_id)[0][3])
@@ -331,15 +335,21 @@ def remind_in(minutes, call):
     bot.send_message(call.from_user.id, f'Я напомню за {minutes} минут до начала')
 
 
-def cancel_event(event_id):
+def cancel_event(event_id,user_id):
     chatids, numbers = get_chatid_and_task_number(event_id)
-
+    if chatids == None:
+        delete_event_db(event_id)
+        bot.send_message(user_id, 'Событие отменено:\n')
+        return
     for number in numbers:
         cmd = ['atrm', str(number)]
         subprocess.check_output(cmd)
+        delete_task(number)
+
+
     for chatid in chatids:
-        description = get_event_by_id(event_id[0][0])
-        bot.send_message(chatid, 'Событие отменено:\n' + description)
+        description = get_event_by_id(event_id)
+        bot.send_message(int(chatid), 'Событие отменено:\n' + description)
     delete_event_db(event_id)
 
 
@@ -373,11 +383,16 @@ def callback_inline(call: CallbackQuery):
 
 @bot.callback_query_handler(func=lambda call: True)  # Реакция на кнопки
 def button_callback(call):
+    print(call)
     if call.data == ' за 15 минут':
         remind_in(15, call)
 
     if call.data == ' за час':
         remind_in(60, call)
+
+    if call.data == ' Отменить эвент':
+        cancel_event(event_id = get_event_id_and_message_id(call.message.message_id),user_id=call.from_user.id)
+
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -420,10 +435,10 @@ def command_handler(message):
     logging.info(message)
     if request == 'События сегодня':
         events = get_events_today_db()
-        # print(events)
-
+        for event in events.copy():
+            if datetime.datetime.now().strftime("%H:%M") > parse(event[3]).strftime("%H:%M"):
+                events.remove(event)
         if events:
-            # print(response)
             process_messages(events, user_id, request)
 
         else:
