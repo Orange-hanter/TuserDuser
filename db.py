@@ -6,8 +6,6 @@ import psycopg2
 from psycopg2.extras import Json, DictCursor
 
 try:
-    print(os.getcwd())
-    #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
     db_connector = psycopg2.connect(dbname='postgres', user='postgres',
                             password='postgres', host='db', port=5432)
     print("DB connected")
@@ -133,7 +131,6 @@ def get_events_by_period_db(date_start, date_end):
 
 
 def add_to_db_tasklist(chatid, time, text, number, event_id):
-    #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
     cursor = db_connector.cursor()
 
     ins = f"""INSERT INTO tasklist (user_id ,time , text, number, event_id)  VALUES ('{chatid}', '{time}', '{text}','{number}', '{event_id}');"""
@@ -150,7 +147,6 @@ def delete_task(number):
 
 def add_user(id, role):
     try:
-        #db_connector = sqlite3.connect("./DB/db.db", check_same_thread=False)
         cursor = db_connector.cursor()
         ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}');"""
         cursor.execute(ins)
