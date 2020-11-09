@@ -29,14 +29,13 @@ class Event:
         self.url = None
         self.time = None
 
+
 init_db()
 bot = telebot.TeleBot(token)
 
 event_dict = {}
 keyboard = None
 
-# для связи id эвента и id сообщения в будущем скорее всего будет в бд
-event_id_and_message_id = {}
 
 # Creates a unique calendar
 calendar_1 = CallbackData("calendar_1", "action", "year", "month", "day")
@@ -120,8 +119,9 @@ def process_date_step(message):
             return
 
         event.date = date
-
-        msg = bot.reply_to(message, 'Введите время (ЧЧ:ММ)')
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+        markup.add('Отмена')
+        msg = bot.reply_to(message, 'Введите время (ЧЧ:ММ)', reply_markup=markup)
         bot.register_next_step_handler(msg, process_time_step)
 
     except Exception as e:
@@ -179,7 +179,6 @@ def add_new_event_url(message):
 
 def add_new_event_image(message):
     try:
-
         if message.text == 'Отмена':
             cancel_adding_event(message.chat.id)
             return
@@ -207,7 +206,6 @@ def add_new_client(message):
     keyboard_keyboard = get_keyboard_by_id(chat_id)
     if message.text == 'Отмена':
         cancel_adding_event(message.chat.id)
-
         return
 
     if message.forward_from != None:
@@ -225,17 +223,10 @@ def cancel_adding_event(chat_id):
         del event_dict[chat_id]
 
 
-def render_events(events):
-    rendered_text = []
-    for event in events:
-        rendered_text.append(f"Когда: {event[2]}\nЧто: {event[1]}\n\n")
-    return rendered_text
-
-
 def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id,
                                 cancel_button=False):
     event = get_event_by_id(event_id)[0]
-    #print(str(event[3]))
+    # print(str(event[3]))
     event_date = parse(' '.join([str(event[2]), str(event[3])]))
 
     keyboard = types.InlineKeyboardMarkup()
@@ -261,7 +252,7 @@ def send_messgage_with_reminder(messgage, user_id, request, event_url, event_id,
     message_id = bot.send_message(user_id, messgage, reply_markup=keyboard).message_id
 
     # event_id_and_message_id[event_id].append(message_id)
-    #event_id_and_message_id.update({message_id: event_id})
+    # event_id_and_message_id.update({message_id: event_id})
     put_event_id_and_message_id(message_id, event_id)
 
 
@@ -278,7 +269,7 @@ def process_messages(events, user_id, request):
         if image_id.startswith('DB'):
             image_id = open(image_id, "rb")
 
-        #event_id_and_message_id.update({event_id: []})
+        # event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
         if get_user_role(user_id)[0][0] == 'admin':
@@ -318,7 +309,7 @@ def add_task(user_id, text, date_time, event_id):  # Функция создаю
 
 
 def remind_in(minutes, call):
-    #event_id = event_id_and_message_id[call.message.message_id]
+    # event_id = event_id_and_message_id[call.message.message_id]
     event_id = get_event_id_and_message_id(call.message.message_id)
     print(event_id)
 
@@ -335,7 +326,7 @@ def remind_in(minutes, call):
     bot.send_message(call.from_user.id, f'Я напомню за {minutes} минут до начала')
 
 
-def cancel_event(event_id,user_id):
+def cancel_event(event_id, user_id):
     chatids, numbers = get_chatid_and_task_number(event_id)
     if chatids == None:
         delete_event_db(event_id)
@@ -345,7 +336,6 @@ def cancel_event(event_id,user_id):
         cmd = ['atrm', str(number)]
         subprocess.check_output(cmd)
         delete_task(number)
-
 
     for chatid in chatids:
         description = get_event_by_id(event_id)
@@ -391,8 +381,7 @@ def button_callback(call):
         remind_in(60, call)
 
     if call.data == ' Отменить эвент':
-        cancel_event(event_id = get_event_id_and_message_id(call.message.message_id),user_id=call.from_user.id)
-
+        cancel_event(event_id=get_event_id_and_message_id(call.message.message_id), user_id=call.from_user.id)
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -458,7 +447,7 @@ def command_handler(message):
         weekstart = dt - datetime.timedelta(days=dt.weekday())
         weekend = weekstart + datetime.timedelta(days=6)
         events = get_events_by_period_db(tomorrow_date(), weekend)
-        #print(events)
+        # print(events)
         if events:
             # print(response)
             process_messages(events, user_id, request)
