@@ -3,6 +3,7 @@ import re
 import subprocess
 import uuid
 import logging
+import os, time
 
 import telebot
 from dateutil.parser import parse
@@ -58,11 +59,17 @@ def init_bot():
     events_on_week = types.KeyboardButton('События на неделе')
     add_event = types.KeyboardButton('Добавить эвент')
     add_client = types.KeyboardButton('Добавить клиента')
-
+    get_file_version = types.KeyboardButton('Версия')
     # keyboard1.row(events_today, events_tomorrow,events_on_week)
     keyboard.add(events_today, events_tomorrow, events_on_week)
     client_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
-    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event, add_client)
+    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event, add_client,get_file_version)
+
+
+def send_message_to_admins():
+    from config import admins
+    for admin_id in admins:
+        bot.send_message(int(admin_id), 'Бот запущен ' + get_version())
 
 
 def add_new_event_proc(message):
@@ -342,6 +349,11 @@ def cancel_event(event_id, user_id):
         bot.send_message(int(chatid), 'Событие отменено:\n' + description)
     delete_event_db(event_id)
 
+def get_version():
+    (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat('main.py')
+    msg = "last modified: %s" % time.ctime(mtime)
+    return msg
+
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(calendar_1.prefix))
 def callback_inline(call: CallbackQuery):
@@ -473,8 +485,16 @@ def command_handler(message):
             bot.send_message(user_id, "Введи айди или перешли сообщение", reply_markup=markup)
             bot.register_next_step_handler(message, add_new_client)
 
+    elif request == 'Версия':
+        role = get_user_role(user_id)[0][0]
+        if role == 'admin':
+
+            bot.send_message(user_id, get_version())
+
+
 
 if __name__ == '__main__':
     init_db()
     init_bot()
     bot.polling()
+    send_message_to_admins()
