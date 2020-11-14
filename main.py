@@ -22,6 +22,7 @@ from db import init_db, \
 
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
+telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
 
 class Event:
     def __init__(self, description):
