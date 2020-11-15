@@ -294,7 +294,7 @@ def get_datetime(call):
 
 def get_keyboard_by_id(user_id):
     markup_keyboard = None
-
+    print(get_user_role(user_id)[0])
     if get_user_role(user_id)[0][0] == 'admin':
         markup_keyboard = admin_keyboard
 
@@ -420,6 +420,7 @@ def start_message(message):
 
     except:
         add_user(message.chat.id, 'user')
+        keyboard_markup = get_keyboard_by_id(message.chat.id)
         bot.send_message(message.chat.id, bot_description, reply_markup=keyboard_markup)
 
 

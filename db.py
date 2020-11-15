@@ -148,7 +148,7 @@ def delete_task(number):
 def add_user(id, role):
     try:
         cursor = db_connector.cursor()
-        ins = f"""INSERT INTO 'users'  VALUES ('{id}', '{role}');"""
+        ins = f"""INSERT INTO users  VALUES ('{id}', '{role}')  ON CONFLICT  DO NOTHING;"""
         cursor.execute(ins)
         cursor.close()
         db_connector.commit()
