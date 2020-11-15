@@ -7,7 +7,7 @@ from psycopg2.extras import Json, DictCursor
 
 try:
     db_connector = psycopg2.connect(dbname='postgres', user='postgres',
-                            password='postgres', host='db', port=5432)
+                            password='postgres', host='localhost', port=5432)
     print("DB connected")
 except Exception as e:
     print("DB not connected")

@@ -22,7 +22,7 @@ from db import init_db, \
 
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
-telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
+#telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
 
 class Event:
     def __init__(self, description):
@@ -279,7 +279,7 @@ def process_messages(events, user_id, request):
 
         # event_id_and_message_id.update({event_id: []})
 
-        messgage = f"Когда: {event[2]}, в {event[3]}\nЧто: {event[1]}\n\n"
+        messgage = f"Когда: {event[2]}, в {event[3][:-3]}\nЧто: {event[1]}\n\n"
         if get_user_role(user_id)[0][0] == 'admin':
             cancel_button = True
         send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id, cancel_button)
@@ -374,7 +374,7 @@ def callback_inline(call: CallbackQuery):
     if action == "DAY":
         msg = bot.send_message(
             chat_id=call.from_user.id,
-            text=f"{date.strftime('%Y.%m.%d')}",
+            text=f"{date.strftime('%d.%m.%Y')}",
             reply_markup=ReplyKeyboardRemove(),
         )
         process_date_step(msg)
@@ -438,9 +438,10 @@ def command_handler(message):
     logging.info(message)
     if request == 'События сегодня':
         events = get_events_today_db()
-        for event in events.copy():
+        for i,event in enumerate(events.copy()):
             if datetime.datetime.now().strftime("%H:%M") > parse(event[3]).strftime("%H:%M"):
-                events.remove(event)
+                del events[i]
+        print(events)
         if events:
             process_messages(events, user_id, request)
 
