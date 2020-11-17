@@ -22,7 +22,8 @@ from db import init_db, \
 
 logging.basicConfig(filename="history_work.log", level=logging.INFO)
 
-#telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
+
+# telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
 
 class Event:
     def __init__(self, description):
@@ -37,7 +38,6 @@ bot = telebot.TeleBot(token)
 
 event_dict = {}
 keyboard = None
-
 
 # Creates a unique calendar
 calendar_1 = CallbackData("calendar_1", "action", "year", "month", "day")
@@ -64,7 +64,7 @@ def init_bot():
     # keyboard1.row(events_today, events_tomorrow,events_on_week)
     keyboard.add(events_today, events_tomorrow, events_on_week)
     client_keyboard.add(events_today, events_tomorrow, events_on_week, add_event)
-    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event, add_client,get_file_version)
+    admin_keyboard.add(events_today, events_tomorrow, events_on_week, add_event, add_client, get_file_version)
 
 
 def send_message_to_admins():
@@ -280,6 +280,7 @@ def process_messages(events, user_id, request):
         # event_id_and_message_id.update({event_id: []})
 
         messgage = f"Когда: {event[2]}, в {event[3][:-3]}\nЧто: {event[1]}\n\n"
+        cancel_button = False
         if get_user_role(user_id)[0][0] == 'admin':
             cancel_button = True
         send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date_time, image_id, cancel_button)
@@ -349,6 +350,7 @@ def cancel_event(event_id, user_id):
         description = get_event_by_id(event_id)
         bot.send_message(int(chatid), 'Событие отменено:\n' + description)
     delete_event_db(event_id)
+
 
 def get_version():
     (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat('main.py')
@@ -438,7 +440,7 @@ def command_handler(message):
     logging.info(message)
     if request == 'События сегодня':
         events = get_events_today_db()
-        for i,event in enumerate(events.copy()):
+        for i, event in enumerate(events.copy()):
             if datetime.datetime.now().strftime("%H:%M") > parse(event[3]).strftime("%H:%M"):
                 del events[i]
         print(events)
@@ -491,13 +493,11 @@ def command_handler(message):
     elif request == 'Версия':
         role = get_user_role(user_id)[0][0]
         if role == 'admin':
-
             bot.send_message(user_id, get_version())
-
 
 
 if __name__ == '__main__':
     init_db()
     init_bot()
     bot.polling()
-    send_message_to_admins()
+    # send_message_to_admins()
