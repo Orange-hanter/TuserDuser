@@ -33,7 +33,6 @@ class Event:
         self.time = None
 
 
-init_db()
 bot = telebot.TeleBot(token)
 
 event_dict = {}
@@ -199,7 +198,8 @@ def add_new_event_image(message):
             image_id = message.photo[0].file_id
 
         date_time_event = str(event.time) + ' ' + str(event.date)
-        add_event_db(event.description, event.date, event.time, event.url, image_id)
+        creator_id = chat_id
+        add_event_db(event.description, event.date, event.time, event.url, image_id, creator_id)
         keyboard_keyboard = get_keyboard_by_id(chat_id)
         bot.send_message(chat_id, 'Хорошо!\nСобытие: ' + event.description + '\nВремя: ' + date_time_event,
                          reply_markup=keyboard_keyboard)
@@ -273,6 +273,7 @@ def process_messages(events, user_id, request):
         event_url = event[4]
         date = event[2]
         image_id = event[5]
+        creator_id = event[6]
 
         if image_id.startswith('DB'):
             image_id = open(image_id, "rb")
@@ -281,7 +282,8 @@ def process_messages(events, user_id, request):
         date_moved = date[-2:] + date[4:8] + date[:4]
         messgage = f"Когда: {date_moved}, в {event[3]}\nЧто: {event[1]}\n\n"
         cancel_button = False
-        if get_user_role(user_id)[0][0] == 'admin':
+
+        if get_user_role(user_id)[0][0] == 'admin' or creator_id == user_id:
             cancel_button = True
         send_messgage_with_reminder(messgage, user_id, request, event_url, event_id, date, image_id, cancel_button)
 

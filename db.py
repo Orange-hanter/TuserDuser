@@ -7,7 +7,7 @@ from psycopg2.extras import Json, DictCursor
 
 try:
     db_connector = psycopg2.connect(dbname='postgres', user='postgres',
-                            password='postgres', host='localhost', port=5432)
+                            password='postgres', host='db', port=5432)
     print("DB connected")
 except Exception as e:
     print("DB not connected")
@@ -24,7 +24,8 @@ def init_db():
                                             date        TEXT,
                                             time        TEXT,
                                             url         TEXT,
-                                            image_id    TEXT
+                                            image_id    TEXT,
+                                            creator_id  TEXT
                                             );""",
                 """CREATE TABLE IF NOT EXISTS Users (id TEXT UNIQUE, role TEXT);""",
                 """CREATE TABLE IF NOT EXISTS TaskList (
@@ -56,12 +57,12 @@ def init_db():
     cursor.close()
 
 
-def add_event_db(description, date, time, url, image_id):
+def add_event_db(description, date, time, url, image_id,creator_id):
     cursor = db_connector.cursor()
     try:
         cursor.execute(
-            f"INSERT INTO events (description, date,time , url, image_id) VALUES ('{description}', '{date}','{time}', "
-            f"'{url}','{image_id}');")
+            f"INSERT INTO events (description, date,time , url, image_id,creator_id) VALUES ('{description}', '{date}','{time}', "
+            f"'{url}','{image_id}','{creator_id}');")
 
         db_connector.commit()
         cursor.close()
