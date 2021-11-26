@@ -1,4 +1,4 @@
-from db import init_db, \
+from DBManager.db_postgre import init_db, \
     get_events_today_db, \
     add_event_db, \
     get_events_by_day_db, \
