@@ -1,26 +1,20 @@
 import datetime
+import logging
+import os
 import re
 import subprocess
-import uuid
-import logging
-import os, time
+import time
 
 import telebot
+import telebot_calendar
 from dateutil.parser import parse
 from telebot import types
-import telebot_calendar
-from telebot_calendar import CallbackData
 from telebot.types import ReplyKeyboardRemove, CallbackQuery
+from telebot_calendar import CallbackData
 
-from config import token
-from db import init_db, \
-    get_events_today_db, \
-    add_event_db, \
-    get_events_by_day_db, \
-    get_events_by_period_db, add_to_db_tasklist, add_user, get_user_role, get_event_by_id, \
-    get_chatid_and_task_number, delete_event_db, put_event_id_and_message_id, get_event_id_and_message_id, delete_task
+from Service.config import token
 
-logging.basicConfig(filename="history_work.log", level=logging.INFO)
+logging.basicConfig(filename="../history_work.log", level=logging.INFO)
 
 
 # telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
@@ -67,7 +61,7 @@ def init_bot():
 
 
 def send_message_to_admins():
-    from config import admins
+    from Service.config import admins
     for admin_id in admins:
         bot.send_message(int(admin_id), 'Бот запущен ' + get_version())
 
