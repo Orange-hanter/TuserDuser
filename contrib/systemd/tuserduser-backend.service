@@ -1,0 +1,17 @@
+[Unit]
+Description=TuserDuser Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=tuserduser
+Group=tuserduser
+WorkingDirectory=/var/lib/tuserduser
+Environment=PORT=8080
+ExecStart=/usr/local/bin/tuserduser-backend
+Restart=on-failure
+RestartSec=5s
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
