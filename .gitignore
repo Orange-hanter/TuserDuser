@@ -130,3 +130,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+bin/tuserduser-backend
+bin/tuserduser-backend-linux-amd64
+.DS_Store
