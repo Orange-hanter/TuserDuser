@@ -110,11 +110,11 @@ func createEventHandler(w http.ResponseWriter, r *http.Request) {
 
 	ev.Time = time.Now().Format(time.RFC3339)
 
-	// Валидация полей
-	if ev.Type == "" || ev.Start == "" || (ev.End == "" && ev.Duration == "") || ev.Place == "" {
-		http.Error(w, "Missing required fields", http.StatusBadRequest)
-		return
-	}
+	// // Валидация полей
+	// if ev.Type == "" || ev.Start == "" || (ev.End == "" && ev.Duration == "") || ev.Place == "" {
+	// 	http.Error(w, "Missing required fields", http.StatusBadRequest)
+	// 	return
+	// }
 
 	select {
 	case eventQueue <- ev:
@@ -127,24 +127,37 @@ func createEventHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	// Start workers with a WaitGroup so they can be gracefully shut down.
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/var/lib/tuserduser"
+	}
+	log.Printf("DATA_DIR=%s", dataDir)
+
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go startWorker("feedbacks.jsonl", feedbackQueue, &wg)
-	go startWorker("events.jsonl", eventQueue, &wg)
+	go startWorker(dataDir+"/feedbacks.jsonl", feedbackQueue, &wg)
+	go startWorker(dataDir+"/events.jsonl", eventQueue, &wg)
 
 	// HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/feedback", submitHandler)
 	mux.HandleFunc("/create", createEventHandler)
 
+	staticDir := os.Getenv("STATIC_DIR")
+	if staticDir == "" {
+		staticDir = "/var/www/tuserduser"
+	}
+	log.Printf("STATIC_DIR=%s", staticDir)
+
 	// Serve the `Support` directory under /static/
-	fs := http.FileServer(http.Dir("Support"))
+	fs := http.FileServer(http.Dir(staticDir))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// Serve the demo HTML at the root. The file in the repo is named `rpoto4.html`.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Request:", r.URL)
 		if r.URL.Path == "/" {
-			http.ServeFile(w, r, "Support/proto4.html")
+			http.ServeFile(w, r, staticDir+"/index.html")
 			return
 		}
 		// Fall back to the static handler for other paths
@@ -179,7 +192,8 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// Create a context with timeout for shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	var timeMultiplyer time.Duration = 5
+	ctx, cancel := context.WithTimeout(context.Background(), timeMultiplyer*time.Second)
 	defer cancel()
 
 	// Shutdown HTTP server
