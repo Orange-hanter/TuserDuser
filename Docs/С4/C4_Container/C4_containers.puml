@@ -1,0 +1,69 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Платформа мероприятий — Диаграмма контейнеров
+
+' === Акторы (внешние по отношению к системе) ===
+Person(user, "Пользователь", "Ищет и регистрируется на мероприятия")
+Person(author, "Организатор", "Создаёт и управляет мероприятиями")
+Person(admin, "Администратор", "Модерирует контент и пользователей")
+Person(support, "Поддержка", "Обрабатывает обращения")
+
+' === Внешние системы ===
+System_Ext(cloud_storage, "Облачное хранилище", "Хранение фото и видео (S3/MinIO)")
+System_Ext(maps_api, "Сервис карт", "Геолокация и маршрутизация (Google/Yandex)")
+System_Ext(notify_provider, "Провайдер уведомлений", "Push, SMS, Email (FCM/Twilio/SendGrid)")
+System_Ext(payments, "Платёжный сервис", "Обработка оплаты билетов и услуг")
+System_Ext(analytics_backend, "Аналитическая система", "Сбор событий и метрик (ClickHouse)")
+
+' === Основная система ===
+System_Boundary(platform, "Платформа мероприятий") {
+
+    ' --- UI-контейнеры ---
+    Container(mobile_app, "Мобильное приложение", "iOS/Android", "Интерфейс для пользователей и организаторов")
+    Container(web_app, "Веб-приложение", "React/Vue", "Публичный веб-интерфейс")
+    Container(telegram_bot, "Telegram-бот", "Python/Node.js", "Интерфейс через Telegram: поиск, регистрация, уведомления")
+
+    Container(admin_panel, "Админка", "Веб-приложение (React)", "Интерфейс для администраторов и поддержки")
+
+    ' --- Бэкенд ---
+    Container(backend, "API-сервер", "Node.js/Go", "Единый бэкенд: аутентификация, мероприятия, группы, отзывы, заказы, медиа")
+
+    ' --- Специализированные сервисы (только где реально нужно) ---
+    Container(search_service, "Сервис поиска", "Elasticsearch + API", "Полнотекстовый поиск и рекомендации")
+
+    ' --- Хранилища ---
+    ContainerDb(main_db, "Основная БД", "PostgreSQL", "Пользователи, мероприятия, регистрации, отзывы, заказы")
+    ContainerDb(cache, "Кеш и фоновые задачи", "Redis", "Сессии, кеши, гео-поиск, очереди уведомлений")
+}
+
+' === Взаимодействия: акторы → система ===
+Rel(user, mobile_app, "Использует")
+Rel(author, mobile_app, "Создаёт и управляет мероприятиями")
+Rel(user, web_app, "Использует")
+Rel(author, web_app, "Создаёт и управляет мероприятиями")
+Rel(admin, admin_panel, "Модерирует контент")
+Rel(support, admin_panel, "Обрабатывает запросы")
+Rel(user, telegram_bot, "Использует через Telegram")
+Rel(author, telegram_bot, "Управляет мероприятиями (ограниченно)")
+
+' === Внутренние связи ===
+Rel(mobile_app, backend, "HTTP/HTTPS", "Вызывает API")
+Rel(web_app, backend, "HTTP/HTTPS", "Вызывает API")
+Rel(admin_panel, backend, "HTTP/HTTPS", "Вызывает API")
+Rel(telegram_bot, backend, "Вызывает API", "HTTP/Webhook")
+
+Rel(backend, main_db, "Чтение/запись", "SQL")
+Rel(backend, cache, "Использует", "Redis API")
+
+Rel(backend, search_service, "Индексирует и ищет", "HTTP/REST")
+Rel(search_service, main_db, "Синхронизирует данные", "CDC / Polling")
+
+' === Внешние интеграции ===
+Rel(backend, cloud_storage, "Загружает/получает медиа", "S3 API")
+Rel(backend, maps_api, "Получает геоданные", "REST API")
+Rel(backend, notify_provider, "Отправляет уведомления", "REST/SMTP")
+Rel(backend, payments, "Инициирует оплату", "REST API")
+Rel(backend, analytics_backend, "Передаёт события", "HTTP/gRPC")
+
+@enduml

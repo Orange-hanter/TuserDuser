@@ -1,0 +1,224 @@
+// Пользователь (объединяет роли: автор, админ, участник, поддержка)
+Table User {
+  user_id integer [pk, increment]
+  email varchar [unique, not null]
+  phone varchar
+  full_name varchar
+  birth_date date
+  gender varchar
+  avatar_url varchar
+  role varchar [note: 'user, author, admin, support']
+  created_at datetime [default: `now()`]
+  last_login datetime
+  is_banned boolean [default: false]
+  ban_reason text
+  ban_until datetime
+  privacy_settings json
+  onboarding_completed boolean [default: false]
+  referral_code varchar
+  referred_by integer [ref: > User.user_id]
+}
+
+// Мероприятие
+Table Event {
+  event_id integer [pk, increment]
+  author_id integer [ref: > User.user_id, not null]
+  title varchar [not null]
+  description text
+  cover_image_url varchar
+  location_name varchar
+  location_lat float
+  location_lng float
+  address text
+  start_datetime datetime [not null]
+  end_datetime datetime
+  age_restriction integer [default: 0]
+  is_paid boolean [default: false]
+  price_min decimal
+  price_max decimal
+  external_registration_url varchar
+  status varchar [note: 'draft, pending_moderation, approved, rejected, cancelled, completed', default: 'draft']
+  rejection_reason text
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+  participant_limit integer
+  supports_group_orders boolean [default: false]
+  supports_partner_search boolean [default: false]
+  moderation_notes json
+}
+
+// Тег мероприятия
+Table EventTag {
+  tag_id integer [pk, increment]
+  name varchar [unique, not null]
+  is_moderated boolean [default: true]
+  created_by integer [ref: > User.user_id]
+  created_at datetime [default: `now()`]
+}
+
+// Связь мероприятие-тег (многие-ко-многим)
+Table EventTagMapping {
+  event_id integer [ref: > Event.event_id, not null]
+  tag_id integer [ref: > EventTag.tag_id, not null]
+  
+  indexes {
+    (event_id, tag_id) [pk]
+  }
+}
+
+// Участник мероприятия (индивидуальный или групповой)
+Table EventParticipant {
+  participant_id integer [pk, increment]
+  event_id integer [ref: > Event.event_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  group_id integer [ref: > Group.group_id]
+  joined_at datetime [default: `now()`]
+  status varchar [note: 'confirmed, cancelled, no_show', default: 'confirmed']
+  has_made_order boolean [default: false]
+  order_id integer [ref: > Order.order_id]
+  notifications_enabled boolean [default: true]
+}
+
+// Группа участников
+Table Group {
+  group_id integer [pk, increment]
+  name varchar
+  creator_id integer [ref: > User.user_id, not null]
+  event_id integer [ref: > Event.event_id, not null]
+  created_at datetime [default: `now()`]
+  member_count integer [default: 1]
+  is_active boolean [default: true]
+}
+
+// Участник группы
+Table GroupMember {
+  group_id integer [ref: > Group.group_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  joined_at datetime [default: `now()`]
+  role_in_group varchar [note: 'member, admin', default: 'member']
+  
+  indexes {
+    (group_id, user_id) [pk]
+  }
+}
+
+// Вопросы и ответы по мероприятию
+Table EventFAQ {
+  faq_id integer [pk, increment]
+  event_id integer [ref: > Event.event_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  question_text text [not null]
+  answer_text text
+  answered_by integer [ref: > User.user_id]
+  answered_at datetime
+  is_pinned boolean [default: false]
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+}
+
+// Отзыв о мероприятии
+Table Review {
+  review_id integer [pk, increment]
+  event_id integer [ref: > Event.event_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  rating integer [note: '1-5', not null]
+  comment text
+  media_url varchar
+  created_at datetime [default: `now()`]
+  is_moderated boolean [default: false]
+  moderation_status varchar [note: 'pending, approved, rejected', default: 'pending']
+  rejection_reason text
+}
+
+// Медиа (фото/видео)
+Table Media {
+  media_id integer [pk, increment]
+  uploader_id integer [ref: > User.user_id, not null]
+  event_id integer [ref: > Event.event_id]
+  review_id integer [ref: > Review.review_id]
+  url varchar [not null]
+  type varchar [note: 'photo, video', not null]
+  uploaded_at datetime [default: `now()`]
+  is_public boolean [default: true]
+  is_moderated boolean [default: false]
+  moderation_status varchar [note: 'pending, approved, rejected', default: 'pending']
+  moderation_notes text
+}
+
+// Избранное (закладки)
+Table Bookmark {
+  user_id integer [ref: > User.user_id, not null]
+  event_id integer [ref: > Event.event_id, not null]
+  bookmarked_at datetime [default: `now()`]
+  
+  indexes {
+    (user_id, event_id) [pk]
+  }
+}
+
+// Заказ в заведении
+Table Order {
+  order_id integer [pk, increment]
+  event_id integer [ref: > Event.event_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  group_id integer [ref: > Group.group_id]
+  items json [note: '[{item_id, name, qty, price}]']
+  total_amount decimal [not null]
+  status varchar [note: 'pending, confirmed, cancelled, completed', default: 'pending']
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+  restaurant_notes text
+}
+
+// Уведомления
+Table Notification {
+  notification_id integer [pk, increment]
+  user_id integer [ref: > User.user_id, not null]
+  event_id integer [ref: > Event.event_id]
+  group_id integer [ref: > Group.group_id]
+  type varchar [note: 'event_reminder, event_changed, event_cancelled, support_reply, moderation_status, group_invite, partner_found']
+  title varchar [not null]
+  body text [not null]
+  sent_at datetime [default: `now()`]
+  read_at datetime
+  channel varchar [note: 'push, email, in_app', default: 'push']
+  priority varchar [note: 'low, normal, high, urgent', default: 'normal']
+  deep_link varchar
+}
+
+// Обращение в поддержку
+Table SupportTicket {
+  ticket_id integer [pk, increment]
+  user_id integer [ref: > User.user_id, not null]
+  assigned_to integer [ref: > User.user_id]
+  subject varchar [not null]
+  description text [not null]
+  status varchar [note: 'new, in_progress, resolved, closed', default: 'new']
+  category varchar [note: 'technical, event_related, billing, complaint, other']
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+  resolved_at datetime
+  screenshot_url varchar
+  internal_notes text
+}
+
+// Сообщения в тикете поддержки
+Table SupportMessage {
+  message_id integer [pk, increment]
+  ticket_id integer [ref: > SupportTicket.ticket_id, not null]
+  sender_id integer [ref: > User.user_id, not null]
+  message_text text [not null]
+  sent_at datetime [default: `now()`]
+  is_internal boolean [default: false]
+}
+
+// Лог действий администратора
+Table AdminActionLog {
+  log_id integer [pk, increment]
+  admin_id integer [ref: > User.user_id, not null]
+  action_type varchar [not null, note: 'event_approve, event_reject, user_ban, media_remove, ticket_resolve...']
+  target_id integer [not null, note: 'ID целевого объекта']
+  target_type varchar [not null, note: 'event, user, media, ticket']
+  details json
+  timestamp datetime [default: `now()`]
+}

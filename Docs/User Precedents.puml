@@ -1,0 +1,79 @@
+@startuml
+left to right direction
+
+' Акторы
+actor "Пользователь" as User
+actor "Система уведомлений" as NotificationSystem
+
+' Граница системы
+rectangle "Платформа мероприятий" {
+
+  package "Аутентификация и профиль" {
+    (Зарегистрироваться / Войти) as UC_Auth
+    (Просматривать профиль) as UC_Profile
+  }
+
+  package "Поиск и просмотр" {
+    (Просматривать ленту мероприятий) as UC_Browse
+    (История участия) as UC_BrowseHistory
+    (Искать и фильтровать мероприятия) as UC_Search
+    (Просматривать карточку мероприятия) as UC_ViewEvent
+    (Добавить в избранное) as UC_Bookmark
+    (Поделиться мероприятием) as UC_Share
+    (Просматривать медиатеку) as UC_Media
+  }
+
+  package "Участие и социальные функции" {
+    (Присоединиться к мероприятию) as UC_Join
+    (Записаться в резервный список) as UC_JoinWaitlist
+    (Отписаться от мероприятия) as UC_Leave
+    (Создать группу участников) as UC_CreateGroup
+    (Найти партнёра на мероприятие) as UC_FindPartner
+    (Сделать заказ в заведении) as UC_PlaceOrder
+    (Оставить отзыв и рейтинг) as UC_Review
+  }
+
+  package "Поддержка" {
+    (Обратиться в поддержку) as UC_ContactSupport
+  }
+
+  ' Внешние / системные прецеденты (не в пакетах, чтобы не путать с бизнес-логикой)
+  (Получить уведомления) as UC_GetNotifications
+  (Уведомлять об изменениях/отмене) as UC_NotifyChanges
+
+  ' === Связи акторов ===
+  User --> UC_Auth
+  User --> UC_Browse
+  User --> UC_Search
+  User --> UC_ViewEvent
+  User --> UC_Join
+  User --> UC_JoinWaitlist
+  User --> UC_Leave
+  User --> UC_Bookmark
+  User --> UC_Share
+  User --> UC_Review
+  User --> UC_FindPartner
+  User --> UC_CreateGroup
+  User --> UC_PlaceOrder
+  User --> UC_Media
+  User --> UC_ContactSupport
+  User --> UC_BrowseHistory
+
+
+
+  ' === Отношения include / extend ===
+  UC_Join .> UC_GetNotifications : <<include>>
+  UC_JoinWaitlist .> UC_GetNotifications : <<include>>
+
+  UC_Review .> UC_Join : <<extend>>\n(после завершения)
+  UC_PlaceOrder .> UC_Join : <<extend>>\n(если поддерживается)
+  UC_FindPartner .> UC_ViewEvent : <<extend>>
+ 
+
+  ' === Связь с внешней системой ===
+  UC_GetNotifications ..> NotificationSystem : использует
+  UC_NotifyChanges ..> NotificationSystem : использует
+
+}
+
+@enduml

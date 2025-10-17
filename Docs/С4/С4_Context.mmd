@@ -1,0 +1,36 @@
+C4Context
+    title Платформа мероприятий — Контекстная диаграмма
+
+    Boundary(G1, "Общая система пользования"){
+        Person(user, "Пользователь", "Регистрируется, ищет, присоединяется к мероприятиям")
+        System(platform, "Платформа-афиша мероприятий", "Мобильное и веб-приложение для поиска, регистрации мероприятий")
+    }
+
+    Boundary(G2, "Система администрирования"){
+        Person(author, "Автор", "Создаёт и управляет мероприятиями")
+        Person(admin, "Администратор", "Модерирует контент и управляет пользователями")
+        Person(support, "Поддержка", "Обрабатывает обращения пользователей и отвечает на вопросы")
+        System(admin_platform, "Административная панель", "Мобильное и веб-приложение для администрирования, создания и управления мероприятиями")
+    }
+
+
+    Enterprise_Boundary(b0, "TuserDuser") {
+
+        System_Ext(cloud_storage, "Внешнее хранилище (S3/MinIO)", "Хранение медиафайлов")
+        System_Ext(maps_api, "Сервис карт (Google/Yandex)", "Геолокация и маршрутизация")
+        System_Ext(notify_provider, "Провайдер уведомлений (FCM/Twilio/SendGrid)", "Push, SMS, Email")
+        System_Ext(analytics_backend, "Аналитическая система (ClickHouse)", "Хранение событий и метрик")
+        System_Ext(Pay_system, "Сервис оплаты", "Для оплаты напрямую через нас или оплаты наших сервисов")
+   }
+
+    Rel(user, platform, "Использует приложение")
+    Rel(author, admin_platform, "Публикует и управляет")
+    Rel(admin, admin_platform, "Модерирует и настраивает")
+    Rel(support, admin_platform, "Решает запросы через панель")
+
+    Rel(admin_platform, platform, "Модерирует мероприятия")
+    Rel(platform, cloud_storage, "Хранит фото/видео")
+    Rel(platform, maps_api, "Получает геоданные и маршруты")
+    Rel(platform, notify_provider, "Отправляет уведомления")
+    Rel(platform, analytics_backend, "Передаёт события для аналитики")
+    Rel(platform, Pay_system, "Проводит оплату")

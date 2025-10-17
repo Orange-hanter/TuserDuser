@@ -1,0 +1,122 @@
+@startuml
+left to right direction
+
+' Акторы
+actor "Пользователь" as User
+actor "Автор" as Author
+actor "Администратор" as Admin
+actor "Поддержка" as Support
+actor "Система уведомлений" as NotificationSystem
+
+' Граница системы
+rectangle "Платформа мероприятий" {
+
+  package "Аутентификация и профиль" {
+    (Зарегистрироваться / Войти) as UC_Auth
+    (Просматривать профиль) as UC_Profile
+  }
+
+  package "Поиск и просмотр" {
+    (Просматривать ленту мероприятий) as UC_Browse
+    (Искать и фильтровать мероприятия) as UC_Search
+    (Просматривать карточку мероприятия) as UC_ViewEvent
+    (Добавить в избранное) as UC_Bookmark
+    (Поделиться мероприятием) as UC_Share
+    (Просматривать медиатеку) as UC_Media
+  }
+
+  package "Участие и социальные функции" {
+    (Присоединиться к мероприятию) as UC_Join
+    (Отписаться от мероприятия) as UC_Leave
+    (Создать группу участников) as UC_CreateGroup
+    (Найти партнёра на мероприятие) as UC_FindPartner
+    (Сделать заказ в заведении) as UC_PlaceOrder
+    (Оставить отзыв и рейтинг) as UC_Review
+  }
+
+  package "Управление мероприятиями" {
+    (Создать мероприятие) as UC_CreateEvent
+    (Редактировать мероприятие) as UC_EditEvent
+    (Отправить на модерацию) as UC_SubmitForModeration
+    (Просматривать статус модерации) as UC_ModerationStatus
+    (Просматривать список участников) as UC_ViewParticipants
+    (Отправлять уведомления участникам) as UC_NotifyParticipants
+    (Отменить/завершить мероприятие) as UC_CancelEvent
+    (Управлять заказами) as UC_ManageOrders
+  }
+
+  package "Модерация и администрирование" {
+    (Просматривать заявки на мероприятия) as UC_ViewSubmissions
+    (Одобрить/отклонить мероприятие) as UC_ApproveReject
+    (Модерировать медиа) as UC_ModerateMedia
+    (Блокировать/разблокировать пользователей) as UC_BanUser
+    (Назначать модераторов) as UC_AssignModerators
+    (Просматривать статистику) as UC_ViewStats
+  }
+
+  package "Поддержка" {
+    (Обратиться в поддержку) as UC_ContactSupport
+    (Просматривать обращения) as UC_ViewTickets
+    (Отвечать на тикеты) as UC_ReplyToTickets
+    (Использовать шаблоны ответов) as UC_UseTemplates
+    (Просматривать профиль пользователя) as UC_ViewUserInSupport
+  }
+
+  ' Внешние / системные прецеденты (не в пакетах, чтобы не путать с бизнес-логикой)
+  (Получить уведомления) as UC_GetNotifications
+  (Уведомлять об изменениях/отмене) as UC_NotifyChanges
+
+  ' === Связи акторов ===
+  User --> UC_Auth
+  User --> UC_Browse
+  User --> UC_Search
+  User --> UC_ViewEvent
+  User --> UC_Join
+  User --> UC_Leave
+  User --> UC_Bookmark
+  User --> UC_Share
+  User --> UC_Review
+  User --> UC_FindPartner
+  User --> UC_CreateGroup
+  User --> UC_PlaceOrder
+  User --> UC_Media
+  User --> UC_ContactSupport
+
+  Author --> UC_CreateEvent
+  Author --> UC_EditEvent
+  Author --> UC_SubmitForModeration
+  Author --> UC_ModerationStatus
+  Author --> UC_ViewParticipants
+  Author --> UC_NotifyParticipants
+  Author --> UC_CancelEvent
+  Author --> UC_ManageOrders
+
+  Admin --> UC_ViewSubmissions
+  Admin --> UC_ApproveReject
+  Admin --> UC_ModerateMedia
+  Admin --> UC_BanUser
+  Admin --> UC_AssignModerators
+  Admin --> UC_ViewStats
+
+  Support --> UC_ViewTickets
+  Support --> UC_ReplyToTickets
+  Support --> UC_UseTemplates
+  Support --> UC_ViewUserInSupport
+
+  ' === Отношения include / extend ===
+  UC_Join .> UC_GetNotifications : <<include>>
+  UC_CreateEvent .> UC_SubmitForModeration : <<include>>
+  UC_CreateEvent .> (Указать теги, возраст, формат) : <<include>>
+
+  UC_Review .> UC_Join : <<extend>>\n(после завершения)
+  UC_PlaceOrder .> UC_Join : <<extend>>\n(если поддерживается)
+  UC_FindPartner .> UC_ViewEvent : <<extend>>
+  UC_ManageOrders .> UC_CreateEvent : <<extend>>\n(если в заведении)
+
+  ' === Связь с внешней системой ===
+  UC_GetNotifications ..> NotificationSystem : использует
+  UC_NotifyChanges ..> NotificationSystem : использует
+
+}
+
+@enduml

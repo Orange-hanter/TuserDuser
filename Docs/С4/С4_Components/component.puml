@@ -1,0 +1,75 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Платформа мероприятий — Компоненты API-сервера
+
+' === Граница контейнера (API-сервер) ===
+Container_Boundary(backend, "API-сервер") {
+
+    ' --- Основные компоненты ---
+    Component(auth_comp, "Auth Component", "Node.js/Go", "Аутентификация, профиль, привязка Telegram, сессии")
+    Component(event_comp, "Event Component", "Node.js/Go", "Создание, редактирование, модерация, публикация мероприятий")
+    Component(group_comp, "Group Component", "Node.js/Go", "Управление группами, поиск партнёров, приглашения")
+    Component(media_comp, "Media Component", "Node.js/Go", "Загрузка, обработка, модерация медиа (фото/видео)")
+    Component(order_comp, "Order Component", "Node.js/Go", "Обработка заказов в заведениях (бронирование, оплата)")
+    Component(review_comp, "Review Component", "Node.js/Go", "Отзывы, рейтинги, жалобы")
+    Component(notify_comp, "Notification Component", "Node.js/Go", "Планирование и триггеры уведомлений")
+    Component(search_adapter, "Search Adapter", "Node.js/Go", "Индексация и запросы к Search Service")
+    Component(geo_comp, "Geo Component", "Node.js/Go", "Геолокация, сортировка по расстоянию, геозоны")
+    Component(analytics_pub, "Analytics Publisher", "Node.js/Go", "Формирование и отправка событий в аналитику")
+
+    ' --- Слой доступа к данным (опционально, но полезно) ---
+    Component(user_repo, "User Repository", "Node.js/Go", "Доступ к данным пользователей")
+    Component(event_repo, "Event Repository", "Node.js/Go", "Доступ к данным мероприятий")
+    Component(media_repo, "Media Repository", "Node.js/Go", "Доступ к медиа-метаданным")
+
+    ' --- Внутренние связи ---
+    Rel(auth_comp, user_repo, "Использует")
+    Rel(event_comp, event_repo, "Использует")
+    Rel(media_comp, media_repo, "Использует")
+
+    Rel(event_comp, auth_comp, "Проверяет автора")
+    Rel(event_comp, media_comp, "Запрашивает медиа")
+    Rel(event_comp, geo_comp, "Получает координаты")
+    Rel(event_comp, search_adapter, "Отправляет на индексацию")
+
+    Rel(group_comp, auth_comp, "Проверяет участников")
+    Rel(order_comp, event_comp, "Связывает с мероприятием")
+    Rel(order_comp, auth_comp, "Проверяет пользователя")
+
+    Rel(review_comp, event_comp, "Привязан к мероприятию")
+    Rel(review_comp, auth_comp, "Проверяет автора отзыва")
+
+    Rel(notify_comp, auth_comp, "Получает контактные данные")
+    Rel(notify_comp, event_comp, "Реагирует на события (начало мероприятия и т.д.)")
+
+    Rel(analytics_pub, auth_comp, "Анонимизирует пользователя")
+    Rel(analytics_pub, event_comp, "Логирует просмотры/регистрации")
+}
+
+' === Внешние зависимости (из уровня Containers) ===
+ContainerDb(main_db, "Основная БД", "PostgreSQL")
+ContainerDb(cache, "Кеш и очереди", "Redis")
+Container(search_service, "Сервис поиска", "Elasticsearch")
+System_Ext(cloud_storage, "Облачное хранилище", "S3/MinIO")
+System_Ext(maps_api, "Сервис карт", "Google/Yandex")
+System_Ext(notify_provider, "Провайдер уведомлений", "FCM/Twilio/Telegram")
+System_Ext(payments, "Платёжный сервис", "Stripe/CloudPayments")
+System_Ext(analytics_backend, "Аналитическая система", "ClickHouse")
+
+' --- Связи с внешними системами ---
+Rel(user_repo, main_db, "Читает/пишет", "SQL")
+Rel(event_repo, main_db, "Читает/пишет", "SQL")
+Rel(media_repo, main_db, "Читает/пишет", "SQL")
+
+Rel(media_comp, cloud_storage, "Загружает файлы", "S3 API")
+Rel(geo_comp, maps_api, "Геокодирование", "REST API")
+Rel(notify_comp, notify_provider, "Отправляет уведомления", "REST/Webhook")
+Rel(order_comp, payments, "Инициирует оплату", "REST API")
+Rel(analytics_pub, analytics_backend, "Передаёт события", "HTTP/gRPC")
+Rel(search_adapter, search_service, "Индексирует данные", "HTTP")
+
+Rel(notify_comp, cache, "Ставит отложенные задачи", "Redis")
+Rel(geo_comp, cache, "Кеширует геозоны", "Redis")
+
+@enduml

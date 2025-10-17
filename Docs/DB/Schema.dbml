@@ -1,0 +1,98 @@
+
+
+// Пользователь (объединяет роли: автор, админ, участник, поддержка)
+Table User {
+  user_id integer [pk, increment]
+  email varchar [unique, not null]
+  phone varchar
+  full_name varchar
+  birth_date date
+  gender varchar
+  avatar_url varchar
+  created_at datetime [default: `now()`]
+  last_login datetime
+  is_banned boolean [default: false]
+  ban_reason text
+  ban_until datetime
+  privacy_settings json
+  onboarding_completed boolean [default: false]
+  referral_code varchar
+  referred_by integer [ref: > User.user_id]
+}
+
+// Мероприятие
+Table Event {
+  event_id integer [pk, increment]
+  author_id integer [ref: > User.user_id, not null]
+  title varchar [not null]
+  description text
+  cover_image_url varchar
+  location_name varchar
+  location_geojson json
+  address text
+  start_datetime datetime [not null]
+  duration_minutes integer [default: 30]
+  age_restriction integer 
+  is_paid boolean [default: false]
+  is_tips_allowed boolean [default: false]
+  price decimal
+  external_registration_url varchar
+  status varchar [note: 'draft, pending_moderation, approved, rejected, cancelled, completed', default: 'draft']
+  rejection_reason text
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+  participant_limit integer
+  moderation_notes json
+}
+
+// Тег мероприятия
+Table EventTag {
+  tag_id integer [pk, increment]
+  name varchar [unique, not null]
+  is_moderated boolean [default: true]
+}
+
+// Связь мероприятие-тег (многие-ко-многим)
+Table EventTagMapping {
+  event_id integer [ref: > Event.event_id, not null]
+  tag_id integer [ref: > EventTag.tag_id, not null]
+  
+  indexes {
+    (event_id, tag_id) [pk]
+  }
+}
+
+// Участник мероприятия (индивидуальный или групповой)
+Table EventParticipant {
+  participant_id integer [pk, increment]
+  event_id integer [ref: > Event.event_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  joined_at datetime [default: `now()`]
+  status varchar [note: 'confirmed, cancelled, no_show', default: 'confirmed']
+  has_made_order boolean [default: false]
+}
+
+// Вопросы и ответы по мероприятию
+Table EventFAQ {
+  faq_id integer [pk, increment]
+  event_id integer [ref: > Event.event_id, not null]
+  user_id integer [ref: > User.user_id, not null]
+  question_text text [not null]
+  answer_text text
+  answered_by integer [ref: > User.user_id]
+  answered_at datetime
+  is_pinned boolean [default: false]
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+}
+
+// Избранное (закладки)
+Table Bookmark {
+  user_id integer [ref: > User.user_id, not null]
+  event_id integer [ref: > Event.event_id, not null]
+  bookmarked_at datetime [default: `now()`]
+  
+  indexes {
+    (user_id, event_id) [pk]
+  }
+}
