@@ -1,0 +1,5 @@
+.env
+*.log
+/go/bin/
+/go/pkg/
+/bin/
