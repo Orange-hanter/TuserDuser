@@ -5,9 +5,11 @@ import (
 	"os"
 
 	"event-api/internal/config"
+	"event-api/internal/database"
 	"event-api/internal/handlers"
 	"event-api/internal/logger"
 	"event-api/internal/middleware"
+	"event-api/internal/migrations"
 	"event-api/internal/service"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +22,32 @@ func main() {
 	defer logger.Sync()
 
 	cfg := config.Load()
+
+	// Инициализируем подключение к БД
+	dbConfig := &database.Config{
+		Host:     cfg.DBHost,
+		Port:     cfg.DBPort,
+		User:     cfg.DBUser,
+		Password: cfg.DBPassword,
+		DBName:   cfg.DBName,
+		SSLMode:  cfg.DBSSLMode,
+		MaxConn:  cfg.DBMaxConn,
+		MinConn:  cfg.DBMinConn,
+	}
+
+	db, err := database.NewDatabase(dbConfig, logger.Log)
+	if err != nil {
+		logger.Log.Fatal("Ошибка при подключении к БД", zap.Error(err))
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	// Запускаем миграции
+	migrator := migrations.NewMigrator(db.DB, logger.Log)
+	if err := migrator.RunMigrations(); err != nil {
+		logger.Log.Fatal("Ошибка при выполнении миграций", zap.Error(err))
+		os.Exit(1)
+	}
 
 	// Инициализируем сервисы
 	authService := service.NewAuthService(cfg)
