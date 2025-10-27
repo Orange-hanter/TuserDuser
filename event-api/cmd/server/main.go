@@ -8,9 +8,11 @@ import (
 	"event-api/internal/handlers"
 	"event-api/internal/logger"
 	"event-api/internal/middleware"
+	"event-api/internal/service"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/cors"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -19,13 +21,28 @@ func main() {
 
 	cfg := config.Load()
 
+	// Инициализируем сервисы
+	authService := service.NewAuthService(cfg)
+
+	// Инициализируем handlers
+	authHandler := handlers.NewAuthHandler(authService)
+
 	r := chi.NewRouter()
 
 	// Middleware
 	r.Use(middleware.SecurityHeaders)
 
-	// Routes
+	// Public routes
 	r.Get("/health", handlers.HealthCheck)
+
+	// Auth routes (public)
+	r.Post("/api/auth/register", authHandler.Register)
+	r.Post("/api/auth/verify", authHandler.Verify)
+	r.Post("/api/auth/login", authHandler.Login)
+
+	// Auth routes (protected)
+	r.Post("/api/auth/logout", authHandler.Logout)
+	r.With(middleware.AuthMiddleware(authService)).Get("/api/auth/me", authHandler.GetMe)
 
 	// CORS
 	c := cors.New(cors.Options{

@@ -12,6 +12,8 @@ type Config struct {
 	Port               string
 	Env                string
 	CORSAllowedOrigins []string
+	JWTSecret          string
+	JWTExpiration      int64 // в секундах
 }
 
 func Load() *Config {
@@ -28,6 +30,8 @@ func Load() *Config {
 		Port:               getEnv("PORT", "8080"),
 		Env:                getEnv("ENV", "development"),
 		CORSAllowedOrigins: origins,
+		JWTSecret:         getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+		JWTExpiration:     3600, // 1 час
 	}
 }
 

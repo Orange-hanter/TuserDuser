@@ -1,0 +1,252 @@
+package handlers
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"event-api/internal/logger"
+	"event-api/internal/models"
+	"event-api/internal/service"
+
+	"go.uber.org/zap"
+)
+
+// AuthHandler управляет всеми auth endpoints
+type AuthHandler struct {
+	authService *service.AuthService
+}
+
+// NewAuthHandler создает новый auth handler
+func NewAuthHandler(authService *service.AuthService) *AuthHandler {
+	return &AuthHandler{
+		authService: authService,
+	}
+}
+
+// Register обрабатывает регистрацию нового пользователя
+// POST /api/auth/register
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	var req models.RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге RegisterRequest", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "bad_request",
+			Message: "Неверный формат запроса",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Валидация
+	if req.Email == "" || req.Password == "" || req.Phone == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "validation_error",
+			Message: "Email, password и phone обязательны",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	if len(req.Password) < 8 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "validation_error",
+			Message: "Пароль должен быть минимум 8 символов",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	user, verifyCode, err := h.authService.Register(&req)
+	if err != nil {
+		logger.Log.Error("Ошибка при регистрации", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "conflict",
+			Message: err.Error(),
+			Code:    http.StatusConflict,
+		})
+		return
+	}
+
+	logger.Log.Info("Новый пользователь зарегистрирован", 
+		zap.String("email", user.Email),
+		zap.String("user_id", user.ID),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"user":       user,
+		"verify_code": verifyCode, // В production отправляем через email/SMS
+	})
+}
+
+// Verify проверяет код верификации
+// POST /api/auth/verify
+func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	var req models.VerifyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге VerifyRequest", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "bad_request",
+			Message: "Неверный формат запроса",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	err := h.authService.VerifyCode(req.Email, req.Code)
+	if err != nil {
+		logger.Log.Warn("Ошибка при верификации", zap.String("email", req.Email), zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "verification_failed",
+			Message: err.Error(),
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	logger.Log.Info("Email верифицирован", zap.String("email", req.Email))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(models.VerifyResponse{
+		Message:  "Email успешно верифицирован",
+		Verified: true,
+	})
+}
+
+// Login аутентифицирует пользователя и выдает JWT
+// POST /api/auth/login
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req models.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге LoginRequest", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "bad_request",
+			Message: "Неверный формат запроса",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	authResponse, err := h.authService.Login(&req)
+	if err != nil {
+		logger.Log.Warn("Ошибка при входе", zap.String("email", req.Email), zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "unauthorized",
+			Message: err.Error(),
+			Code:    http.StatusUnauthorized,
+		})
+		return
+	}
+
+	logger.Log.Info("Пользователь успешно вошел", zap.String("email", req.Email))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(authResponse)
+}
+
+// Logout отзывает JWT токен
+// POST /api/auth/logout
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	
+	// Парсим Bearer токен из заголовка
+	var token string
+	if authHeader != "" && len(authHeader) > 7 {
+		if authHeader[:7] == "Bearer " {
+			token = authHeader[7:]
+		}
+	}
+
+	// Если в заголовке нет, пробуем из тела запроса
+	if token == "" {
+		var req models.LogoutRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			token = req.Token
+		}
+	}
+
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "bad_request",
+			Message: "Token не найден",
+			Code:    http.StatusBadRequest,
+		})
+		return
+	}
+
+	err := h.authService.Logout(token)
+	if err != nil {
+		logger.Log.Error("Ошибка при выходе", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Ошибка при выходе",
+			Code:    http.StatusInternalServerError,
+		})
+		return
+	}
+
+	logger.Log.Info("Пользователь успешно вышел")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Успешно вышли из системы",
+	})
+}
+
+// GetMe возвращает текущего пользователя
+// GET /api/auth/me
+func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	// UserID поставляется middleware AuthMiddleware
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "unauthorized",
+			Message: "User not found in context",
+			Code:    http.StatusUnauthorized,
+		})
+		return
+	}
+
+	user, err := h.authService.GetUserByID(userID)
+	if err != nil {
+		logger.Log.Error("Ошибка при получении пользователя", zap.String("user_id", userID), zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(models.ErrorResponse{
+			Error:   "not_found",
+			Message: "Пользователь не найден",
+			Code:    http.StatusNotFound,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(user)
+}
