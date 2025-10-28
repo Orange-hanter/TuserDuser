@@ -5,14 +5,22 @@ import (
 
 	"event-api/internal/config"
 	"event-api/internal/models"
+	"event-api/internal/worker"
+
+	"go.uber.org/zap"
 )
 
 func TestRegister(t *testing.T) {
 	cfg := &config.Config{
-		JWTSecret:    "test-secret",
+		JWTSecret:     "test-secret",
 		JWTExpiration: 3600,
 	}
-	authService := NewAuthService(cfg)
+	logger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, logger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := NewAuthService(cfg, workerPool, logger)
 
 	tests := []struct {
 		name      string
@@ -44,7 +52,7 @@ func TestRegister(t *testing.T) {
 		},
 	}
 
-		for _, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			user, code, err := authService.Register(&models.RegisterRequest{
 				Email:    tt.email,
@@ -77,10 +85,15 @@ func TestRegister(t *testing.T) {
 
 func TestVerifyCode(t *testing.T) {
 	cfg := &config.Config{
-		JWTSecret:    "test-secret",
+		JWTSecret:     "test-secret",
 		JWTExpiration: 3600,
 	}
-	authService := NewAuthService(cfg)
+	logger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, logger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := NewAuthService(cfg, workerPool, logger)
 
 	// Регистрируем пользователя
 	user, verifyCode, err := authService.Register(&models.RegisterRequest{
@@ -130,10 +143,15 @@ func TestVerifyCode(t *testing.T) {
 
 func TestLogin(t *testing.T) {
 	cfg := &config.Config{
-		JWTSecret:    "test-secret",
+		JWTSecret:     "test-secret",
 		JWTExpiration: 3600,
 	}
-	authService := NewAuthService(cfg)
+	logger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, logger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := NewAuthService(cfg, workerPool, logger)
 
 	// Регистрируем и верифицируем пользователя
 	user, verifyCode, _ := authService.Register(&models.RegisterRequest{
@@ -198,10 +216,15 @@ func TestLogin(t *testing.T) {
 
 func TestLogout(t *testing.T) {
 	cfg := &config.Config{
-		JWTSecret:    "test-secret",
+		JWTSecret:     "test-secret",
 		JWTExpiration: 3600,
 	}
-	authService := NewAuthService(cfg)
+	logger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, logger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := NewAuthService(cfg, workerPool, logger)
 
 	// Регистрируем и логируемся
 	user, verifyCode, _ := authService.Register(&models.RegisterRequest{
@@ -231,10 +254,15 @@ func TestLogout(t *testing.T) {
 
 func TestGetUserByID(t *testing.T) {
 	cfg := &config.Config{
-		JWTSecret:    "test-secret",
+		JWTSecret:     "test-secret",
 		JWTExpiration: 3600,
 	}
-	authService := NewAuthService(cfg)
+	logger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, logger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := NewAuthService(cfg, workerPool, logger)
 
 	// Регистрируем пользователя
 	user, _, _ := authService.Register(&models.RegisterRequest{
@@ -282,10 +310,15 @@ func TestGetUserByID(t *testing.T) {
 
 func TestValidateJWT(t *testing.T) {
 	cfg := &config.Config{
-		JWTSecret:    "test-secret",
+		JWTSecret:     "test-secret",
 		JWTExpiration: 3600,
 	}
-	authService := NewAuthService(cfg)
+	logger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, logger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := NewAuthService(cfg, workerPool, logger)
 
 	// Регистрируем и логируемся
 	user, verifyCode, _ := authService.Register(&models.RegisterRequest{

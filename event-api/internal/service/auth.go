@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -9,8 +10,10 @@ import (
 
 	"event-api/internal/config"
 	"event-api/internal/models"
+	"event-api/internal/worker"
 
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -19,8 +22,10 @@ type AuthService struct {
 	cfg        *config.Config
 	users      map[string]*models.User
 	verifyCode map[string]string // email -> code
-	tokens     map[string]bool    // blacklist для токенов
+	tokens     map[string]bool   // blacklist для токенов
 	mu         sync.RWMutex
+	workerPool *worker.Pool
+	logger     *zap.Logger
 }
 
 // VerificationCode хранит информацию о коде верификации
@@ -31,12 +36,14 @@ type VerificationCode struct {
 }
 
 // NewAuthService создает новый сервис аутентификации
-func NewAuthService(cfg *config.Config) *AuthService {
+func NewAuthService(cfg *config.Config, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		cfg:        cfg,
 		users:      make(map[string]*models.User),
 		verifyCode: make(map[string]string),
 		tokens:     make(map[string]bool),
+		workerPool: workerPool,
+		logger:     logger,
 	}
 }
 
@@ -75,6 +82,12 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 	// Генерируем код верификации
 	code := generateVerificationCode()
 	s.verifyCode[req.Email] = code
+
+	// Асинхронная отправка кода верификации
+	email := req.Email
+	s.workerPool.Submit(func(ctx context.Context) error {
+		return s.sendVerificationCode(ctx, email, code)
+	})
 
 	return user, code, nil
 }
@@ -236,6 +249,29 @@ func (s *AuthService) ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 	}
 
 	return claims, nil
+}
+
+// sendVerificationCode отправляет код верификации по email
+// В будущем здесь будет реальная интеграция с email сервисом
+func (s *AuthService) sendVerificationCode(ctx context.Context, email, code string) error {
+	s.logger.Info("Отправка кода верификации (асинхронно)",
+		zap.String("email", email),
+		zap.String("code", code),
+	)
+
+	// Симуляция отправки email
+	time.Sleep(100 * time.Millisecond)
+
+	// В production здесь будет:
+	// - SMTP отправка
+	// - SendGrid/Mailgun API
+	// - Очередь сообщений (RabbitMQ/Kafka)
+
+	s.logger.Info("Код верификации отправлен (асинхронно)",
+		zap.String("email", email),
+	)
+
+	return nil
 }
 
 // Вспомогательные функции

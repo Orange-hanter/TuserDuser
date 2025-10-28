@@ -11,6 +11,8 @@ import (
 	"event-api/internal/logger"
 	"event-api/internal/models"
 	"event-api/internal/service"
+	"event-api/internal/worker"
+
 	"go.uber.org/zap"
 )
 
@@ -21,7 +23,12 @@ func init() {
 
 func TestRegisterHandler(t *testing.T) {
 	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	authService := service.NewAuthService(cfg)
+	testLogger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, testLogger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := service.NewAuthService(cfg, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	tests := []struct {
@@ -65,7 +72,12 @@ func TestRegisterHandler(t *testing.T) {
 
 func TestVerifyHandler(t *testing.T) {
 	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	authService := service.NewAuthService(cfg)
+	testLogger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, testLogger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := service.NewAuthService(cfg, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем пользователя для получения кода
@@ -115,7 +127,12 @@ func TestVerifyHandler(t *testing.T) {
 
 func TestLoginHandler(t *testing.T) {
 	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	authService := service.NewAuthService(cfg)
+	testLogger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, testLogger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := service.NewAuthService(cfg, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем и верифицируем пользователя
@@ -166,7 +183,12 @@ func TestLoginHandler(t *testing.T) {
 
 func TestLogoutHandler(t *testing.T) {
 	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	authService := service.NewAuthService(cfg)
+	testLogger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, testLogger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := service.NewAuthService(cfg, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем, верифицируем и логируемся
@@ -197,7 +219,12 @@ func TestLogoutHandler(t *testing.T) {
 
 func TestGetMeHandler(t *testing.T) {
 	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	authService := service.NewAuthService(cfg)
+	testLogger, _ := zap.NewDevelopment()
+	workerPool := worker.NewPool(2, 10, testLogger)
+	workerPool.Start()
+	defer workerPool.Shutdown()
+
+	authService := service.NewAuthService(cfg, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем, верифицируем и логируемся

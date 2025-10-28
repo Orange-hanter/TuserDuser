@@ -1,0 +1,268 @@
+basePath: /v1
+definitions:
+  models.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_at:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+    type: object
+  models.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  models.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  models.LogoutRequest:
+    properties:
+      token:
+        type: string
+    type: object
+  models.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      phone:
+        type: string
+    required:
+    - email
+    - password
+    - phone
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      phone:
+        type: string
+      updated_at:
+        type: string
+      verified:
+        type: boolean
+    type: object
+  models.VerifyRequest:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+    required:
+    - code
+    - email
+    type: object
+  models.VerifyResponse:
+    properties:
+      message:
+        type: string
+      verified:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: API для управления событиями и аутентификации пользователей
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Event API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      description: Возвращает статус OK если сервис работает
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Проверка здоровья сервиса
+      tags:
+      - health
+  /v1/api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Аутентифицирует пользователя и возвращает JWT токены
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная аутентификация
+          schema:
+            $ref: '#/definitions/models.AuthResponse'
+        "400":
+          description: Неверный формат запроса
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Неверные учетные данные
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Вход в систему
+      tags:
+      - auth
+  /v1/api/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Отзывает JWT токен пользователя
+      parameters:
+      - description: Bearer токен
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Токен в теле запроса (опционально)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/models.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message:string
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Token не найден
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Выход из системы
+      tags:
+      - auth
+  /v1/api/auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает информацию о текущем аутентифицированном пользователе
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Информация о пользователе
+          schema:
+            $ref: '#/definitions/models.User'
+        "401":
+          description: Пользователь не аутентифицирован
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Пользователь не найден
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить текущего пользователя
+      tags:
+      - auth
+  /v1/api/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя и отправляет код верификации
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: user:models.User, verify_code:string
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Неверный формат запроса
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Пользователь уже существует
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Регистрация нового пользователя
+      tags:
+      - auth
+  /v1/api/auth/verify:
+    post:
+      consumes:
+      - application/json
+      description: Проверяет код верификации для подтверждения email
+      parameters:
+      - description: Код верификации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email успешно верифицирован
+          schema:
+            $ref: '#/definitions/models.VerifyResponse'
+        "400":
+          description: Неверный код или формат запроса
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Верификация email
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

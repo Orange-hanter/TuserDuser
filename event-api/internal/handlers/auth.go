@@ -24,7 +24,17 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 }
 
 // Register обрабатывает регистрацию нового пользователя
-// POST /api/auth/register
+// POST /v1/api/auth/register
+// @Summary Регистрация нового пользователя
+// @Description Создает нового пользователя и отправляет код верификации
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body models.RegisterRequest true "Данные для регистрации"
+// @Success 201 {object} map[string]interface{} "user:models.User, verify_code:string"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Failure 409 {object} models.ErrorResponse "Пользователь уже существует"
+// @Router /v1/api/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -75,7 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("Новый пользователь зарегистрирован", 
+	logger.Log.Info("Новый пользователь зарегистрирован",
 		zap.String("email", user.Email),
 		zap.String("user_id", user.ID),
 	)
@@ -83,13 +93,22 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"user":       user,
+		"user":        user,
 		"verify_code": verifyCode, // В production отправляем через email/SMS
 	})
 }
 
 // Verify проверяет код верификации
-// POST /api/auth/verify
+// POST /v1/api/auth/verify
+// @Summary Верификация email
+// @Description Проверяет код верификации для подтверждения email
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body models.VerifyRequest true "Код верификации"
+// @Success 200 {object} models.VerifyResponse "Email успешно верифицирован"
+// @Failure 400 {object} models.ErrorResponse "Неверный код или формат запроса"
+// @Router /v1/api/auth/verify [post]
 func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -128,7 +147,17 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login аутентифицирует пользователя и выдает JWT
-// POST /api/auth/login
+// POST /v1/api/auth/login
+// @Summary Вход в систему
+// @Description Аутентифицирует пользователя и возвращает JWT токены
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body models.LoginRequest true "Данные для входа"
+// @Success 200 {object} models.AuthResponse "Успешная аутентификация"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Failure 401 {object} models.ErrorResponse "Неверные учетные данные"
+// @Router /v1/api/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -164,10 +193,22 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout отзывает JWT токен
-// POST /api/auth/logout
+// POST /v1/api/auth/logout
+// @Summary Выход из системы
+// @Description Отзывает JWT токен пользователя
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer токен"
+// @Param request body models.LogoutRequest false "Токен в теле запроса (опционально)"
+// @Success 200 {object} map[string]interface{} "message:string"
+// @Failure 400 {object} models.ErrorResponse "Token не найден"
+// @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
+// @Router /v1/api/auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
-	
+
 	// Парсим Bearer токен из заголовка
 	var token string
 	if authHeader != "" && len(authHeader) > 7 {
@@ -218,7 +259,17 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMe возвращает текущего пользователя
-// GET /api/auth/me
+// GET /v1/api/auth/me
+// @Summary Получить текущего пользователя
+// @Description Возвращает информацию о текущем аутентифицированном пользователе
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.User "Информация о пользователе"
+// @Failure 401 {object} models.ErrorResponse "Пользователь не аутентифицирован"
+// @Failure 404 {object} models.ErrorResponse "Пользователь не найден"
+// @Router /v1/api/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	// UserID поставляется middleware AuthMiddleware
 	userID := r.Header.Get("X-User-ID")

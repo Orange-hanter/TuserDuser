@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: event_api_postgres
     restart: unless-stopped
     
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_USER: ${DB_USER:-devuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpass}
       POSTGRES_DB: ${DB_NAME:-event_api}
       POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
     
@@ -21,7 +19,7 @@ services:
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
     
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-devuser}"]
       interval: 10s
       timeout: 5s
       retries: 5

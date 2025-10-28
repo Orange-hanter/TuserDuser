@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -14,7 +15,8 @@ type Config struct {
 	CORSAllowedOrigins []string
 	JWTSecret          string
 	JWTExpiration      int64 // в секундах
-	
+	ShutdownTimeout    int   // в секундах
+
 	// Database config
 	DBHost     string
 	DBPort     string
@@ -40,9 +42,10 @@ func Load() *Config {
 		Port:               getEnv("PORT", "8080"),
 		Env:                getEnv("ENV", "development"),
 		CORSAllowedOrigins: origins,
-		JWTSecret:         getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-		JWTExpiration:     3600, // 1 час
-		
+		JWTSecret:          getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+		JWTExpiration:      3600,                                // 1 час
+		ShutdownTimeout:    getEnvAsInt("SHUTDOWN_TIMEOUT", 30), // 30 секунд
+
 		// Database config
 		DBHost:     getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnv("DB_PORT", "5432"),
@@ -58,6 +61,15 @@ func Load() *Config {
 func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return fallback
+}
+
+func getEnvAsInt(key string, fallback int) int {
+	if value := os.Getenv(key); value != "" {
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return intVal
+		}
 	}
 	return fallback
 }

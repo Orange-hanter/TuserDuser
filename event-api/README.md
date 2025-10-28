@@ -11,6 +11,9 @@ REST API для управления событиями с аутентифик�
 - ✅ CORS поддержка
 - ✅ Security headers
 - ✅ Структурированное логирование
+- ✅ **Swagger API документация**
+- ✅ **API versioning** (`/v1`)
+- ✅ **Graceful shutdown**
 
 ## 📋 Технологический стек
 
@@ -20,6 +23,7 @@ REST API для управления событиями с аутентифик�
 - **Bcrypt** - Хеширование паролей
 - **Zap** - Логирование
 - **CORS** - Cross-origin поддержка
+- **Swagger** - API документация
 
 ## 📦 Зависимости
 
@@ -30,6 +34,8 @@ golang.org/x/crypto v0.43.0             # Bcrypt
 github.com/rs/cors v1.11.1              # CORS
 go.uber.org/zap v1.27.0                 # Логирование
 github.com/joho/godotenv v1.5.1         # .env загрузка
+github.com/swaggo/http-swagger v1.3.4   # Swagger UI
+github.com/swaggo/swag v1.16.6          # Swagger генератор
 ```
 
 ## 🏗️ Структура проекта
@@ -106,24 +112,55 @@ make docker-run
 
 ### Public endpoints
 
-- `POST /api/auth/register` - Регистрация пользователя
-- `POST /api/auth/verify` - Верификация email
-- `POST /api/auth/login` - Вход в систему
+- `POST /v1/api/auth/register` - Регистрация пользователя
+- `POST /v1/api/auth/verify` - Верификация email
+- `POST /v1/api/auth/login` - Вход в систему
 - `GET /health` - Проверка статуса
+- `GET /swagger/*` - **Swagger UI документация**
 
 ### Protected endpoints
 
-- `GET /api/auth/me` - Получить текущего пользователя
-- `POST /api/auth/logout` - Выход из системы
+- `GET /v1/api/auth/me` - Получить текущего пользователя
+- `POST /v1/api/auth/logout` - Выход из системы
 
 Полная документация: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+
+## 📖 Swagger документация
+
+Интерактивная API документация доступна по адресу:
+**http://localhost:8080/swagger/index.html**
+
+Для генерации обновленной документации:
+```bash
+make swagger
+```
+
+Документация включает:
+- ✅ Все доступные endpoints
+- ✅ Модели запросов и ответов
+- ✅ Примеры использования
+- ✅ Возможность тестирования API прямо в браузере
+
+## 🔢 API Versioning
+
+API использует семантическое версионирование через URL префиксы:
+
+- **Текущая версия**: `v1` (`/v1/api/...`)
+- **Предыдущие версии**: Поддерживаются для обратной совместимости
+- **Будущие версии**: Новые версии будут добавляться как `v2`, `v3` и т.д.
+
+Пример:
+```
+GET /v1/api/auth/me     # Текущая версия
+GET /v2/api/auth/me     # Будущая версия (когда будет готова)
+```
 
 ## 🧪 Тестирование
 
 ### Регистрация
 
 ```bash
-curl -X POST http://localhost:8080/api/auth/register \
+curl -X POST http://localhost:8080/v1/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
@@ -135,7 +172,7 @@ curl -X POST http://localhost:8080/api/auth/register \
 ### Верификация
 
 ```bash
-curl -X POST http://localhost:8080/api/auth/verify \
+curl -X POST http://localhost:8080/v1/api/auth/verify \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
@@ -146,7 +183,7 @@ curl -X POST http://localhost:8080/api/auth/verify \
 ### Вход
 
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
+curl -X POST http://localhost:8080/v1/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
@@ -157,7 +194,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 ### Получение профиля
 
 ```bash
-curl -X GET http://localhost:8080/api/auth/me \
+curl -X GET http://localhost:8080/v1/api/auth/me \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -167,6 +204,7 @@ curl -X GET http://localhost:8080/api/auth/me \
 make build         # Компилирует бинарный файл
 make run           # Компилирует и запускает локально
 make test          # Запускает тесты
+make swagger       # Генерирует Swagger документацию
 make docker-build  # Создает Docker образ
 make docker-run    # Запускает контейнер
 ```
@@ -179,6 +217,22 @@ make docker-run    # Запускает контейнер
 - ✅ Security headers (HSTS, X-Frame-Options, X-Content-Type-Options)
 - ✅ CORS настроен
 - ✅ Валидация input данных
+
+## 🛑 Graceful Shutdown
+
+Приложение поддерживает graceful shutdown для корректного завершения работы:
+
+- **Обработка сигналов**: `SIGTERM` и `SIGINT` (Ctrl+C)
+- **Таймаут**: 30 секунд (настраивается через `SHUTDOWN_TIMEOUT`)
+- **Закрытие ресурсов**: БД соединения, активные запросы
+- **Логирование**: Детальная информация о процессе shutdown
+
+```bash
+# Отправка сигнала для graceful shutdown
+kill -TERM <pid>
+# или
+pkill -TERM -f "bin/server"
+```
 
 ## 📝 Логирование
 
