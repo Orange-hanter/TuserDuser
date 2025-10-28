@@ -101,12 +101,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // Verify проверяет код верификации
 // POST /v1/api/auth/verify
 // @Summary Верификация email
-// @Description Проверяет код верификации для подтверждения email
+// @Description Проверяет код верификации для подтверждения email и возвращает JWT токен
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param request body models.VerifyRequest true "Код верификации"
-// @Success 200 {object} models.VerifyResponse "Email успешно верифицирован"
+// @Success 200 {object} models.AuthResponse "Email верифицирован, токен выдан"
 // @Failure 400 {object} models.ErrorResponse "Неверный код или формат запроса"
 // @Router /v1/api/auth/verify [post]
 func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +123,7 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.authService.VerifyCode(req.Email, req.Code)
+	authResponse, err := h.authService.VerifyAndIssueToken(req.Email, req.Code)
 	if err != nil {
 		logger.Log.Warn("Ошибка при верификации", zap.String("email", req.Email), zap.Error(err))
 		w.Header().Set("Content-Type", "application/json")
@@ -136,14 +136,11 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("Email верифицирован", zap.String("email", req.Email))
+	logger.Log.Info("Email верифицирован и токен выдан", zap.String("email", req.Email))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(models.VerifyResponse{
-		Message:  "Email успешно верифицирован",
-		Verified: true,
-	})
+	json.NewEncoder(w).Encode(authResponse)
 }
 
 // Login аутентифицирует пользователя и выдает JWT

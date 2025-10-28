@@ -237,7 +237,7 @@ const docTemplate = `{
         },
         "/v1/api/auth/verify": {
             "post": {
-                "description": "Проверяет код верификации для подтверждения email",
+                "description": "Проверяет код верификации для подтверждения email и возвращает JWT токен",
                 "consumes": [
                     "application/json"
                 ],
@@ -261,9 +261,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Email успешно верифицирован",
+                        "description": "Email верифицирован, токен выдан",
                         "schema": {
-                            "$ref": "#/definitions/models.VerifyResponse"
+                            "$ref": "#/definitions/models.AuthResponse"
                         }
                     },
                     "400": {
@@ -389,17 +389,6 @@ const docTemplate = `{
                 },
                 "email": {
                     "type": "string"
-                }
-            }
-        },
-        "models.VerifyResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "verified": {
-                    "type": "boolean"
                 }
             }
         }

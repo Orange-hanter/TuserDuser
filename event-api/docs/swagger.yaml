@@ -76,13 +76,6 @@ definitions:
     - code
     - email
     type: object
-  models.VerifyResponse:
-    properties:
-      message:
-        type: string
-      verified:
-        type: boolean
-    type: object
 host: localhost:8080
 info:
   contact:
@@ -237,7 +230,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Проверяет код верификации для подтверждения email
+      description: Проверяет код верификации для подтверждения email и возвращает
+        JWT токен
       parameters:
       - description: Код верификации
         in: body
@@ -249,9 +243,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: Email успешно верифицирован
+          description: Email верифицирован, токен выдан
           schema:
-            $ref: '#/definitions/models.VerifyResponse'
+            $ref: '#/definitions/models.AuthResponse'
         "400":
           description: Неверный код или формат запроса
           schema:

@@ -122,6 +122,49 @@ func (s *AuthService) VerifyCode(email, code string) error {
 	return nil
 }
 
+// VerifyAndIssueToken проверяет код верификации и возвращает JWT токен
+func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthResponse, error) {
+	// Проверяем код верификации
+	if err := s.VerifyCode(email, code); err != nil {
+		return nil, err
+	}
+
+	// Находим пользователя
+	s.mu.RLock()
+	var user *models.User
+	for _, u := range s.users {
+		if u.Email == email {
+			user = u
+			break
+		}
+	}
+	s.mu.RUnlock()
+
+	if user == nil {
+		return nil, fmt.Errorf("пользователь не найден после верификации")
+	}
+
+	// Генерируем JWT токен
+	token, expiresAt, err := s.GenerateJWT(user)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при генерации токена: %w", err)
+	}
+
+	return &models.AuthResponse{
+		AccessToken: token,
+		User: &models.User{
+			ID:        user.ID,
+			Email:     user.Email,
+			Phone:     user.Phone,
+			Verified:  user.Verified,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+		},
+		ExpiresIn: s.cfg.JWTExpiration,
+		ExpiresAt: expiresAt,
+	}, nil
+}
+
 // Login аутентифицирует пользователя и выдает JWT токен
 func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
 	s.mu.RLock()
