@@ -81,6 +81,7 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 
 	// Генерируем код верификации
 	code := generateVerificationCode()
+	fmt.Printf("\nGenerated verification code for %s: %s\n", req.Email, code)
 	s.verifyCode[req.Email] = code
 
 	// Асинхронная отправка кода верификации
