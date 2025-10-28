@@ -1,3 +1,16 @@
 {
-    "makefile.configureOnOpen": false
+    "makefile.configureOnOpen": false,
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "postgre-dev",
+            "database": "devdb",
+            "username": "devuser",
+            "password": "devpass"
+        }
+    ]
 }
