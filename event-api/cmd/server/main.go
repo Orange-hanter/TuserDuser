@@ -15,6 +15,7 @@ import (
 	"event-api/internal/logger"
 	"event-api/internal/middleware"
 	"event-api/internal/migrations"
+	redisClient "event-api/internal/redis"
 	"event-api/internal/service"
 	"event-api/internal/worker"
 
@@ -95,12 +96,32 @@ func main() {
 		"Migrations: Applied",
 	))
 
+	// Инициализируем подключение к Redis
+	redisConfig := &redisClient.Config{
+		Host:     cfg.RedisHost,
+		Port:     cfg.RedisPort,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	}
+
+	redis, err := redisClient.NewClient(redisConfig, logger.Log)
+	if err != nil {
+		fmt.Println(logger.FormatError(
+			"Failed to Connect to Redis",
+			err,
+			"Host: "+cfg.RedisHost,
+			"Port: "+cfg.RedisPort,
+		))
+		os.Exit(1)
+	}
+	defer redis.Close()
+
 	// Инициализируем worker pool
 	workerPool := worker.NewPool(5, 100, logger.Log)
 	workerPool.Start()
 
 	// Инициализируем сервисы
-	authService := service.NewAuthService(cfg, workerPool, logger.Log)
+	authService := service.NewAuthService(cfg, db.DB, redis, workerPool, logger.Log)
 	eventService := service.NewEventService(db.DB, logger.Log)
 
 	// Инициализируем handlers

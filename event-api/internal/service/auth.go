@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"sync"
 	"time"
 
 	"event-api/internal/config"
 	"event-api/internal/models"
+	redisClient "event-api/internal/redis"
 	"event-api/internal/worker"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -20,10 +21,8 @@ import (
 // AuthService управляет аутентификацией и авторизацией
 type AuthService struct {
 	cfg        *config.Config
-	users      map[string]*models.User
-	verifyCode map[string]string // email -> code
-	tokens     map[string]bool   // blacklist для токенов
-	mu         sync.RWMutex
+	db         *sql.DB
+	redis      *redisClient.Client
 	workerPool *worker.Pool
 	logger     *zap.Logger
 }
@@ -36,12 +35,11 @@ type VerificationCode struct {
 }
 
 // NewAuthService создает новый сервис аутентификации
-func NewAuthService(cfg *config.Config, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
+func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		cfg:        cfg,
-		users:      make(map[string]*models.User),
-		verifyCode: make(map[string]string),
-		tokens:     make(map[string]bool),
+		db:         db,
+		redis:      redis,
 		workerPool: workerPool,
 		logger:     logger,
 	}
@@ -49,14 +47,13 @@ func NewAuthService(cfg *config.Config, workerPool *worker.Pool, logger *zap.Log
 
 // Register регистрирует нового пользователя
 func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Проверяем, не существует ли уже пользователь с этим email
-	for _, user := range s.users {
-		if user.Email == req.Email {
-			return nil, "", fmt.Errorf("пользователь с таким email уже существует")
-		}
+	var existingUserID string
+	err := s.db.QueryRow("SELECT id FROM users WHERE email = $1", req.Email).Scan(&existingUserID)
+	if err == nil {
+		return nil, "", fmt.Errorf("пользователь с таким email уже существует")
+	} else if err != sql.ErrNoRows {
+		return nil, "", fmt.Errorf("ошибка при проверке существования пользователя: %w", err)
 	}
 
 	// Хешируем пароль
@@ -65,7 +62,7 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 		return nil, "", fmt.Errorf("ошибка при хешировании пароля: %w", err)
 	}
 
-	// Создаем пользователя
+	// Создаем пользователя в БД
 	userID := generateID()
 	user := &models.User{
 		ID:        userID,
@@ -77,12 +74,26 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 		UpdatedAt: time.Now(),
 	}
 
-	s.users[userID] = user
+	query := `
+		INSERT INTO users (id, email, phone, password, verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err = s.db.Exec(query, user.ID, user.Email, user.Phone, user.Password, user.Verified, user.CreatedAt, user.UpdatedAt)
+	if err != nil {
+		return nil, "", fmt.Errorf("ошибка при сохранении пользователя: %w", err)
+	}
 
 	// Генерируем код верификации
 	code := generateVerificationCode()
 	fmt.Printf("\nGenerated verification code for %s: %s\n", req.Email, code)
-	s.verifyCode[req.Email] = code
+
+	// Сохраняем код верификации в Redis с TTL 10 минут
+	ctx := context.Background()
+	verifyKey := fmt.Sprintf("verify:%s", req.Email)
+	err = s.redis.Set(ctx, verifyKey, code, 10*time.Minute)
+	if err != nil {
+		return nil, "", fmt.Errorf("ошибка при сохранении кода верификации в Redis: %w", err)
+	}
 
 	// Асинхронная отправка кода верификации
 	email := req.Email
@@ -95,29 +106,34 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 
 // VerifyCode проверяет код верификации и подтверждает email
 func (s *AuthService) VerifyCode(email, code string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	ctx := context.Background()
+	verifyKey := fmt.Sprintf("verify:%s", email)
 
-	storedCode, exists := s.verifyCode[email]
-	if !exists {
-		return fmt.Errorf("код верификации не найден")
+	// Получаем код верификации из Redis
+	storedCode, err := s.redis.Get(ctx, verifyKey)
+	if err != nil {
+		return fmt.Errorf("код верификации не найден или истек срок действия")
 	}
 
+	// Проверяем правильность кода
 	if storedCode != code {
 		return fmt.Errorf("неверный код верификации")
 	}
 
-	// Находим пользователя по email и отмечаем как верифицированного
-	for _, user := range s.users {
-		if user.Email == email {
-			user.Verified = true
-			user.UpdatedAt = time.Now()
-			break
-		}
+	// Обновляем статус верификации пользователя в БД
+	_, err = s.db.Exec(
+		"UPDATE users SET verified = true, updated_at = $1 WHERE email = $2",
+		time.Now(), email,
+	)
+	if err != nil {
+		return fmt.Errorf("ошибка при обновлении статуса верификации: %w", err)
 	}
 
-	// Удаляем использованный код
-	delete(s.verifyCode, email)
+	// Удаляем использованный код из Redis
+	if err := s.redis.Del(ctx, verifyKey); err != nil {
+		s.logger.Error("Ошибка при удалении кода верификации из Redis", zap.Error(err))
+		// Не возвращаем ошибку, так как верификация уже прошла успешно
+	}
 
 	return nil
 }
@@ -129,23 +145,22 @@ func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthRespo
 		return nil, err
 	}
 
-	// Находим пользователя
-	s.mu.RLock()
-	var user *models.User
-	for _, u := range s.users {
-		if u.Email == email {
-			user = u
-			break
-		}
-	}
-	s.mu.RUnlock()
+	// Получаем пользователя из БД
+	var user models.User
+	err := s.db.QueryRow(
+		"SELECT id, email, phone, password, verified, created_at, updated_at FROM users WHERE email = $1",
+		email,
+	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
-	if user == nil {
+	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден после верификации")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении пользователя: %w", err)
 	}
 
 	// Генерируем JWT токен
-	token, expiresAt, err := s.GenerateJWT(user)
+	token, expiresAt, err := s.GenerateJWT(&user)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при генерации токена: %w", err)
 	}
@@ -167,30 +182,28 @@ func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthRespo
 
 // Login аутентифицирует пользователя и выдает JWT токен
 func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	// Получаем пользователя из БД
+	var user models.User
+	err := s.db.QueryRow(
+		"SELECT id, email, phone, password, verified, created_at, updated_at FROM users WHERE email = $1",
+		req.Email,
+	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
-	// Ищем пользователя по email
-	var user *models.User
-	for _, u := range s.users {
-		if u.Email == req.Email {
-			user = u
-			break
-		}
-	}
-
-	if user == nil {
+	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении пользователя: %w", err)
 	}
 
 	// Проверяем пароль
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
 	if err != nil {
 		return nil, fmt.Errorf("неверный пароль")
 	}
 
 	// Генерируем JWT токен
-	token, expiresAt, err := s.GenerateJWT(user)
+	token, expiresAt, err := s.GenerateJWT(&user)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при генерации токена: %w", err)
 	}
@@ -212,21 +225,32 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 
 // Logout добавляет токен в черный список
 func (s *AuthService) Logout(token string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	ctx := context.Background()
+	blacklistKey := fmt.Sprintf("blacklist:%s", token)
 
-	s.tokens[token] = true
+	// Добавляем токен в blacklist с TTL равным времени жизни токена
+	ttl := time.Duration(s.cfg.JWTExpiration) * time.Second
+	err := s.redis.Set(ctx, blacklistKey, "1", ttl)
+	if err != nil {
+		return fmt.Errorf("ошибка при добавлении токена в blacklist: %w", err)
+	}
+
 	return nil
 }
 
 // GetUserByID получает пользователя по ID
 func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	var user models.User
+	err := s.db.QueryRow(
+		"SELECT id, email, phone, verified, created_at, updated_at FROM users WHERE id = $1",
+		userID,
+	).Scan(&user.ID, &user.Email, &user.Phone, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
-	user, exists := s.users[userID]
-	if !exists {
+	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении пользователя: %w", err)
 	}
 
 	return &models.User{
@@ -241,10 +265,16 @@ func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 
 // IsTokenBlacklisted проверяет, находится ли токен в черном списке
 func (s *AuthService) IsTokenBlacklisted(token string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	ctx := context.Background()
+	blacklistKey := fmt.Sprintf("blacklist:%s", token)
 
-	return s.tokens[token]
+	exists, err := s.redis.Exists(ctx, blacklistKey)
+	if err != nil {
+		s.logger.Error("Ошибка при проверке токена в blacklist", zap.Error(err))
+		return false
+	}
+
+	return exists
 }
 
 // GenerateJWT генерирует JWT токен

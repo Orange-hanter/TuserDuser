@@ -43,6 +43,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createEventsTable,
 			down: dropEventsTable,
 		},
+		{
+			name: "003_create_verification_codes_table",
+			up:   createVerificationCodesTable,
+			down: dropVerificationCodesTable,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -133,7 +138,7 @@ func (m *Migrator) runMigration(mig migration) error {
 // createUsersTable создает таблицу users
 const createUsersTable = `
 CREATE TABLE IF NOT EXISTS users (
-	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	id TEXT PRIMARY KEY,
 	email VARCHAR(255) UNIQUE NOT NULL,
 	phone VARCHAR(20) NOT NULL,
 	password VARCHAR(255) NOT NULL,
@@ -149,6 +154,25 @@ CREATE INDEX IF NOT EXISTS idx_users_verified ON users(verified);
 // dropUsersTable удаляет таблицу users
 const dropUsersTable = `
 DROP TABLE IF EXISTS users CASCADE;
+`
+
+// createVerificationCodesTable создает таблицу verification_codes
+const createVerificationCodesTable = `
+CREATE TABLE IF NOT EXISTS verification_codes (
+	id SERIAL PRIMARY KEY,
+	email VARCHAR(255) NOT NULL,
+	code VARCHAR(10) NOT NULL,
+	expires_at TIMESTAMP NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON verification_codes(email);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON verification_codes(expires_at);
+`
+
+// dropVerificationCodesTable удаляет таблицу verification_codes
+const dropVerificationCodesTable = `
+DROP TABLE IF EXISTS verification_codes CASCADE;
 `
 
 // createEventsTable - SQL для создания таблицы events

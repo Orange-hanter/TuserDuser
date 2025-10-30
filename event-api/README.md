@@ -14,6 +14,10 @@ REST API для управления событиями с аутентифик�
 - ✅ **Swagger API документация**
 - ✅ **API versioning** (`/v1`)
 - ✅ **Graceful shutdown**
+- ✅ **PostgreSQL** - персистентное хранилище пользователей
+- ✅ **Redis** - коды верификации и token blacklist
+- ✅ **Worker Pool** - асинхронная обработка задач
+- ✅ **Events CRUD** - управление событиями
 
 ## 📋 Технологический стек
 
@@ -24,6 +28,8 @@ REST API для управления событиями с аутентифик�
 - **Zap** - Логирование
 - **CORS** - Cross-origin поддержка
 - **Swagger** - API документация
+- **PostgreSQL** 18 - Основная БД
+- **Redis** 7 - Кеш и временные данные
 
 ## 📦 Зависимости
 
@@ -36,6 +42,8 @@ go.uber.org/zap v1.27.0                 # Логирование
 github.com/joho/godotenv v1.5.1         # .env загрузка
 github.com/swaggo/http-swagger v1.3.4   # Swagger UI
 github.com/swaggo/swag v1.16.6          # Swagger генератор
+github.com/lib/pq v1.10.9               # PostgreSQL драйвер
+github.com/redis/go-redis/v9 v9.x       # Redis клиент
 ```
 
 ## 🏗️ Структура проекта
@@ -74,13 +82,42 @@ event-api/
 Создайте файл `.env` в корне проекта:
 
 ```env
+# Server
 PORT=8080
 ENV=development
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5174
 JWT_SECRET=super-secret-key-change-in-production-please
+SHUTDOWN_TIMEOUT=30
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=devuser
+DB_PASSWORD=devpass
+DB_NAME=event_api
+DB_SSLMODE=disable
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=devpass
+REDIS_DB=0
 ```
 
 ## 🚀 Запуск
+
+### С Docker Compose (рекомендуется)
+
+```bash
+# Запустить PostgreSQL и Redis
+docker-compose up -d
+
+# Запустить приложение
+make run
+
+# Или все вместе
+docker-compose up -d && make run
+```
 
 ### Локально
 
@@ -242,15 +279,48 @@ pkill -TERM -f "bin/server"
 {"level":"info","ts":1761425592.289552,"caller":"server/main.go:57","msg":"Сервер запущен","port":":8080","env":"development"}
 ```
 
-## 🚧 Планы развития
+## � Хранилища данных
 
-- [ ] Интеграция с БД (PostgreSQL)
+### PostgreSQL
+- **Пользователи**: id, email, phone, password (bcrypt), verified, timestamps
+- **События**: id, type, start_time, end_time, duration, place, price_type, need_registration, details (JSONB)
+- **Миграции**: Автоматическое применение схемы при старте
+
+См. [DOC/DATABASE.md](DOC/DATABASE.md) для подробностей
+
+### Redis
+- **Коды верификации**: `verify:{email}` → `{code}` (TTL: 10 минут)
+- **Token Blacklist**: `blacklist:{jwt}` → `"1"` (TTL: время жизни токена)
+- **Автоматическое удаление**: Истекшие ключи удаляются автоматически
+
+См. [DOC/REDIS.md](DOC/REDIS.md) для подробностей
+
+### Мониторинг Redis
+
+```bash
+# Подключиться к Redis CLI
+docker exec -it event_api_redis redis-cli -a devpass
+
+# Посмотреть все ключи
+KEYS *
+
+# Мониторинг в реальном времени
+MONITOR
+```
+
+## �🚧 Планы развития
+
+- [x] Интеграция с БД (PostgreSQL) ✅
+- [x] Redis для кеша и временных данных ✅
+- [x] Worker Pool для асинхронных задач ✅
+- [x] Events CRUD с JSONB полями ✅
 - [ ] Refresh tokens
 - [ ] 2FA (двухфакторная аутентификация)
 - [ ] Social login (Google, GitHub)
-- [ ] Email notifications
-- [ ] Rate limiting
+- [ ] Email notifications (SMTP/SendGrid)
+- [ ] Rate limiting (через Redis)
 - [ ] Tests coverage
+- [ ] Metrics (Prometheus)
 
 ## 📄 Лицензия
 
@@ -259,7 +329,3 @@ MIT
 ## 👨‍💻 Автор
 
 Event API Team
-
----
-
-**Примечание**: Текущая реализация использует in-memory хранилище. Для production используйте настоящую базу данных и Redis для кеша.

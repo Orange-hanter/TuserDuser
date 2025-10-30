@@ -26,6 +26,12 @@ type Config struct {
 	DBSSLMode  string
 	DBMaxConn  int
 	DBMinConn  int
+
+	// Redis config
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+	RedisDB       int
 }
 
 func Load() *Config {
@@ -55,6 +61,12 @@ func Load() *Config {
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
 		DBMaxConn:  25,
 		DBMinConn:  5,
+
+		// Redis config
+		RedisHost:     getEnv("REDIS_HOST", "localhost"),
+		RedisPort:     getEnv("REDIS_PORT", "6379"),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
+		RedisDB:       getEnvAsInt("REDIS_DB", 0),
 	}
 }
 

@@ -27,6 +27,29 @@ services:
     networks:
       - event_api_network
   
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: event_api_redis
+    restart: unless-stopped
+    
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    
+    volumes:
+      - redis_data:/data
+    
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-devpass}
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    networks:
+      - event_api_network
+  
   # Optional: pgAdmin for database management
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -48,6 +71,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
     driver: local
 
 networks:
