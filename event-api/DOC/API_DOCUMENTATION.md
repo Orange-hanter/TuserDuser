@@ -3,7 +3,8 @@
 ## Документация API для аутентификации
 
 ### Базовый URL
-```
+
+```sh
 http://localhost:8080
 ```
 
@@ -16,6 +17,7 @@ http://localhost:8080
 **Описание:** Создает новый аккаунт пользователя
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -25,11 +27,13 @@ http://localhost:8080
 ```
 
 **Параметры:**
+
 - `email` (string, required): Email адрес пользователя
 - `phone` (string, required): Номер телефона
 - `password` (string, required): Пароль (минимум 8 символов)
 
 **Response (201 Created):**
+
 ```json
 {
   "user": {
@@ -45,6 +49,7 @@ http://localhost:8080
 ```
 
 **Примеры ошибок:**
+
 - `409 Conflict`: Пользователь с таким email уже существует
 - `400 Bad Request`: Неверный формат данных
 
@@ -55,6 +60,7 @@ http://localhost:8080
 **Описание:** Проверяет код верификации и подтверждает email
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -63,10 +69,12 @@ http://localhost:8080
 ```
 
 **Параметры:**
+
 - `email` (string, required): Email адрес пользователя
 - `code` (string, required): 6-значный код верификации
 
 **Response (200 OK):**
+
 ```json
 {
   "message": "Email успешно верифицирован",
@@ -75,6 +83,7 @@ http://localhost:8080
 ```
 
 **Примеры ошибок:**
+
 - `400 Bad Request`: Неверный код верификации
 
 ---
@@ -84,6 +93,7 @@ http://localhost:8080
 **Описание:** Аутентифицирует пользователя и выдает JWT токен
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -92,10 +102,12 @@ http://localhost:8080
 ```
 
 **Параметры:**
+
 - `email` (string, required): Email адрес
 - `password` (string, required): Пароль
 
 **Response (200 OK):**
+
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -113,6 +125,7 @@ http://localhost:8080
 ```
 
 **Примеры ошибок:**
+
 - `401 Unauthorized`: Пользователь не найден или неверный пароль
 - `400 Bad Request`: Неверный формат данных
 
@@ -123,6 +136,7 @@ http://localhost:8080
 **Описание:** Отзывает JWT токен (добавляет его в черный список)
 
 **Request:**
+
 ```
 Headers:
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...

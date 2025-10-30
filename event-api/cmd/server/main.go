@@ -101,9 +101,11 @@ func main() {
 
 	// Инициализируем сервисы
 	authService := service.NewAuthService(cfg, workerPool, logger.Log)
+	eventService := service.NewEventService(db.DB, logger.Log)
 
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService)
+	eventHandler := handlers.NewEventHandler(eventService)
 
 	r := chi.NewRouter()
 
@@ -123,6 +125,14 @@ func main() {
 		// Auth routes (protected)
 		r.Post("/api/auth/logout", authHandler.Logout)
 		r.With(middleware.AuthMiddleware(authService)).Get("/api/auth/me", authHandler.GetMe)
+
+		// Events routes (public)
+		r.Get("/api/events", eventHandler.GetAllEvents)
+		r.Get("/api/events/{id}", eventHandler.GetEventByID)
+
+		// Events routes (protected)
+		r.With(middleware.AuthMiddleware(authService)).Post("/api/events", eventHandler.CreateEvent)
+		r.With(middleware.AuthMiddleware(authService)).Delete("/api/events/{id}", eventHandler.DeleteEvent)
 	})
 
 	// Swagger routes

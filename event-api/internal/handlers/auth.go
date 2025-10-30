@@ -171,7 +171,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	authResponse, err := h.authService.Login(&req)
 	if err != nil {
-		logger.Log.Warn("Ошибка при входе", zap.String("email", req.Email), zap.Error(err))
+		logger.Log.Warn("Ошибка при входе", zap.String("email", req.Email) /*, zap.Error(err)*/)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(models.ErrorResponse{

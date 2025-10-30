@@ -13,6 +13,32 @@ definitions:
       user:
         $ref: '#/definitions/models.User'
     type: object
+  models.CreateEventRequest:
+    properties:
+      details:
+        additionalProperties: true
+        type: object
+      duration:
+        type: integer
+      end:
+        type: string
+      needReg:
+        type: boolean
+      place:
+        type: string
+      priceType:
+        type: string
+      start:
+        type: string
+      type:
+        type: string
+    required:
+    - duration
+    - end
+    - priceType
+    - start
+    - type
+    type: object
   models.ErrorResponse:
     properties:
       code:
@@ -20,6 +46,31 @@ definitions:
       error:
         type: string
       message:
+        type: string
+    type: object
+  models.Event:
+    properties:
+      details:
+        additionalProperties: true
+        type: object
+      duration:
+        description: в минутах
+        type: integer
+      end:
+        type: string
+      id:
+        type: string
+      needReg:
+        type: boolean
+      place:
+        type: string
+      priceType:
+        type: string
+      start:
+        type: string
+      time:
+        type: string
+      type:
         type: string
     type: object
   models.LoginRequest:
@@ -253,6 +304,109 @@ paths:
       summary: Верификация email
       tags:
       - auth
+  /v1/api/events:
+    get:
+      description: Возвращает список всех событий
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список событий
+          schema:
+            items:
+              $ref: '#/definitions/models.Event'
+            type: array
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Получить все события
+      tags:
+      - events
+    post:
+      consumes:
+      - application/json
+      description: Создает новое событие
+      parameters:
+      - description: Данные события
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Созданное событие
+          schema:
+            $ref: '#/definitions/models.Event'
+        "400":
+          description: Неверный формат запроса
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Создать событие
+      tags:
+      - events
+  /v1/api/events/{id}:
+    delete:
+      description: Удаляет событие по ID
+      parameters:
+      - description: ID события
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message: Событие удалено'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Удалить событие
+      tags:
+      - events
+    get:
+      description: Возвращает событие с указанным ID
+      parameters:
+      - description: ID события
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Событие
+          schema:
+            $ref: '#/definitions/models.Event'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Получить событие по ID
+      tags:
+      - events
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer" followed by a space and JWT token.
