@@ -135,3 +135,4 @@ bin/tuserduser-backend-linux-amd64
 .DS_Store
 goStarter.sh
 .vscode/*
+bin/*
