@@ -38,6 +38,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-${{ matrix.service }}-
 
+      - name: Download Go dependencies for ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          go mod download
+          go mod verify
+
       - name: Run golangci-lint on ${{ matrix.service }}
         uses: golangci/golangci-lint-action@v6
         with:
