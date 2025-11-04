@@ -17,6 +17,7 @@ import (
 	"event-api/internal/migrations"
 	redisClient "event-api/internal/redis"
 	"event-api/internal/service"
+	"event-api/internal/sms"
 	"event-api/internal/worker"
 
 	"github.com/go-chi/chi/v5"
@@ -116,12 +117,30 @@ func main() {
 	}
 	defer redis.Close()
 
+	// Инициализируем SMS сервис
+	smsConfig := &sms.Config{
+		Provider: cfg.SMSProvider,
+		APIKey:   cfg.SMSAPIKey,
+		APIToken: cfg.SMSAPIToken,
+		From:     cfg.SMSFrom,
+	}
+
+	smsService, err := sms.NewService(smsConfig, logger.Log)
+	if err != nil {
+		fmt.Println(logger.FormatError(
+			"Failed to Initialize SMS Service",
+			err,
+			"Provider: "+cfg.SMSProvider,
+		))
+		os.Exit(1)
+	}
+
 	// Инициализируем worker pool
 	workerPool := worker.NewPool(5, 100, logger.Log)
 	workerPool.Start()
 
 	// Инициализируем сервисы
-	authService := service.NewAuthService(cfg, db.DB, redis, workerPool, logger.Log)
+	authService := service.NewAuthService(cfg, db.DB, redis, smsService, workerPool, logger.Log)
 	eventService := service.NewEventService(db.DB, logger.Log)
 
 	// Инициализируем handlers

@@ -32,6 +32,12 @@ type Config struct {
 	RedisPort     string
 	RedisPassword string
 	RedisDB       int
+
+	// SMS config
+	SMSProvider string
+	SMSAPIKey   string
+	SMSAPIToken string
+	SMSFrom     string
 }
 
 func Load() *Config {
@@ -67,6 +73,12 @@ func Load() *Config {
 		RedisPort:     getEnv("REDIS_PORT", "6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		RedisDB:       getEnvAsInt("REDIS_DB", 0),
+
+		// SMS config
+		SMSProvider: getEnv("SMS_PROVIDER", "mock"),
+		SMSAPIKey:   getEnv("SMS_API_KEY", ""),
+		SMSAPIToken: getEnv("SMS_API_TOKEN", ""),
+		SMSFrom:     getEnv("SMS_FROM", ""),
 	}
 }
 

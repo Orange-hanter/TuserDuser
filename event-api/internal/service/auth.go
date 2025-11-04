@@ -11,6 +11,7 @@ import (
 	"event-api/internal/config"
 	"event-api/internal/models"
 	redisClient "event-api/internal/redis"
+	"event-api/internal/sms"
 	"event-api/internal/worker"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -23,6 +24,7 @@ type AuthService struct {
 	cfg        *config.Config
 	db         *sql.DB
 	redis      *redisClient.Client
+	sms        *sms.Service
 	workerPool *worker.Pool
 	logger     *zap.Logger
 }
@@ -35,11 +37,12 @@ type VerificationCode struct {
 }
 
 // NewAuthService создает новый сервис аутентификации
-func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
+func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, sms *sms.Service, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		cfg:        cfg,
 		db:         db,
 		redis:      redis,
+		sms:        sms,
 		workerPool: workerPool,
 		logger:     logger,
 	}
@@ -95,10 +98,18 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 		return nil, "", fmt.Errorf("ошибка при сохранении кода верификации в Redis: %w", err)
 	}
 
-	// Асинхронная отправка кода верификации
+	// Асинхронная отправка кодов верификации (email и SMS)
 	email := req.Email
+	phone := req.Phone
+
+	// Отправка email кода
 	s.workerPool.Submit(func(ctx context.Context) error {
 		return s.sendVerificationCode(ctx, email, code)
+	})
+
+	// Отправка SMS кода
+	s.workerPool.Submit(func(ctx context.Context) error {
+		return s.sendSMSVerificationCode(ctx, phone, code)
 	})
 
 	return user, code, nil
@@ -343,6 +354,29 @@ func (s *AuthService) sendVerificationCode(ctx context.Context, email, code stri
 
 	s.logger.Info("Код верификации отправлен (асинхронно)",
 		zap.String("email", email),
+	)
+
+	return nil
+}
+
+// sendSMSVerificationCode отправляет код верификации по SMS
+func (s *AuthService) sendSMSVerificationCode(ctx context.Context, phone, code string) error {
+	s.logger.Info("Отправка кода верификации по SMS (асинхронно)",
+		zap.String("phone", phone),
+		zap.String("code", code),
+	)
+
+	// Отправка SMS через SMS сервис
+	if err := s.sms.SendVerificationCode(ctx, phone, code); err != nil {
+		s.logger.Error("Ошибка при отправке SMS кода верификации",
+			zap.String("phone", phone),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	s.logger.Info("SMS код верификации успешно отправлен",
+		zap.String("phone", phone),
 	)
 
 	return nil
