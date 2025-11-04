@@ -22,7 +22,7 @@ linters:
     - gocritic        # Множество проверок качества кода
     - godot           # Точки в комментариях
     - prealloc        # Предаллокация слайсов
-    - copyloopvar     # Fix loop variables (replaces exportloopref in Go 1.22)
+    - exportloopref   # Ошибки с переменными в циклах
     - noctx           # Проверка context.Context
 
   disable:
@@ -30,7 +30,6 @@ linters:
     - structcheck     # Deprecated
     - deadcode        # Deprecated
     - ifshort         # Deprecated
-    - exportloopref   # Deprecated (replaced by copyloopvar)
 
 linters-settings:
   errcheck:
