@@ -1,5 +1,47 @@
+# Environment variables
 .env
+.env.local
+.env.production
+.env.staging
+.env.*.local
+
+# Logs
 *.log
+logs/
+/tmp/
+
+# Build artifacts
+/bin/
 /go/bin/
 /go/pkg/
-/bin/
+main
+
+# Test coverage
+coverage.out
+coverage.html
+*.test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database backups
+backups/
+*.sql
+*.sql.gz
+
+# Dependencies
+vendor/
+
+# Swagger
+docs/swagger.json
+docs/swagger.yaml
+
+# Temporary files
+tmp/
+temp/
+

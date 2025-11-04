@@ -127,7 +127,7 @@ definitions:
     - code
     - email
     type: object
-host: localhost:8080
+host: api.tuserduser.online
 info:
   contact:
     email: support@swagger.io
@@ -407,6 +407,9 @@ paths:
       summary: Получить событие по ID
       tags:
       - events
+schemes:
+- https
+- http
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer" followed by a space and JWT token.

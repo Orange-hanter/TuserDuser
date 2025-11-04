@@ -39,8 +39,9 @@ import (
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
-// @host localhost:8080
+// @host api.tuserduser.online
 // @BasePath /v1
+// @schemes https http
 
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -177,17 +178,17 @@ func main() {
 
 	// Swagger routes
 	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("http://localhost:"+cfg.Port+"/swagger/doc.json"),
+		httpSwagger.URL("/swagger/doc.json"),
 	))
 
 	// CORS
 	c := cors.New(cors.Options{
 		AllowedOrigins:   cfg.CORSAllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
+		ExposedHeaders:   []string{"Content-Length", "X-JSON-Response"},
 		AllowCredentials: true,
-		MaxAge:           300, // 5 минут
+		MaxAge:           3600, // 1 час
 	})
 
 	handler := c.Handler(r)

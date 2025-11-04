@@ -1,5 +1,9 @@
 # Event API
 
+[![CI/CD Pipeline](https://github.com/Orange-hanter/TuserDuser/actions/workflows/ci.yml/badge.svg)](https://github.com/Orange-hanter/TuserDuser/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.25.0-00ADD8?logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 REST API для управления событиями с аутентификацией на основе JWT.
 
 ## 🚀 Возможности
@@ -18,6 +22,8 @@ REST API для управления событиями с аутентифик�
 - ✅ **Redis** - коды верификации и token blacklist
 - ✅ **Worker Pool** - асинхронная обработка задач
 - ✅ **Events CRUD** - управление событиями
+- ✅ **SMS Service** - отправка SMS через несколько провайдеров
+- ✅ **CI/CD** - автоматическое тестирование и деплой
 
 ## 📋 Технологический стек
 
@@ -28,6 +34,10 @@ REST API для управления событиями с аутентифик�
 - **Zap** - Логирование
 - **CORS** - Cross-origin поддержка
 - **Swagger** - API документация
+- **PostgreSQL** 17 - Основная БД
+- **Redis** 7 - Кеш и временные данные
+- **Docker** - Контейнеризация
+- **GitHub Actions** - CI/CD
 - **PostgreSQL** 18 - Основная БД
 - **Redis** 7 - Кеш и временные данные
 
@@ -308,6 +318,86 @@ KEYS *
 MONITOR
 ```
 
+## 🔄 CI/CD
+
+Проект использует GitHub Actions для автоматизации:
+
+### Workflows
+
+- **CI Pipeline** - Lint, Test, Build, Security Scan, Deploy
+- **Staging Pipeline** - Автоматический деплой на staging
+- **Release Pipeline** - Релизы с бинарниками для всех платформ
+
+### Быстрый старт
+
+1. Push в `master` → Автоматический деплой на production
+2. Push в `develop` → Автоматический деплой на staging
+3. Tag `v1.0.0` → Автоматический релиз с бинарниками
+
+### Команды
+
+```bash
+# Локальное тестирование как в CI
+make ci-test
+
+# Проверка кода
+make check
+
+# Деплой
+./scripts/deploy.sh production
+
+# Бэкап БД
+./scripts/backup.sh
+```
+
+Подробнее:
+- 📖 [CI/CD Quick Start](./CI_CD_QUICKSTART.md)
+- 📚 [Полная документация CI/CD](./CI_CD.md)
+
+## 📱 SMS Service
+
+Интегрированный SMS сервис для отправки кодов верификации:
+
+- **Mock Provider** - для разработки и тестирования
+- **SMS.RU** - российский SMS провайдер
+- **SMSC.RU** - российский SMS провайдер
+- **Twilio** - международный SMS провайдер
+
+Подробнее: [SMS_SERVICE.md](./SMS_SERVICE.md)
+
+## 🚧 Планы развития
+
+- [x] Интеграция с БД (PostgreSQL) ✅
+- [x] Redis для кеша и временных данных ✅
+- [x] Worker Pool для асинхронных задач ✅
+- [x] Events CRUD с JSONB полями ✅
+- [x] SMS Service с несколькими провайдерами ✅
+- [x] CI/CD с GitHub Actions ✅
+- [ ] Refresh tokens
+- [ ] 2FA (двухфакторная аутентификация)
+- [ ] Social login (Google, GitHub)
+- [ ] Email notifications (SMTP/SendGrid)
+- [ ] Rate limiting (через Redis)
+- [ ] Tests coverage >80%
+- [ ] Metrics (Prometheus + Grafana)
+- [ ] Kubernetes deployment
+
+## 📚 Документация
+
+- [API Documentation](./API_DOCUMENTATION.md) - Полная документация API
+- [CI/CD Quick Start](./CI_CD_QUICKSTART.md) - Быстрый старт с CI/CD
+- [CI/CD Documentation](./CI_CD.md) - Подробная документация CI/CD
+- [SMS Service](./SMS_SERVICE.md) - Документация SMS сервиса
+- [Redis Documentation](./DOC/REDIS.md) - Redis интеграция
+- [Testing Guide](./docs/TESTING.md) - Руководство по тестированию
+
+## 📄 Лицензия
+
+MIT
+
+## 👨‍💻 Автор
+
+Event API Team
 ## �🚧 Планы развития
 
 - [x] Интеграция с БД (PostgreSQL) ✅
