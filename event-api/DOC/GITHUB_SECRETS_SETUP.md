@@ -15,14 +15,16 @@
 
 Если вы хотите публиковать Docker образы в Docker Hub:
 
-**DOCKER_USERNAME**
-```
+#### DOCKER_USERNAME
+
+```text
 Value: ваш_username_на_dockerhub
 Example: johndoe
 ```
 
-**DOCKER_PASSWORD**
-```
+#### DOCKER_PASSWORD
+
+```text
 Value: ваш_пароль_или_access_token
 Рекомендация: Используйте Access Token вместо пароля
 Как получить: Docker Hub → Account Settings → Security → New Access Token
@@ -32,20 +34,23 @@ Value: ваш_пароль_или_access_token
 
 Если вы деплоите на свой сервер через SSH:
 
-**SSH_HOST**
-```
+#### SSH_HOST
+
+```text
 Value: IP_адрес_или_домен_вашего_сервера
 Example: 123.45.67.89 или server.example.com
 ```
 
-**SSH_USERNAME**
-```
+#### SSH_USERNAME
+
+```text
 Value: имя_пользователя_на_сервере
 Example: deploy или ubuntu
 ```
 
-**SSH_PRIVATE_KEY**
-```
+#### SSH_PRIVATE_KEY
+
+```text
 Value: приватный SSH ключ (весь текст)
 Example:
 -----BEGIN OPENSSH PRIVATE KEY-----
@@ -56,18 +61,19 @@ b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAG...
 Как получить:
 1. Сгенерируйте новую SSH пару ключей:
    ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/deploy_key
-   
+
 2. Добавьте публичный ключ на сервер:
    ssh-copy-id -i ~/.ssh/deploy_key.pub user@server.com
-   
+
 3. Скопируйте приватный ключ:
    cat ~/.ssh/deploy_key
-   
+
 4. Вставьте весь текст (включая BEGIN и END строки) в Secret
 ```
 
 **SSH_PORT** (опционально)
-```
+
+```text
 Value: порт SSH (по умолчанию 22)
 Example: 22 или 2222
 ```
@@ -76,8 +82,9 @@ Example: 22 или 2222
 
 ### Для Codecov (отслеживание покрытия кода)
 
-**CODECOV_TOKEN**
-```
+#### CODECOV_TOKEN
+
+```text
 Value: токен из codecov.io
 Как получить:
 1. Зарегистрируйтесь на https://codecov.io
@@ -87,36 +94,42 @@ Value: токен из codecov.io
 
 ### Для Staging окружения
 
-**STAGING_SSH_HOST**
-```
+#### STAGING_SSH_HOST
+
+```text
 Value: IP_или_домен_staging_сервера
 ```
 
-**STAGING_SSH_USERNAME**
-```
+#### STAGING_SSH_USERNAME
+
+```text
 Value: имя_пользователя
 ```
 
-**STAGING_SSH_PRIVATE_KEY**
-```
+#### STAGING_SSH_PRIVATE_KEY
+
+```text
 Value: приватный SSH ключ для staging
 ```
 
-**STAGING_SSH_PORT**
-```
+#### STAGING_SSH_PORT
+
+```text
 Value: порт SSH (по умолчанию 22)
 ```
 
 ### Для уведомлений в Slack/Discord (опционально)
 
-**SLACK_WEBHOOK_URL**
-```
+#### SLACK_WEBHOOK_URL
+
+```text
 Value: webhook URL из Slack
 Как получить: Slack → Apps → Incoming Webhooks
 ```
 
-**DISCORD_WEBHOOK_URL**
-```
+#### DISCORD_WEBHOOK_URL
+
+```text
 Value: webhook URL из Discord
 Как получить: Discord → Server Settings → Integrations → Webhooks
 ```
@@ -136,6 +149,7 @@ Value: webhook URL из Discord
 ### Staging Environment
 
 Повторите для staging окружения:
+
 1. Имя: `staging`
 2. Deployment branches: только `develop`
 
@@ -144,6 +158,7 @@ Value: webhook URL из Discord
 После добавления всех secrets:
 
 1. Сделайте тестовый commit и push:
+
 ```bash
 git add .
 git commit -m "test: проверка CI/CD"
@@ -156,7 +171,7 @@ git push origin master
 
 ## Безопасность
 
-### ✅ Хорошие практики:
+### ✅ Хорошие практики
 
 1. **Используйте Access Tokens вместо паролей**
    - Docker Hub: используйте Access Token
@@ -173,7 +188,7 @@ git push origin master
 4. **Отдельные ключи для разных окружений**
    - Production и Staging должны иметь разные ключи
 
-### ❌ Чего НЕ делать:
+### ❌ Чего НЕ делать
 
 1. ❌ Не коммитьте secrets в код
 2. ❌ Не используйте одинаковые ключи везде
@@ -194,7 +209,8 @@ git push origin master
 ### Ошибка: "Secret not found"
 
 **Проблема**: Workflow не может найти secret
-**Решение**: 
+**Решение**:
+
 1. Проверьте правильность имени secret
 2. Убедитесь что secret добавлен в репозиторий, а не в организацию
 3. Проверьте что secret не истёк (для токенов с временем жизни)
@@ -203,6 +219,7 @@ git push origin master
 
 **Проблема**: Не может подключиться к серверу
 **Решение**:
+
 1. Проверьте что публичный ключ добавлен на сервер
 2. Проверьте права на ~/.ssh/authorized_keys (должно быть 600)
 3. Попробуйте подключиться вручную с этим ключом
@@ -211,14 +228,16 @@ git push origin master
 
 **Проблема**: Не может залогиниться в Docker Hub
 **Решение**:
+
 1. Проверьте правильность username
 2. Создайте новый Access Token в Docker Hub
 3. Убедитесь что копировали токен полностью
 
-## Готово!
+## Готово
 
 После настройки всех необходимых secrets ваш CI/CD pipeline готов к работе! 🎉
 
 Дополнительная помощь:
+
 - [GitHub Secrets Documentation](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 - [GitHub Environments Documentation](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)

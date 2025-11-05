@@ -11,7 +11,7 @@ import (
 // @Tags health
 // @Produce plain
 // @Success 200 {string} string "OK"
-// @Router /health [get]
+// @Router /health [get].
 func HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))

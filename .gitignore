@@ -136,3 +136,9 @@ bin/tuserduser-backend-linux-amd64
 goStarter.sh
 .vscode/*
 bin/*
+.trunk/.gitignore
+.trunk/trunk.yaml
+.trunk/configs/.hadolint.yaml
+.trunk/configs/.markdownlint.yaml
+.trunk/configs/.shellcheckrc
+.trunk/configs/.yamllint.yaml

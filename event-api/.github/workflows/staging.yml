@@ -2,18 +2,18 @@ name: Deploy to Staging
 
 on:
   push:
-    branches: [ develop ]
+    branches: [develop]
   workflow_dispatch:
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: "1.22"
   DOCKER_IMAGE: event-api
 
 jobs:
   test:
     name: Quick Tests
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:17-alpine
@@ -64,7 +64,7 @@ jobs:
     environment:
       name: staging
       url: https://staging.your-domain.com
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

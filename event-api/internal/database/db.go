@@ -9,13 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// Database представляет подключение к БД
+// Database представляет подключение к БД.
 type Database struct {
 	DB     *sql.DB
 	Logger *zap.Logger
 }
 
-// Config содержит параметры подключения к БД
+// Config содержит параметры подключения к БД.
 type Config struct {
 	Host     string
 	Port     string
@@ -27,7 +27,7 @@ type Config struct {
 	MinConn  int
 }
 
-// NewDatabase создает новое подключение к БД
+// NewDatabase создает новое подключение к БД.
 func NewDatabase(cfg *Config, logger *zap.Logger) (*Database, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
@@ -83,7 +83,7 @@ func NewDatabase(cfg *Config, logger *zap.Logger) (*Database, error) {
 	}, nil
 }
 
-// Close закрывает подключение к БД
+// Close закрывает подключение к БД.
 func (d *Database) Close() error {
 	if d.DB != nil {
 		d.Logger.Info("Закрываем подключение к БД")
@@ -92,30 +92,30 @@ func (d *Database) Close() error {
 	return nil
 }
 
-// Health проверяет здоровье подключения к БД
+// Health проверяет здоровье подключения к БД.
 func (d *Database) Health() error {
 	return d.DB.Ping()
 }
 
-// Query выполняет SELECT запрос
+// Query выполняет SELECT запрос.
 func (d *Database) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	d.Logger.Debug("Выполняем запрос", zap.String("query", query))
 	return d.DB.Query(query, args...)
 }
 
-// QueryRow выполняет SELECT запрос, возвращающий одну строку
+// QueryRow выполняет SELECT запрос, возвращающий одну строку.
 func (d *Database) QueryRow(query string, args ...interface{}) *sql.Row {
 	d.Logger.Debug("Выполняем QueryRow", zap.String("query", query))
 	return d.DB.QueryRow(query, args...)
 }
 
-// Exec выполняет INSERT/UPDATE/DELETE запрос
+// Exec выполняет INSERT/UPDATE/DELETE запрос.
 func (d *Database) Exec(query string, args ...interface{}) (sql.Result, error) {
 	d.Logger.Debug("Выполняем Exec", zap.String("query", query))
 	return d.DB.Exec(query, args...)
 }
 
-// BeginTx начинает новую транзакцию
+// BeginTx начинает новую транзакцию.
 func (d *Database) BeginTx() (*sql.Tx, error) {
 	d.Logger.Debug("Начинаем транзакцию")
 	return d.DB.Begin()

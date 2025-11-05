@@ -11,7 +11,7 @@ import (
 
 var Log *zap.Logger
 
-// ANSI цвета для консоли
+// ANSI цвета для консоли.
 const (
 	ColorReset   = "\033[0m"
 	ColorRed     = "\033[31m"
@@ -24,7 +24,7 @@ const (
 	ColorGray    = "\033[90m"
 )
 
-// Init инициализирует логгер с красивым форматированием
+// Init инициализирует логгер с красивым форматированием.
 func Init() {
 	var err error
 
@@ -45,7 +45,7 @@ func Init() {
 	}
 }
 
-// createDevelopmentLogger создает логгер для разработки с красивым выводом
+// createDevelopmentLogger создает логгер для разработки с красивым выводом.
 func createDevelopmentLogger() (*zap.Logger, error) {
 	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
@@ -63,7 +63,7 @@ func createDevelopmentLogger() (*zap.Logger, error) {
 	return logger, err
 }
 
-// Sync синхронизирует логгер (вызывать в defer)
+// Sync синхронизирует логгер (вызывать в defer).
 func Sync() error {
 	if Log != nil {
 		return Log.Sync()
@@ -71,7 +71,7 @@ func Sync() error {
 	return nil
 }
 
-// GetLogger возвращает экземпляр логгера
+// GetLogger возвращает экземпляр логгера.
 func GetLogger() *zap.Logger {
 	if Log == nil {
 		Init()
@@ -79,7 +79,7 @@ func GetLogger() *zap.Logger {
 	return Log
 }
 
-// FormatError форматирует ошибку с красивым выводом
+// FormatError форматирует ошибку с красивым выводом.
 func FormatError(title string, err error, details ...string) string {
 	var output strings.Builder
 
@@ -100,7 +100,7 @@ func FormatError(title string, err error, details ...string) string {
 	return output.String()
 }
 
-// FormatSuccess форматирует успешное сообщение
+// FormatSuccess форматирует успешное сообщение.
 func FormatSuccess(message string, details ...string) string {
 	var output strings.Builder
 
@@ -117,7 +117,7 @@ func FormatSuccess(message string, details ...string) string {
 	return output.String()
 }
 
-// FormatWarning форматирует предупреждение
+// FormatWarning форматирует предупреждение.
 func FormatWarning(message string, details ...string) string {
 	var output strings.Builder
 
@@ -134,7 +134,7 @@ func FormatWarning(message string, details ...string) string {
 	return output.String()
 }
 
-// FormatInfo форматирует информационное сообщение
+// FormatInfo форматирует информационное сообщение.
 func FormatInfo(message string, details ...string) string {
 	var output strings.Builder
 

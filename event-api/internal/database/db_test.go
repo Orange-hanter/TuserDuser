@@ -8,9 +8,9 @@ import (
 
 func TestConfig(t *testing.T) {
 	tests := []struct {
-		name   string
 		config *Config
 		verify func(t *testing.T, cfg *Config)
+		name   string
 	}{
 		{
 			name: "Valid config structure",
@@ -114,10 +114,10 @@ func TestDatabaseStructure(t *testing.T) {
 
 func TestConnectionPoolSettings(t *testing.T) {
 	tests := []struct {
+		verify  func(t *testing.T, max, min int)
 		name    string
 		maxConn int
 		minConn int
-		verify  func(t *testing.T, max, min int)
 	}{
 		{
 			name:    "Standard pool sizes",
@@ -172,9 +172,9 @@ func TestConnectionPoolSettings(t *testing.T) {
 
 func TestDatabaseConfig_DSN(t *testing.T) {
 	tests := []struct {
-		name     string
 		config   *Config
 		checkDSN func(t *testing.T, cfg *Config)
+		name     string
 	}{
 		{
 			name: "Local development DSN",
@@ -232,8 +232,8 @@ func TestLoggerIntegration(t *testing.T) {
 	defer logger.Sync()
 
 	tests := []struct {
-		name   string
 		logger *zap.Logger
+		name   string
 	}{
 		{
 			name:   "Development logger",

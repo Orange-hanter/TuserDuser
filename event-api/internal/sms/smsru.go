@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// SMSRuProvider провайдер для SMS.RU API
+// SMSRuProvider провайдер для SMS.RU API.
 type SMSRuProvider struct {
 	apiID  string
 	from   string
@@ -21,7 +21,7 @@ type SMSRuProvider struct {
 	logger *zap.Logger
 }
 
-// SMSRuResponse ответ от SMS.RU API
+// SMSRuResponse ответ от SMS.RU API.
 type SMSRuResponse struct {
 	Status     string `json:"status"`
 	StatusCode int    `json:"status_code"`
@@ -33,7 +33,7 @@ type SMSRuResponse struct {
 	Balance float64 `json:"balance"`
 }
 
-// NewSMSRuProvider создает новый провайдер SMS.RU
+// NewSMSRuProvider создает новый провайдер SMS.RU.
 func NewSMSRuProvider(cfg *Config, logger *zap.Logger) (*SMSRuProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("API ключ для SMS.RU не указан")
@@ -49,7 +49,7 @@ func NewSMSRuProvider(cfg *Config, logger *zap.Logger) (*SMSRuProvider, error) {
 	}, nil
 }
 
-// SendSMS отправляет SMS через SMS.RU
+// SendSMS отправляет SMS через SMS.RU.
 func (p *SMSRuProvider) SendSMS(ctx context.Context, phone, message string) error {
 	// SMS.RU API endpoint
 	apiURL := "https://sms.ru/sms/send"
@@ -105,7 +105,7 @@ func (p *SMSRuProvider) SendSMS(ctx context.Context, phone, message string) erro
 	return nil
 }
 
-// GetName возвращает название провайдера
+// GetName возвращает название провайдера.
 func (p *SMSRuProvider) GetName() string {
 	return "SMS.RU"
 }

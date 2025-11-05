@@ -7,13 +7,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// Provider интерфейс для SMS провайдеров
+// Provider интерфейс для SMS провайдеров.
 type Provider interface {
 	SendSMS(ctx context.Context, phone, message string) error
 	GetName() string
 }
 
-// Config конфигурация для SMS сервиса
+// Config конфигурация для SMS сервиса.
 type Config struct {
 	Provider string // "mock", "twilio", "smsru", "smsc"
 	APIKey   string
@@ -21,13 +21,13 @@ type Config struct {
 	From     string // Номер отправителя
 }
 
-// Service сервис для отправки SMS
+// Service сервис для отправки SMS.
 type Service struct {
 	provider Provider
 	logger   *zap.Logger
 }
 
-// NewService создает новый SMS сервис
+// NewService создает новый SMS сервис.
 func NewService(cfg *Config, logger *zap.Logger) (*Service, error) {
 	var provider Provider
 	var err error
@@ -59,7 +59,7 @@ func NewService(cfg *Config, logger *zap.Logger) (*Service, error) {
 	}, nil
 }
 
-// SendSMS отправляет SMS
+// SendSMS отправляет SMS.
 func (s *Service) SendSMS(ctx context.Context, phone, message string) error {
 	s.logger.Info("Отправка SMS",
 		zap.String("phone", phone),
@@ -83,19 +83,19 @@ func (s *Service) SendSMS(ctx context.Context, phone, message string) error {
 	return nil
 }
 
-// SendVerificationCode отправляет код верификации
+// SendVerificationCode отправляет код верификации.
 func (s *Service) SendVerificationCode(ctx context.Context, phone, code string) error {
 	message := fmt.Sprintf("Ваш код верификации: %s\nКод действителен 10 минут.", code)
 	return s.SendSMS(ctx, phone, message)
 }
 
-// SendPasswordReset отправляет код сброса пароля
+// SendPasswordReset отправляет код сброса пароля.
 func (s *Service) SendPasswordReset(ctx context.Context, phone, code string) error {
 	message := fmt.Sprintf("Код сброса пароля: %s\nНе сообщайте никому этот код.", code)
 	return s.SendSMS(ctx, phone, message)
 }
 
-// SendNotification отправляет уведомление
+// SendNotification отправляет уведомление.
 func (s *Service) SendNotification(ctx context.Context, phone, text string) error {
 	return s.SendSMS(ctx, phone, text)
 }

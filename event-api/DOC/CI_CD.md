@@ -9,35 +9,41 @@
 ### 1. CI Pipeline (`.github/workflows/ci.yml`)
 
 Основной CI/CD pipeline, запускается при:
+
 - Push в ветки `master`, `main`, `develop`
 - Pull Request в эти ветки
 
-#### Jobs:
+#### Jobs
 
-**1.1. Lint (Проверка кода)**
+##### 1.1. Lint (Проверка кода)
+
 - ✅ golangci-lint с расширенными правилами
 - ✅ Проверка форматирования (gofmt)
 - ✅ Go vet для статического анализа
 - ✅ Кэширование Go модулей для ускорения
 
-**1.2. Test (Тестирование)**
+##### 1.2. Test (Тестирование)
+
 - ✅ Запуск PostgreSQL 17 и Redis 7 через GitHub Services
 - ✅ Выполнение всех тестов с флагами `-race` и `-cover`
 - ✅ Генерация отчёта о покрытии кода
 - ✅ Загрузка coverage в Codecov (опционально)
 - ✅ Артефакты с отчётом о покрытии
 
-**1.3. Build (Сборка Docker образа)**
+##### 1.3. Build (Сборка Docker образа)
+
 - ✅ Сборка Docker образа приложения
 - ✅ Кэширование Docker layers для ускорения
 - ✅ Запускается только при push (не для PR)
 
-**1.4. Security (Сканирование безопасности)**
+##### 1.4. Security (Сканирование безопасности)
+
 - ✅ Trivy для сканирования уязвимостей в файловой системе
 - ✅ GoSec для анализа безопасности Go кода
 - ✅ Загрузка результатов в GitHub Security
 
-**1.5. Deploy (Деплой на Production)**
+##### 1.5. Deploy (Деплой на Production)
+
 - ✅ Запускается только для `master`/`main` ветки
 - ✅ Требует ручного подтверждения (GitHub Environment)
 - 🔧 Настраивается под ваш метод деплоя
@@ -45,6 +51,7 @@
 ### 2. Staging Pipeline (`.github/workflows/staging.yml`)
 
 Деплой на staging окружение:
+
 - Запускается при push в ветку `develop`
 - Можно запустить вручную через `workflow_dispatch`
 - Быстрые тесты перед деплоем
@@ -53,6 +60,7 @@
 ### 3. Release Pipeline (`.github/workflows/release.yml`)
 
 Создание релизов с тегами версий:
+
 - Запускается при push тега формата `v*.*.*` (например, `v1.0.0`)
 - Сборка бинарников для всех платформ:
   - Linux AMD64/ARM64
@@ -73,22 +81,25 @@ CI/CD уже настроен и будет работать автоматич�
 
 Перейдите в **Settings → Secrets and variables → Actions** вашего GitHub репозитория и добавьте:
 
-#### Для Docker Hub (опционально):
-```
+#### Для Docker Hub (опционально)
+
+```text
 DOCKER_USERNAME - ваш Docker Hub username
 DOCKER_PASSWORD - ваш Docker Hub password или access token
 ```
 
-#### Для SSH деплоя (опционально):
-```
+#### Для SSH деплоя (опционально)
+
+```text
 SSH_HOST - IP или домен вашего сервера
 SSH_USERNAME - username для SSH
 SSH_PRIVATE_KEY - приватный SSH ключ
 SSH_PORT - порт SSH (по умолчанию 22)
 ```
 
-#### Для staging (опционально):
-```
+#### Для staging (опционально)
+
+```text
 STAGING_SSH_HOST
 STAGING_SSH_USERNAME
 STAGING_SSH_PRIVATE_KEY
@@ -111,10 +122,11 @@ STAGING_SSH_PORT
 
 Для отслеживания покрытия кода:
 
-1. Зарегистрируйтесь на https://codecov.io
+1. Зарегистрируйтесь на [https://codecov.io](dasda)
 2. Подключите ваш GitHub репозиторий
 3. Добавьте токен в GitHub Secrets:
-   ```
+
+   ```text
    CODECOV_TOKEN - токен из Codecov
    ```
 
@@ -198,6 +210,7 @@ linters:
 ```
 
 Запуск локально:
+
 ```bash
 # Установка golangci-lint
 brew install golangci-lint  # macOS
@@ -223,6 +236,7 @@ golangci-lint run
 ```
 
 Скрипт выполняет:
+
 1. ✅ Проверку Git статуса
 2. ✅ Создание бэкапа БД
 3. ✅ Pull последних изменений
@@ -244,6 +258,7 @@ golangci-lint run
 ```
 
 Особенности:
+
 - Сжатие через gzip
 - Автоматическое удаление старых бэкапов (>7 дней)
 - Сохранение в директорию `./backups/`
@@ -330,6 +345,7 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 ### Nginx Reverse Proxy
 
 Файл `nginx.conf` настроен с:
+
 - Rate limiting (10 req/s)
 - Gzip compression
 - Security headers
@@ -337,6 +353,7 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 - SSL/TLS готово (закомментировано)
 
 Для включения SSL:
+
 1. Получите сертификаты (Let's Encrypt, Cloudflare, etc.)
 2. Поместите их в `./ssl/`
 3. Раскомментируйте HTTPS секцию в `nginx.conf`
@@ -364,6 +381,7 @@ git push origin v1.0.0
 ### Semantic Versioning
 
 Используйте семантическое версионирование:
+
 - `v1.0.0` - Major версия (breaking changes)
 - `v1.1.0` - Minor версия (новые фичи)
 - `v1.1.1` - Patch версия (bug fixes)
@@ -379,6 +397,7 @@ git push origin v1.0.0
 - `security` → 🔒 Security
 
 Пример:
+
 ```bash
 # В PR добавьте метку "feature"
 # В changelog появится под секцией "🚀 Features"
@@ -420,6 +439,7 @@ docker-compose -f docker-compose.prod.yml ps
 ### Prometheus Metrics (TODO)
 
 Добавить `/metrics` endpoint для мониторинга:
+
 - Request rate
 - Response time
 - Error rate
@@ -433,6 +453,7 @@ docker-compose -f docker-compose.prod.yml ps
 **Проблема**: Тесты падают в CI, но проходят локально
 
 **Решение**:
+
 1. Проверьте версию Go в `.github/workflows/ci.yml`
 2. Убедитесь, что PostgreSQL/Redis запущены корректно
 3. Проверьте переменные окружения в step "Create test .env file"
@@ -442,6 +463,7 @@ docker-compose -f docker-compose.prod.yml ps
 **Проблема**: Сборка Docker образа падает
 
 **Решение**:
+
 1. Проверьте `Dockerfile` - версия Go должна быть 1.23+
 2. Убедитесь, что все зависимости в `go.mod`
 3. Локально: `docker build -t event-api:test .`
@@ -451,6 +473,7 @@ docker-compose -f docker-compose.prod.yml ps
 **Проблема**: Деплой не запускается
 
 **Решение**:
+
 1. Проверьте Secrets в GitHub Settings
 2. Убедитесь, что Environment настроен правильно
 3. Проверьте, что ветка `master` или `main`
@@ -460,6 +483,7 @@ docker-compose -f docker-compose.prod.yml ps
 **Проблема**: Trivy или GoSec находят уязвимости
 
 **Решение**:
+
 1. Обновите зависимости: `go get -u && go mod tidy`
 2. Проверьте отчёт в GitHub Security tab
 3. Исправьте критичные уязвимости перед мержем
@@ -477,7 +501,8 @@ docker-compose -f docker-compose.prod.yml ps
 ### 2. Commit Messages
 
 Используйте conventional commits:
-```
+
+```text
 feat: добавлена отправка SMS через Twilio
 fix: исправлена утечка памяти в Redis клиенте
 docs: обновлена документация по CI/CD

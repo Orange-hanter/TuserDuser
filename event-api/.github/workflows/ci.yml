@@ -2,12 +2,12 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [master, main, develop]
   pull_request:
-    branches: [ master, main, develop ]
+    branches: [master, main, develop]
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: "1.22"
   DOCKER_IMAGE: event-api
 
 jobs:
@@ -57,7 +57,7 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: lint
-    
+
     services:
       postgres:
         image: postgres:17-alpine
@@ -185,7 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -220,7 +220,7 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: lint
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -228,27 +228,27 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Run GoSec Security Scanner
         uses: securego/gosec@master
         with:
-          args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
+          args: "-no-fail -fmt sarif -out gosec-results.sarif ./..."
 
       - name: Upload GoSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'gosec-results.sarif'
+          sarif_file: "gosec-results.sarif"
 
   # Job 5: Deploy (только для main/master branch)
   deploy:
@@ -259,7 +259,7 @@ jobs:
     environment:
       name: production
       url: https://your-domain.com
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

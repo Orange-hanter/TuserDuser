@@ -17,14 +17,16 @@
 
 Перейдите в **Settings → Secrets and variables → Actions** и добавьте:
 
-#### Минимальные (для Docker Hub):
-```
+#### Минимальные (для Docker Hub)
+
+```text
 DOCKER_USERNAME = your_dockerhub_username
 DOCKER_PASSWORD = your_dockerhub_password_or_token
 ```
 
-#### Для SSH деплоя:
-```
+#### Для SSH деплоя
+
+```text
 SSH_HOST = your.server.com
 SSH_USERNAME = deploy
 SSH_PRIVATE_KEY = -----BEGIN OPENSSH PRIVATE KEY-----...
@@ -159,14 +161,16 @@ git push origin develop
 ### Изменить версию Go
 
 В `.github/workflows/ci.yml`:
+
 ```yaml
 env:
-  GO_VERSION: '1.25.0'  # ← измените здесь
+  GO_VERSION: "1.25.0" # ← измените здесь
 ```
 
 ### Добавить новый шаг в CI
 
 В `.github/workflows/ci.yml` добавьте новый step:
+
 ```yaml
 - name: My custom step
   run: |
@@ -177,6 +181,7 @@ env:
 ### Изменить метод деплоя
 
 Замените SSH деплой на свой метод в job `deploy`:
+
 - Kubernetes: используйте `kubectl` или Helm
 - AWS: используйте `aws-actions`
 - GCP: используйте `google-github-actions`
@@ -198,6 +203,7 @@ make ci-test
 ### Деплой не запускается
 
 Проверьте:
+
 1. Secrets добавлены в GitHub
 2. Environment "production" создан
 3. Код в ветке `master` или `main`
@@ -243,9 +249,10 @@ docker build -t event-api:test .
 3. Проверьте [CI_CD.md](./CI_CD.md) для деталей
 4. Проверьте GitHub Actions логи для конкретной ошибки
 
-## 🎉 Готово!
+## 🎉 Готово
 
 Теперь у вас настроен полноценный CI/CD pipeline с автоматическим:
+
 - ✅ Тестированием
 - ✅ Линтингом
 - ✅ Security сканированием

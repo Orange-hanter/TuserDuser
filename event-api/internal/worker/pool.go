@@ -7,20 +7,20 @@ import (
 	"go.uber.org/zap"
 )
 
-// Task представляет задачу для выполнения
+// Task представляет задачу для выполнения.
 type Task func(ctx context.Context) error
 
-// Pool представляет пул воркеров для асинхронной обработки задач
+// Pool представляет пул воркеров для асинхронной обработки задач.
 type Pool struct {
-	workers   int
-	taskQueue chan Task
-	wg        sync.WaitGroup
 	ctx       context.Context
+	taskQueue chan Task
 	cancel    context.CancelFunc
 	logger    *zap.Logger
+	wg        sync.WaitGroup
+	workers   int
 }
 
-// NewPool создает новый пул воркеров
+// NewPool создает новый пул воркеров.
 func NewPool(workers int, queueSize int, logger *zap.Logger) *Pool {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -33,7 +33,7 @@ func NewPool(workers int, queueSize int, logger *zap.Logger) *Pool {
 	}
 }
 
-// Start запускает воркеры
+// Start запускает воркеры.
 func (p *Pool) Start() {
 	for i := 0; i < p.workers; i++ {
 		p.wg.Add(1)
@@ -43,7 +43,7 @@ func (p *Pool) Start() {
 	p.logger.Info("Worker pool started", zap.Int("workers", p.workers))
 }
 
-// worker обрабатывает задачи из очереди
+// worker обрабатывает задачи из очереди.
 func (p *Pool) worker(id int) {
 	defer p.wg.Done()
 
@@ -67,7 +67,7 @@ func (p *Pool) worker(id int) {
 	}
 }
 
-// Submit отправляет задачу в очередь
+// Submit отправляет задачу в очередь.
 func (p *Pool) Submit(task Task) error {
 	select {
 	case p.taskQueue <- task:
@@ -77,7 +77,7 @@ func (p *Pool) Submit(task Task) error {
 	}
 }
 
-// Shutdown завершает работу пула воркеров
+// Shutdown завершает работу пула воркеров.
 func (p *Pool) Shutdown() {
 	p.logger.Info("Shutting down worker pool...")
 	close(p.taskQueue)

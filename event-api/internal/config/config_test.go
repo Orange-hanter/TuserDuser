@@ -8,16 +8,16 @@ import (
 func TestLoad(t *testing.T) {
 	// Save original environment
 	originalEnv := map[string]string{
-		"PORT":                  os.Getenv("PORT"),
-		"ENV":                   os.Getenv("ENV"),
-		"JWT_SECRET":            os.Getenv("JWT_SECRET"),
-		"CORS_ALLOWED_ORIGINS":  os.Getenv("CORS_ALLOWED_ORIGINS"),
-		"DB_HOST":               os.Getenv("DB_HOST"),
-		"DB_PORT":               os.Getenv("DB_PORT"),
-		"DB_USER":               os.Getenv("DB_USER"),
-		"DB_PASSWORD":           os.Getenv("DB_PASSWORD"),
-		"DB_NAME":               os.Getenv("DB_NAME"),
-		"DB_SSLMODE":            os.Getenv("DB_SSLMODE"),
+		"PORT":                 os.Getenv("PORT"),
+		"ENV":                  os.Getenv("ENV"),
+		"JWT_SECRET":           os.Getenv("JWT_SECRET"),
+		"CORS_ALLOWED_ORIGINS": os.Getenv("CORS_ALLOWED_ORIGINS"),
+		"DB_HOST":              os.Getenv("DB_HOST"),
+		"DB_PORT":              os.Getenv("DB_PORT"),
+		"DB_USER":              os.Getenv("DB_USER"),
+		"DB_PASSWORD":          os.Getenv("DB_PASSWORD"),
+		"DB_NAME":              os.Getenv("DB_NAME"),
+		"DB_SSLMODE":           os.Getenv("DB_SSLMODE"),
 	}
 
 	defer func() {
@@ -32,23 +32,23 @@ func TestLoad(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name      string
 		setupEnv  map[string]string
 		checkFunc func(t *testing.T, cfg *Config)
+		name      string
 	}{
 		{
 			name: "Load with all environment variables set",
 			setupEnv: map[string]string{
-				"PORT":                  "9000",
-				"ENV":                   "production",
-				"JWT_SECRET":            "test-secret-key",
-				"CORS_ALLOWED_ORIGINS":  "http://localhost:3000, http://localhost:3001",
-				"DB_HOST":               "db.example.com",
-				"DB_PORT":               "5433",
-				"DB_USER":               "testuser",
-				"DB_PASSWORD":           "testpass",
-				"DB_NAME":               "testdb",
-				"DB_SSLMODE":            "require",
+				"PORT":                 "9000",
+				"ENV":                  "production",
+				"JWT_SECRET":           "test-secret-key",
+				"CORS_ALLOWED_ORIGINS": "http://localhost:3000, http://localhost:3001",
+				"DB_HOST":              "db.example.com",
+				"DB_PORT":              "5433",
+				"DB_USER":              "testuser",
+				"DB_PASSWORD":          "testpass",
+				"DB_NAME":              "testdb",
+				"DB_SSLMODE":           "require",
 			},
 			checkFunc: func(t *testing.T, cfg *Config) {
 				if cfg.Port != "9000" {
@@ -152,12 +152,12 @@ func TestLoad(t *testing.T) {
 		{
 			name: "Load database configuration",
 			setupEnv: map[string]string{
-				"DB_HOST":      "prod-db.example.com",
-				"DB_PORT":      "5433",
-				"DB_USER":      "appuser",
-				"DB_PASSWORD":  "securepass123",
-				"DB_NAME":      "production_db",
-				"DB_SSLMODE":   "require",
+				"DB_HOST":     "prod-db.example.com",
+				"DB_PORT":     "5433",
+				"DB_USER":     "appuser",
+				"DB_PASSWORD": "securepass123",
+				"DB_NAME":     "production_db",
+				"DB_SSLMODE":  "require",
 			},
 			checkFunc: func(t *testing.T, cfg *Config) {
 				if cfg.DBHost != "prod-db.example.com" {
@@ -220,8 +220,8 @@ func TestGetEnv(t *testing.T) {
 		key            string
 		fallback       string
 		setValue       string
-		shouldSet      bool
 		expectedResult string
+		shouldSet      bool
 	}{
 		{
 			name:           "Return environment variable when set",

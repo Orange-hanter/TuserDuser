@@ -7,13 +7,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// Migrator управляет миграциями БД
+// Migrator управляет миграциями БД.
 type Migrator struct {
 	db     *sql.DB
 	logger *zap.Logger
 }
 
-// NewMigrator создает новый Migrator
+// NewMigrator создает новый Migrator.
 func NewMigrator(db *sql.DB, logger *zap.Logger) *Migrator {
 	return &Migrator{
 		db:     db,
@@ -21,7 +21,7 @@ func NewMigrator(db *sql.DB, logger *zap.Logger) *Migrator {
 	}
 }
 
-// RunMigrations запускает все миграции
+// RunMigrations запускает все миграции.
 func (m *Migrator) RunMigrations() error {
 	m.logger.Info("🔄 Запускаем миграции БД...")
 
@@ -65,14 +65,14 @@ func (m *Migrator) RunMigrations() error {
 	return nil
 }
 
-// migration представляет одну миграцию
+// migration представляет одну миграцию.
 type migration struct {
 	name string
 	up   string
 	down string
 }
 
-// createMigrationsTable создает таблицу для отслеживания миграций
+// createMigrationsTable создает таблицу для отслеживания миграций.
 func (m *Migrator) createMigrationsTable() error {
 	query := `
 	CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -85,7 +85,7 @@ func (m *Migrator) createMigrationsTable() error {
 	return err
 }
 
-// runMigration запускает одну миграцию
+// runMigration запускает одну миграцию.
 func (m *Migrator) runMigration(mig migration) error {
 	// Проверяем, была ли уже применена эта миграция
 	var exists bool
@@ -135,7 +135,7 @@ func (m *Migrator) runMigration(mig migration) error {
 
 // SQL миграции
 
-// createUsersTable создает таблицу users
+// createUsersTable создает таблицу users.
 const createUsersTable = `
 CREATE TABLE IF NOT EXISTS users (
 	id TEXT PRIMARY KEY,
@@ -151,12 +151,12 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_verified ON users(verified);
 `
 
-// dropUsersTable удаляет таблицу users
+// dropUsersTable удаляет таблицу users.
 const dropUsersTable = `
 DROP TABLE IF EXISTS users CASCADE;
 `
 
-// createVerificationCodesTable создает таблицу verification_codes
+// createVerificationCodesTable создает таблицу verification_codes.
 const createVerificationCodesTable = `
 CREATE TABLE IF NOT EXISTS verification_codes (
 	id SERIAL PRIMARY KEY,
@@ -170,12 +170,12 @@ CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON verification_codes(em
 CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON verification_codes(expires_at);
 `
 
-// dropVerificationCodesTable удаляет таблицу verification_codes
+// dropVerificationCodesTable удаляет таблицу verification_codes.
 const dropVerificationCodesTable = `
 DROP TABLE IF EXISTS verification_codes CASCADE;
 `
 
-// createEventsTable - SQL для создания таблицы events
+// createEventsTable - SQL для создания таблицы events.
 const createEventsTable = `
 CREATE TABLE IF NOT EXISTS events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -202,7 +202,7 @@ VALUES
 ON CONFLICT DO NOTHING;
 `
 
-// dropEventsTable - SQL для удаления таблицы events
+// dropEventsTable - SQL для удаления таблицы events.
 const dropEventsTable = `
 DROP TABLE IF EXISTS events CASCADE;
 `

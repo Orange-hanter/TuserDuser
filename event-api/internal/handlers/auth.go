@@ -11,12 +11,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// AuthHandler управляет всеми auth endpoints
+// AuthHandler управляет всеми auth endpoints.
 type AuthHandler struct {
 	authService *service.AuthService
 }
 
-// NewAuthHandler создает новый auth handler
+// NewAuthHandler создает новый auth handler.
 func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
@@ -34,7 +34,7 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 // @Success 201 {object} map[string]interface{} "user:models.User, verify_code:string"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 409 {object} models.ErrorResponse "Пользователь уже существует"
-// @Router /v1/api/auth/register [post]
+// @Router /v1/api/auth/register [post].
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -108,7 +108,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Param request body models.VerifyRequest true "Код верификации"
 // @Success 200 {object} models.AuthResponse "Email верифицирован, токен выдан"
 // @Failure 400 {object} models.ErrorResponse "Неверный код или формат запроса"
-// @Router /v1/api/auth/verify [post]
+// @Router /v1/api/auth/verify [post].
 func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -154,7 +154,7 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} models.AuthResponse "Успешная аутентификация"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 401 {object} models.ErrorResponse "Неверные учетные данные"
-// @Router /v1/api/auth/login [post]
+// @Router /v1/api/auth/login [post].
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -202,7 +202,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]interface{} "message:string"
 // @Failure 400 {object} models.ErrorResponse "Token не найден"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/auth/logout [post]
+// @Router /v1/api/auth/logout [post].
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 
@@ -266,7 +266,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} models.User "Информация о пользователе"
 // @Failure 401 {object} models.ErrorResponse "Пользователь не аутентифицирован"
 // @Failure 404 {object} models.ErrorResponse "Пользователь не найден"
-// @Router /v1/api/auth/me [get]
+// @Router /v1/api/auth/me [get].
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	// UserID поставляется middleware AuthMiddleware
 	userID := r.Header.Get("X-User-ID")

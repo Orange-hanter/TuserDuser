@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Config содержит настройки для подключения к Redis
+// Config содержит настройки для подключения к Redis.
 type Config struct {
 	Host     string
 	Port     string
@@ -17,13 +17,13 @@ type Config struct {
 	DB       int
 }
 
-// Client обертка над redis.Client
+// Client обертка над redis.Client.
 type Client struct {
 	client *redis.Client
 	logger *zap.Logger
 }
 
-// NewClient создает новое подключение к Redis
+// NewClient создает новое подключение к Redis.
 func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
@@ -51,22 +51,22 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 	}, nil
 }
 
-// Set сохраняет значение с TTL
+// Set сохраняет значение с TTL.
 func (c *Client) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	return c.client.Set(ctx, key, value, expiration).Err()
 }
 
-// Get получает значение по ключу
+// Get получает значение по ключу.
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	return c.client.Get(ctx, key).Result()
 }
 
-// Del удаляет ключ
+// Del удаляет ключ.
 func (c *Client) Del(ctx context.Context, keys ...string) error {
 	return c.client.Del(ctx, keys...).Err()
 }
 
-// Exists проверяет существование ключа
+// Exists проверяет существование ключа.
 func (c *Client) Exists(ctx context.Context, keys ...string) (bool, error) {
 	count, err := c.client.Exists(ctx, keys...).Result()
 	if err != nil {
@@ -75,22 +75,22 @@ func (c *Client) Exists(ctx context.Context, keys ...string) (bool, error) {
 	return count > 0, nil
 }
 
-// SetNX устанавливает значение только если ключ не существует
+// SetNX устанавливает значение только если ключ не существует.
 func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
 	return c.client.SetNX(ctx, key, value, expiration).Result()
 }
 
-// Expire устанавливает время жизни для ключа
+// Expire устанавливает время жизни для ключа.
 func (c *Client) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	return c.client.Expire(ctx, key, expiration).Err()
 }
 
-// TTL возвращает оставшееся время жизни ключа
+// TTL возвращает оставшееся время жизни ключа.
 func (c *Client) TTL(ctx context.Context, key string) (time.Duration, error) {
 	return c.client.TTL(ctx, key).Result()
 }
 
-// Close закрывает соединение с Redis
+// Close закрывает соединение с Redis.
 func (c *Client) Close() error {
 	if err := c.client.Close(); err != nil {
 		c.logger.Error("Ошибка при закрытии Redis соединения", zap.Error(err))
@@ -100,7 +100,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// GetClient возвращает базовый redis.Client для продвинутых операций
+// GetClient возвращает базовый redis.Client для продвинутых операций.
 func (c *Client) GetClient() *redis.Client {
 	return c.client
 }

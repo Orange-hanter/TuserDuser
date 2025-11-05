@@ -24,25 +24,30 @@
 Перейдите в **Settings → Secrets and variables → Actions**
 
 **Минимальные (для базового CI):**
+
 - [ ] Ничего не требуется! Lint, Test, Build работают без secrets
 
 **Для Docker Hub (опционально):**
+
 - [ ] `DOCKER_USERNAME` - ваш Docker Hub username
 - [ ] `DOCKER_PASSWORD` - Docker Hub password или access token
 
 **Для Production Deploy:**
+
 - [ ] `SSH_HOST` - IP или домен production сервера
 - [ ] `SSH_USERNAME` - username для SSH
 - [ ] `SSH_PRIVATE_KEY` - приватный SSH ключ
 - [ ] `SSH_PORT` - порт SSH (обычно 22)
 
 **Для Staging Deploy:**
+
 - [ ] `STAGING_SSH_HOST`
 - [ ] `STAGING_SSH_USERNAME`
 - [ ] `STAGING_SSH_PRIVATE_KEY`
 - [ ] `STAGING_SSH_PORT`
 
 **Опционально:**
+
 - [ ] `CODECOV_TOKEN` - для отслеживания coverage
 
 #### Environments Configuration
@@ -50,12 +55,14 @@
 Перейдите в **Settings → Environments**
 
 **Production Environment:**
+
 - [ ] Создан environment с именем `production`
 - [ ] Добавлены reviewers (рекомендуется)
 - [ ] Настроен deployment branch: только `master` или `main`
 - [ ] Wait timer настроен (опционально)
 
 **Staging Environment:**
+
 - [ ] Создан environment с именем `staging`
 - [ ] Настроен deployment branch: только `develop`
 
@@ -64,16 +71,19 @@
 #### `.github/workflows/ci.yml`
 
 **Для Docker Hub deploy:**
+
 - [ ] Раскомментирован блок "Login to Docker Hub"
 - [ ] Раскомментирован блок "Build and push Docker image"
 - [ ] Проверен `DOCKER_IMAGE` name в env (или используйте ваш)
 
 **Для SSH deploy:**
+
 - [ ] Раскомментирован блок "Deploy to server via SSH"
 - [ ] Обновлен путь `/path/to/app` на реальный путь на сервере
 - [ ] Проверены команды деплоя
 
 **Или альтернативный метод:**
+
 - [ ] Kubernetes deployment настроен
 - [ ] Cloud provider (AWS/GCP/Azure) настроен
 - [ ] Другой метод деплоя настроен
@@ -86,6 +96,7 @@
 #### `.github/workflows/release.yml`
 
 **Для Docker Hub:**
+
 - [ ] Раскомментирован блок "Build and push Docker image"
 - [ ] Проверен username/repository name
 
@@ -100,6 +111,7 @@
 - [ ] Пользователь имеет права на Docker (или добавлен в docker group)
 
 **Создайте структуру на сервере:**
+
 ```bash
 mkdir -p /opt/event-api
 cd /opt/event-api
@@ -153,6 +165,7 @@ git push origin master
 - [ ] Security job прошел успешно
 
 **Если deploy настроен:**
+
 - [ ] Deploy job запустился
 - [ ] Ждет подтверждения (если настроены reviewers)
 - [ ] Deploy выполнен успешно
@@ -263,6 +276,7 @@ make restore FILE=backups/your_backup.sql.gz
 ### Issue: Tests fail in CI but pass locally
 
 **Check:**
+
 - [ ] Go version совпадает (local vs CI)
 - [ ] PostgreSQL version совпадает
 - [ ] Redis version совпадает
@@ -271,6 +285,7 @@ make restore FILE=backups/your_backup.sql.gz
 ### Issue: Docker build fails
 
 **Check:**
+
 - [ ] `.dockerignore` настроен правильно
 - [ ] `go.mod` и `go.sum` committed
 - [ ] Dockerfile Go version актуальна
@@ -278,6 +293,7 @@ make restore FILE=backups/your_backup.sql.gz
 ### Issue: Deploy fails
 
 **Check:**
+
 - [ ] SSH ключ добавлен правильно
 - [ ] SSH доступ работает: `ssh user@server`
 - [ ] Docker установлен на сервере
@@ -286,6 +302,7 @@ make restore FILE=backups/your_backup.sql.gz
 ### Issue: Application crashes after deploy
 
 **Check:**
+
 - [ ] `.env` файл существует на сервере
 - [ ] Все переменные окружения заполнены
 - [ ] Database доступна
@@ -298,7 +315,7 @@ make restore FILE=backups/your_backup.sql.gz
 
 - ✅ Push в master → автоматический production deploy
 - ✅ Push в develop → автоматический staging deploy
-- ✅ Tag v*.*.* → автоматический release с binaries
+- ✅ Tag v*.*.\* → автоматический release с binaries
 - ✅ Pull Requests → автоматические тесты
 - ✅ Security scanning работает
 - ✅ Health checks проходят
@@ -338,7 +355,3 @@ make restore FILE=backups/your_backup.sql.gz
 - 🔐 [GitHub Secrets Setup](./GITHUB_SECRETS_SETUP.md)
 - 💬 Ask in team chat
 - 🐛 Check GitHub Actions logs
-
-## 🎉 Congratulations!
-
-Если вы прошли все пункты чеклиста - у вас полностью настроен production-ready CI/CD pipeline! 🚀

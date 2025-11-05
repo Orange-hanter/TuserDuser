@@ -19,7 +19,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AuthService управляет аутентификацией и авторизацией
+// AuthService управляет аутентификацией и авторизацией.
 type AuthService struct {
 	cfg        *config.Config
 	db         *sql.DB
@@ -29,14 +29,14 @@ type AuthService struct {
 	logger     *zap.Logger
 }
 
-// VerificationCode хранит информацию о коде верификации
+// VerificationCode хранит информацию о коде верификации.
 type VerificationCode struct {
+	ExpiresAt time.Time
 	Code      string
 	Email     string
-	ExpiresAt time.Time
 }
 
-// NewAuthService создает новый сервис аутентификации
+// NewAuthService создает новый сервис аутентификации.
 func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, sms *sms.Service, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		cfg:        cfg,
@@ -48,7 +48,7 @@ func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, s
 	}
 }
 
-// Register регистрирует нового пользователя
+// Register регистрирует нового пользователя.
 func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, string, error) {
 	// Проверяем, не существует ли уже пользователь с этим email
 	var existingUserID string
@@ -115,7 +115,7 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 	return user, code, nil
 }
 
-// VerifyCode проверяет код верификации и подтверждает email
+// VerifyCode проверяет код верификации и подтверждает email.
 func (s *AuthService) VerifyCode(email, code string) error {
 	ctx := context.Background()
 	verifyKey := fmt.Sprintf("verify:%s", email)
@@ -149,7 +149,7 @@ func (s *AuthService) VerifyCode(email, code string) error {
 	return nil
 }
 
-// VerifyAndIssueToken проверяет код верификации и возвращает JWT токен
+// VerifyAndIssueToken проверяет код верификации и возвращает JWT токен.
 func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthResponse, error) {
 	// Проверяем код верификации
 	if err := s.VerifyCode(email, code); err != nil {
@@ -191,7 +191,7 @@ func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthRespo
 	}, nil
 }
 
-// Login аутентифицирует пользователя и выдает JWT токен
+// Login аутентифицирует пользователя и выдает JWT токен.
 func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
 	// Получаем пользователя из БД
 	var user models.User
@@ -234,7 +234,7 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 	}, nil
 }
 
-// Logout добавляет токен в черный список
+// Logout добавляет токен в черный список.
 func (s *AuthService) Logout(token string) error {
 	ctx := context.Background()
 	blacklistKey := fmt.Sprintf("blacklist:%s", token)
@@ -249,7 +249,7 @@ func (s *AuthService) Logout(token string) error {
 	return nil
 }
 
-// GetUserByID получает пользователя по ID
+// GetUserByID получает пользователя по ID.
 func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 	var user models.User
 	err := s.db.QueryRow(
@@ -274,7 +274,7 @@ func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 	}, nil
 }
 
-// IsTokenBlacklisted проверяет, находится ли токен в черном списке
+// IsTokenBlacklisted проверяет, находится ли токен в черном списке.
 func (s *AuthService) IsTokenBlacklisted(token string) bool {
 	ctx := context.Background()
 	blacklistKey := fmt.Sprintf("blacklist:%s", token)
@@ -288,7 +288,7 @@ func (s *AuthService) IsTokenBlacklisted(token string) bool {
 	return exists
 }
 
-// GenerateJWT генерирует JWT токен
+// GenerateJWT генерирует JWT токен.
 func (s *AuthService) GenerateJWT(user *models.User) (string, time.Time, error) {
 	expiresAt := time.Now().Add(time.Duration(s.cfg.JWTExpiration) * time.Second)
 
@@ -310,7 +310,7 @@ func (s *AuthService) GenerateJWT(user *models.User) (string, time.Time, error) 
 	return tokenString, expiresAt, nil
 }
 
-// ValidateJWT валидирует JWT токен и возвращает claims
+// ValidateJWT валидирует JWT токен и возвращает claims.
 func (s *AuthService) ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 	// Проверяем черный список
 	if s.IsTokenBlacklisted(tokenString) {
@@ -337,7 +337,7 @@ func (s *AuthService) ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 }
 
 // sendVerificationCode отправляет код верификации по email
-// В будущем здесь будет реальная интеграция с email сервисом
+// В будущем здесь будет реальная интеграция с email сервисом.
 func (s *AuthService) sendVerificationCode(ctx context.Context, email, code string) error {
 	s.logger.Info("Отправка кода верификации (асинхронно)",
 		zap.String("email", email),
@@ -359,7 +359,7 @@ func (s *AuthService) sendVerificationCode(ctx context.Context, email, code stri
 	return nil
 }
 
-// sendSMSVerificationCode отправляет код верификации по SMS
+// sendSMSVerificationCode отправляет код верификации по SMS.
 func (s *AuthService) sendSMSVerificationCode(ctx context.Context, phone, code string) error {
 	s.logger.Info("Отправка кода верификации по SMS (асинхронно)",
 		zap.String("phone", phone),
@@ -384,14 +384,14 @@ func (s *AuthService) sendSMSVerificationCode(ctx context.Context, phone, code s
 
 // Вспомогательные функции
 
-// generateID генерирует уникальный ID
+// generateID генерирует уникальный ID.
 func generateID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
-// generateVerificationCode генерирует 6-значный код верификации
+// generateVerificationCode генерирует 6-значный код верификации.
 func generateVerificationCode() string {
 	b := make([]byte, 3)
 	rand.Read(b)

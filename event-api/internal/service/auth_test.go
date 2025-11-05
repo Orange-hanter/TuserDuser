@@ -20,7 +20,7 @@ func TestRegister(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := NewAuthService(cfg, workerPool, logger)
+	authService := NewAuthService(cfg, nil, nil, nil, workerPool, logger)
 
 	tests := []struct {
 		name      string
@@ -93,7 +93,7 @@ func TestVerifyCode(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := NewAuthService(cfg, workerPool, logger)
+	authService := NewAuthService(cfg, nil, nil, nil, workerPool, logger)
 
 	// Регистрируем пользователя
 	user, verifyCode, err := authService.Register(&models.RegisterRequest{
@@ -151,7 +151,7 @@ func TestLogin(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := NewAuthService(cfg, workerPool, logger)
+	authService := NewAuthService(cfg, nil, nil, nil, workerPool, logger)
 
 	// Регистрируем и верифицируем пользователя
 	user, verifyCode, _ := authService.Register(&models.RegisterRequest{
@@ -224,7 +224,7 @@ func TestLogout(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := NewAuthService(cfg, workerPool, logger)
+	authService := NewAuthService(cfg, nil, nil, nil, workerPool, logger)
 
 	// Регистрируем и логируемся
 	user, verifyCode, _ := authService.Register(&models.RegisterRequest{
@@ -262,7 +262,7 @@ func TestGetUserByID(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := NewAuthService(cfg, workerPool, logger)
+	authService := NewAuthService(cfg, nil, nil, nil, workerPool, logger)
 
 	// Регистрируем пользователя
 	user, _, _ := authService.Register(&models.RegisterRequest{
@@ -318,7 +318,7 @@ func TestValidateJWT(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := NewAuthService(cfg, workerPool, logger)
+	authService := NewAuthService(cfg, nil, nil, nil, workerPool, logger)
 
 	// Регистрируем и логируемся
 	user, verifyCode, _ := authService.Register(&models.RegisterRequest{

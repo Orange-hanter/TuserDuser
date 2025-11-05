@@ -10,7 +10,7 @@ Cross-Origin Resource Sharing (CORS) is configured to allow API calls from speci
 
 The following origins are allowed to make requests to the API:
 
-```
+```text
 - https://api.tuserduser.online     (API domain itself)
 - https://tuserduser.online          (Production frontend)
 - https://www.tuserduser.online      (WWW variant)
@@ -22,7 +22,7 @@ The following origins are allowed to make requests to the API:
 
 ### Request Headers Accepted
 
-```
+```text
 - Accept
 - Authorization
 - Content-Type
@@ -32,7 +32,7 @@ The following origins are allowed to make requests to the API:
 
 ### Response Headers Exposed
 
-```
+```text
 - Content-Length
 - X-Json-Response
 ```
@@ -41,7 +41,7 @@ The following origins are allowed to make requests to the API:
 
 Allowed HTTP methods for CORS requests:
 
-```
+```text
 - GET       (Retrieve data)
 - POST      (Create data)
 - PUT       (Update data)
@@ -86,7 +86,8 @@ curl -i -X OPTIONS https://api.tuserduser.online/v1/api/health \
 ```
 
 Expected response headers:
-```
+
+```text
 Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS
 Access-Control-Allow-Credentials: true
@@ -110,7 +111,8 @@ curl -i -X POST https://api.tuserduser.online/v1/api/auth/register \
 ```
 
 Expected response headers:
-```
+
+```text
 Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Credentials: true
 Access-Control-Expose-Headers: Content-Length, X-Json-Response
@@ -122,55 +124,56 @@ Access-Control-Expose-Headers: Content-Length, X-Json-Response
 
 ```javascript
 // Fetch API
-fetch('https://api.tuserduser.online/v1/api/auth/register', {
-  method: 'POST',
+fetch("https://api.tuserduser.online/v1/api/auth/register", {
+  method: "POST",
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
-  credentials: 'include', // Important: send credentials
+  credentials: "include", // Important: send credentials
   body: JSON.stringify({
-    email: 'user@example.com',
-    phone: '+79991234567',
-    password: 'password123'
-  })
+    email: "user@example.com",
+    phone: "+79991234567",
+    password: "password123",
+  }),
 })
-.then(response => response.json())
-.then(data => console.log(data))
-.catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 ```
 
 ### Axios
 
 ```javascript
-import axios from 'axios';
+import axios from "axios";
 
 const apiClient = axios.create({
-  baseURL: 'https://api.tuserduser.online/v1/api',
+  baseURL: "https://api.tuserduser.online/v1/api",
   withCredentials: true, // Important: include credentials
   headers: {
-    'Content-Type': 'application/json',
-  }
+    "Content-Type": "application/json",
+  },
 });
 
-apiClient.post('/auth/register', {
-  email: 'user@example.com',
-  phone: '+79991234567',
-  password: 'password123'
-})
-.then(response => console.log(response.data))
-.catch(error => console.error(error));
+apiClient
+  .post("/auth/register", {
+    email: "user@example.com",
+    phone: "+79991234567",
+    password: "password123",
+  })
+  .then((response) => console.log(response.data))
+  .catch((error) => console.error(error));
 ```
 
 ### React
 
 ```jsx
 useEffect(() => {
-  fetch('https://api.tuserduser.online/v1/api/health', {
-    credentials: 'include' // Important for CORS with cookies/auth
+  fetch("https://api.tuserduser.online/v1/api/health", {
+    credentials: "include", // Important for CORS with cookies/auth
   })
-  .then(res => res.json())
-  .then(data => setHealth(data))
-  .catch(err => console.error(err));
+    .then((res) => res.json())
+    .then((data) => setHealth(data))
+    .catch((err) => console.error(err));
 }, []);
 ```
 
@@ -201,7 +204,8 @@ curl -i https://api.tuserduser.online/health -H "Origin: https://myapp.com" | gr
 
 **Cause**: Origin not in allowed list
 
-**Solution**: 
+**Solution**:
+
 1. Check the `CORS_ALLOWED_ORIGINS` in `.env`
 2. Ensure origin matches exactly (protocol, domain, port)
 3. Restart the service: `sudo systemctl restart event-api`
@@ -210,7 +214,8 @@ curl -i https://api.tuserduser.online/health -H "Origin: https://myapp.com" | gr
 
 **Cause**: `AllowCredentials` is false
 
-**Solution**: 
+**Solution**:
+
 - Check that `AllowCredentials: true` is set in CORS config
 - Update and redeploy if needed
 
@@ -219,6 +224,7 @@ curl -i https://api.tuserduser.online/health -H "Origin: https://myapp.com" | gr
 **Cause**: Method or headers not allowed
 
 **Solution**:
+
 1. Check `AllowedMethods` includes your method (GET, POST, PUT, DELETE, PATCH)
 2. Check `AllowedHeaders` includes required headers
 3. Update code/config if needed and redeploy

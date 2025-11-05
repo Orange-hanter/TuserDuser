@@ -28,7 +28,7 @@ func TestRegisterHandler(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := service.NewAuthService(cfg, workerPool, testLogger)
+	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	tests := []struct {
@@ -77,7 +77,7 @@ func TestVerifyHandler(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := service.NewAuthService(cfg, workerPool, testLogger)
+	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем пользователя для получения кода
@@ -132,7 +132,7 @@ func TestLoginHandler(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := service.NewAuthService(cfg, workerPool, testLogger)
+	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем и верифицируем пользователя
@@ -188,7 +188,7 @@ func TestLogoutHandler(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := service.NewAuthService(cfg, workerPool, testLogger)
+	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем, верифицируем и логируемся
@@ -224,7 +224,7 @@ func TestGetMeHandler(t *testing.T) {
 	workerPool.Start()
 	defer workerPool.Shutdown()
 
-	authService := service.NewAuthService(cfg, workerPool, testLogger)
+	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
 	handler := NewAuthHandler(authService)
 
 	// Регистрируем, верифицируем и логируемся

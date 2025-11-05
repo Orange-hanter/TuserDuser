@@ -5,6 +5,7 @@
 ### 1. GitHub Actions Workflows
 
 #### `.github/workflows/ci.yml` - Основной CI/CD Pipeline
+
 - **Lint Job**: golangci-lint, gofmt проверка, go vet
 - **Test Job**: Запуск тестов с PostgreSQL 17 и Redis 7
 - **Build Job**: Сборка Docker образа с кешированием
@@ -12,11 +13,13 @@
 - **Deploy Job**: Автоматический деплой на production (настраивается)
 
 #### `.github/workflows/staging.yml` - Staging Pipeline
+
 - Быстрые тесты перед деплоем
 - Автоматический деплой на staging сервер
 - Триггер: push в ветку `develop`
 
 #### `.github/workflows/release.yml` - Release Pipeline
+
 - Сборка бинарников для Linux, macOS, Windows (amd64/arm64)
 - Создание checksums
 - Docker образ с тегом версии
@@ -27,11 +30,13 @@
 ### 2. Конфигурационные файлы
 
 #### `.golangci.yml`
+
 - Настройки линтера с 20+ включенными правилами
 - Оптимизированные настройки для Go проектов
 - Исключения для тестовых файлов
 
 #### `docker-compose.prod.yml`
+
 - Production-ready Docker Compose конфигурация
 - PostgreSQL с персистентным хранилищем
 - Redis с AOF persistence
@@ -40,6 +45,7 @@
 - Правильная сеть и зависимости
 
 #### `nginx.conf`
+
 - Reverse proxy для приложения
 - Rate limiting (10 req/s)
 - Gzip compression
@@ -50,6 +56,7 @@
 ### 3. Deployment Scripts
 
 #### `scripts/deploy.sh`
+
 - Автоматический деплой с проверками
 - Создание бэкапа БД перед деплоем
 - Git pull и Docker build
@@ -58,12 +65,14 @@
 - Поддержка production и staging
 
 #### `scripts/backup.sh`
+
 - Бэкап PostgreSQL базы данных
 - Автоматическое сжатие (gzip)
 - Удаление старых бэкапов (>7 дней)
 - Простой интерфейс
 
 #### `scripts/restore.sh`
+
 - Восстановление из бэкапа
 - Поддержка gzip файлов
 - Подтверждение перед восстановлением
@@ -72,11 +81,13 @@
 ### 4. Environment Examples
 
 #### `.env.production.example`
+
 - Шаблон для production окружения
 - Все необходимые переменные
 - Комментарии и примеры
 
 #### `.env.staging.example`
+
 - Шаблон для staging окружения
 - Mock SMS провайдер для тестирования
 - Mailtrap для email тестирования
@@ -84,6 +95,7 @@
 ### 5. Обновленный Makefile
 
 Новые команды:
+
 - `make ci-test` - тесты как в CI
 - `make lint` - запуск golangci-lint
 - `make fmt` - форматирование кода
@@ -100,7 +112,8 @@
 ### 6. Обновленный .gitignore
 
 Добавлены исключения для:
-- Environment файлов (.env.*)
+
+- Environment файлов (.env.\*)
 - Coverage отчётов
 - Бэкапов БД
 - IDE файлов
@@ -110,6 +123,7 @@
 ### 7. Документация
 
 #### `CI_CD.md` - Полная документация (507 строк)
+
 - Обзор всех workflows
 - Детальная настройка
 - Примеры деплоя
@@ -118,12 +132,14 @@
 - Production checklist
 
 #### `CI_CD_QUICKSTART.md` - Быстрый старт (267 строк)
+
 - 5-минутная настройка
 - Типичные сценарии использования
 - Checklist перед production
 - Troubleshooting guide
 
 #### `GITHUB_SECRETS_SETUP.md` - Настройка Secrets (210 строк)
+
 - Пошаговая инструкция
 - Все необходимые secrets
 - Генерация SSH ключей
@@ -132,6 +148,7 @@
 - Troubleshooting
 
 #### Обновленный `README.md`
+
 - GitHub Actions badge
 - Секция CI/CD с примерами
 - Секция SMS Service
@@ -140,7 +157,7 @@
 
 ## Архитектура CI/CD
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    GitHub Actions                        │
 └─────────────────────────────────────────────────────────┘
@@ -169,17 +186,18 @@
 
 ## Workflow Triggers
 
-| Workflow | Trigger | Branch | Action |
-|----------|---------|--------|--------|
-| CI Pipeline | Push | master, main, develop | Lint → Test → Build → Security → Deploy (prod) |
-| CI Pipeline | Pull Request | master, main, develop | Lint → Test → Build → Security |
-| Staging | Push | develop | Test → Deploy (staging) |
-| Staging | Manual | any | Test → Deploy (staging) |
-| Release | Tag Push | v*.*.* | Build → Docker → Changelog → Release |
+| Workflow    | Trigger      | Branch                | Action                                         |
+| ----------- | ------------ | --------------------- | ---------------------------------------------- |
+| CI Pipeline | Push         | master, main, develop | Lint → Test → Build → Security → Deploy (prod) |
+| CI Pipeline | Pull Request | master, main, develop | Lint → Test → Build → Security                 |
+| Staging     | Push         | develop               | Test → Deploy (staging)                        |
+| Staging     | Manual       | any                   | Test → Deploy (staging)                        |
+| Release     | Tag Push     | v*.*.\*               | Build → Docker → Changelog → Release           |
 
 ## Metrics
 
 ### Lines of Code Added
+
 - Workflows: ~400 строк (3 файла)
 - Scripts: ~200 строк (3 файла)
 - Configuration: ~150 строк (3 файла)
@@ -187,6 +205,7 @@
 - **Total: ~1750 строк**
 
 ### Files Added
+
 - 3 GitHub Actions workflows
 - 1 golangci-lint config
 - 1 production docker-compose
@@ -197,6 +216,7 @@
 - **Total: 15 новых файлов**
 
 ### Files Modified
+
 - `Makefile` - добавлено 20+ новых команд
 - `.gitignore` - расширен список исключений
 - `README.md` - добавлены CI/CD badges и секции

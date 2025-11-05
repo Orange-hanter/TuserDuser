@@ -11,13 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// EventService управляет событиями
+// EventService управляет событиями.
 type EventService struct {
 	db     *sql.DB
 	logger *zap.Logger
 }
 
-// NewEventService создает новый сервис событий
+// NewEventService создает новый сервис событий.
 func NewEventService(db *sql.DB, logger *zap.Logger) *EventService {
 	return &EventService{
 		db:     db,
@@ -25,7 +25,7 @@ func NewEventService(db *sql.DB, logger *zap.Logger) *EventService {
 	}
 }
 
-// GetAllEvents получает все события
+// GetAllEvents получает все события.
 func (s *EventService) GetAllEvents(ctx context.Context) ([]*models.Event, error) {
 	query := `
 		SELECT id, type, start_time, end_time, duration, place, 
@@ -85,7 +85,7 @@ func (s *EventService) GetAllEvents(ctx context.Context) ([]*models.Event, error
 	return events, nil
 }
 
-// GetEventByID получает событие по ID
+// GetEventByID получает событие по ID.
 func (s *EventService) GetEventByID(ctx context.Context, id string) (*models.Event, error) {
 	query := `
 		SELECT id, type, start_time, end_time, duration, place, 
@@ -129,7 +129,7 @@ func (s *EventService) GetEventByID(ctx context.Context, id string) (*models.Eve
 	return &event, nil
 }
 
-// CreateEvent создает новое событие
+// CreateEvent создает новое событие.
 func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventRequest) (*models.Event, error) {
 	detailsJSON, err := json.Marshal(req.Details)
 	if err != nil {
@@ -188,7 +188,7 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 	return &event, nil
 }
 
-// DeleteEvent удаляет событие
+// DeleteEvent удаляет событие.
 func (s *EventService) DeleteEvent(ctx context.Context, id string) error {
 	query := `DELETE FROM events WHERE id = $1`
 

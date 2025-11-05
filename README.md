@@ -4,7 +4,7 @@ A monorepo containing multiple Go microservices for event management and user fe
 
 ## Project Structure
 
-```
+```text
 TuserDuser/
 ├── .github/
 │   └── workflows/

@@ -8,19 +8,19 @@ import (
 	"go.uber.org/zap"
 )
 
-// MockProvider имитирует отправку SMS (для разработки и тестирования)
+// MockProvider имитирует отправку SMS (для разработки и тестирования).
 type MockProvider struct {
 	logger *zap.Logger
 }
 
-// NewMockProvider создает новый Mock провайдер
+// NewMockProvider создает новый Mock провайдер.
 func NewMockProvider(logger *zap.Logger) *MockProvider {
 	return &MockProvider{
 		logger: logger,
 	}
 }
 
-// SendSMS имитирует отправку SMS
+// SendSMS имитирует отправку SMS.
 func (p *MockProvider) SendSMS(ctx context.Context, phone, message string) error {
 	p.logger.Info("📱 [MOCK SMS] Отправка сообщения",
 		zap.String("phone", phone),
@@ -43,7 +43,7 @@ func (p *MockProvider) SendSMS(ctx context.Context, phone, message string) error
 	return nil
 }
 
-// GetName возвращает название провайдера
+// GetName возвращает название провайдера.
 func (p *MockProvider) GetName() string {
 	return "Mock SMS Provider"
 }

@@ -1,104 +1,139 @@
+# Configuration file version - must be "2" for golangci-lint v2+
+version: 2
+
+# Global run settings
 run:
+  # Increase timeout for large codebases (0 = no timeout; default is 1m)
   timeout: 5m
+  # Analyze test files too
   tests: true
+  # Use go modules in readonly mode (avoids accidental writes)
   modules-download-mode: readonly
+  # Optional: specify Go version (used by staticcheck, etc.)
+  # go: "1.22"
 
+# Linter configuration
 linters:
+  # Enable specific linters (formatters like gofmt are NOT here — see `formatters`)
   enable:
-    - errcheck        # Проверка обработки ошибок
-    - gosimple        # Упрощение кода
-    - govet           # Стандартный vet
-    - ineffassign     # Неиспользуемые присваивания
-    - staticcheck     # Множество проверок
-    - unused          # Неиспользуемый код
-    - typecheck       # Проверка типов
-    - gofmt           # Форматирование
-    - goimports       # Импорты
-    - misspell        # Опечатки в комментариях
-    - revive          # Замена golint
-    - bodyclose       # HTTP response body закрыт
-    - gosec           # Безопасность
-    - unconvert       # Ненужные преобразования типов
-    - gocritic        # Множество проверок качества кода
-    - godot           # Точки в комментариях
-    - prealloc        # Предаллокация слайсов
-    - exportloopref   # Ошибки с переменными в циклах
-    - noctx           # Проверка context.Context
+    # Error handling
+    - errcheck # Check for unchecked errors
+    - ineffassign # Detect ineffectual assignments
+    - bodyclose # Ensure HTTP response bodies are closed
+    - noctx # Detect HTTP handlers without context
 
-  disable:
-    - varcheck        # Deprecated
-    - structcheck     # Deprecated
-    - deadcode        # Deprecated
-    - ifshort         # Deprecated
+    # Code quality & simplicity
+    - staticcheck # Comprehensive static analysis (includes gosimple/stylecheck)
+    - unused # Find unused code (variables, functions, etc.)
+    - unconvert # Remove unnecessary type conversions
+    - revive # Fast, configurable linter (successor to golint)
+    - gocritic # Opinionated code diagnostics (style/performance)
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
+    # Standard vet
+    - govet # Go's official vet tool
 
-  govet:
-    enable-all: true
-    disable:
-      - shadow
+    # Comments & strings
+    - misspell # Find common spelling mistakes in comments
+    - godot # Enforce period at end of comments
 
-  revive:
+    # Performance
+    - prealloc # Suggest preallocating slices/maps
+
+    # Security
+    - gosec # Scan for security issues
+
+  # Per-linter settings
+  settings:
+    errcheck:
+      check-type-assertions: true # Report ignored type assertion errors
+      check-blank: true # Report errors assigned to blank identifier (_)
+
+    govet:
+      enable-all: true # Enable all govet analyzers
+      disable:
+        - shadow # Disable shadow variable check (often noisy)
+
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+          arguments:
+            - checkPrivateReceivers
+            - sayRepetitiveInsteadOfStutters
+
+    misspell:
+      locale: US # Use US English spelling
+
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G404 # Weak random number generator (math/rand)
+        - G304 # File path provided from external input (often false positive)
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - commentFormatting # Too strict on comment style
+        - whyNoLint # Not needed if you manage nolint well
+        - unnamedResult # Optional; can be noisy
+
+    godot:
+      scope: declarations # Only check top-level declarations (funcs, types, etc.)
+      capital: false # Do not enforce capitalization after period
+
+  # Exclusion rules (replaces `issues.exclude-rules`)
+  exclusions:
     rules:
-      - name: exported
-        disabled: false
-        arguments:
-          - "checkPrivateReceivers"
-          - "sayRepetitiveInsteadOfStutters"
+      # Skip some linters on test files
+      - path: _test\.go
+        linters:
+          - gosec
+          - gocritic
+          - errcheck
+          - bodyclose
 
-  gofmt:
-    simplify: true
+      # Skip security/style checks in auto-generated migration files
+      - path: internal/migrations/
+        linters:
+          - gocritic
+          - gosec
 
-  goimports:
-    local-prefixes: event-api
+    # Optional: disable limits on issue reporting
+    # (0 = unlimited; remove if you want defaults)
+    # presets:
+    #   - common-false-positives
 
-  misspell:
-    locale: US
+# Formatter configuration (gofmt, goimports, etc. are FORMATTERS now)
+formatters:
+  enable:
+    - gofmt # Enforce gofmt formatting
+    - goimports # Fix import order and groups
 
-  gosec:
-    severity: medium
-    confidence: medium
-    excludes:
-      - G404  # Use of weak random number generator
-      - G304  # File path provided as input
+  settings:
+    gofmt:
+      simplify: true # Apply simplifications (e.g., x[:] → x)
 
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-    disabled-checks:
-      - commentFormatting
-      - whyNoLint
-      - unnamedResult
+    goimports:
+      # Group local imports separately (adjust to your module name)
+      local-prefixes: event-api
 
-  godot:
-    scope: declarations
-    capital: false
-
+# Issue reporting limits (optional)
 issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files.
-    - path: _test\.go
-      linters:
-        - gosec
-        - gocritic
-        - errcheck
-        - bodyclose
-
-    # Exclude known linters from partially hard-vendored code
-    - path: internal/migrations/
-      linters:
-        - gocritic
-        - gosec
-
+  # Disable per-linter and duplicate issue limits
   max-issues-per-linter: 0
   max-same-issues: 0
 
+# Output settings
 output:
-  print-issued-lines: true
-  print-linter-name: true
-  sort-results: true
+  formats:
+    # Standard colored terminal output
+    text:
+      path: stdout
+      print-issued-lines: true # Show the problematic code line
+      print-linter-name: true # Prefix each issue with linter name
+      color: auto # Auto-enable color in terminals
+  # Note: results are always sorted in v2 — no need for sort-results

@@ -3,16 +3,16 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: "1.22"
 
 jobs:
   build-and-release:
     name: Build and Release
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,16 +32,16 @@ jobs:
         run: |
           # Linux AMD64
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" -o bin/event-api-linux-amd64 ./cmd/server
-          
+
           # Linux ARM64
           GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" -o bin/event-api-linux-arm64 ./cmd/server
-          
+
           # macOS AMD64
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" -o bin/event-api-darwin-amd64 ./cmd/server
-          
+
           # macOS ARM64 (M1/M2)
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" -o bin/event-api-darwin-arm64 ./cmd/server
-          
+
           # Windows AMD64
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" -o bin/event-api-windows-amd64.exe ./cmd/server
 
@@ -122,25 +122,25 @@ jobs:
         with:
           body: |
             ## Release ${{ steps.get_version.outputs.VERSION }}
-            
+
             ${{ steps.changelog.outputs.changelog }}
-            
+
             ## 📦 Docker Image
-            
+
             ```bash
             docker pull ${{ secrets.DOCKER_USERNAME }}/event-api:${{ steps.get_version.outputs.VERSION }}
             ```
-            
+
             ## 📥 Download Binaries
-            
+
             Download the appropriate binary for your platform below.
-            
+
             ### Verify checksums
-            
+
             ```bash
             sha256sum -c checksums.txt
             ```
-            
+
           files: |
             bin/event-api-*
             bin/checksums.txt

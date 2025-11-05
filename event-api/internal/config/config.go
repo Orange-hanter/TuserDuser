@@ -10,34 +10,28 @@ import (
 )
 
 type Config struct {
-	Port               string
-	Env                string
-	CORSAllowedOrigins []string
+	RedisPort          string
+	DBSSLMode          string
+	SMSFrom            string
 	JWTSecret          string
-	JWTExpiration      int64 // в секундах
-	ShutdownTimeout    int   // в секундах
-
-	// Database config
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	DBSSLMode  string
-	DBMaxConn  int
-	DBMinConn  int
-
-	// Redis config
-	RedisHost     string
-	RedisPort     string
-	RedisPassword string
-	RedisDB       int
-
-	// SMS config
-	SMSProvider string
-	SMSAPIKey   string
-	SMSAPIToken string
-	SMSFrom     string
+	SMSAPIToken        string
+	SMSAPIKey          string
+	DBHost             string
+	DBPort             string
+	DBUser             string
+	SMSProvider        string
+	Env                string
+	DBName             string
+	DBPassword         string
+	RedisPassword      string
+	RedisHost          string
+	Port               string
+	CORSAllowedOrigins []string
+	DBMinConn          int
+	RedisDB            int
+	DBMaxConn          int
+	ShutdownTimeout    int
+	JWTExpiration      int64
 }
 
 func Load() *Config {

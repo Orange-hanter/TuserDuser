@@ -14,28 +14,28 @@ import (
 	"go.uber.org/zap"
 )
 
-// TwilioProvider провайдер для Twilio API
+// TwilioProvider провайдер для Twilio API.
 type TwilioProvider struct {
+	client     *http.Client
+	logger     *zap.Logger
 	accountSID string
 	authToken  string
 	from       string
-	client     *http.Client
-	logger     *zap.Logger
 }
 
-// TwilioResponse ответ от Twilio API
+// TwilioResponse ответ от Twilio API.
 type TwilioResponse struct {
 	SID         string `json:"sid"`
 	Status      string `json:"status"`
 	To          string `json:"to"`
 	From        string `json:"from"`
 	Body        string `json:"body"`
-	ErrorCode   int    `json:"error_code,omitempty"`
 	ErrorMsg    string `json:"error_message,omitempty"`
 	DateCreated string `json:"date_created"`
+	ErrorCode   int    `json:"error_code,omitempty"`
 }
 
-// NewTwilioProvider создает новый провайдер Twilio
+// NewTwilioProvider создает новый провайдер Twilio.
 func NewTwilioProvider(cfg *Config, logger *zap.Logger) (*TwilioProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("Account SID для Twilio не указан")
@@ -58,7 +58,7 @@ func NewTwilioProvider(cfg *Config, logger *zap.Logger) (*TwilioProvider, error)
 	}, nil
 }
 
-// SendSMS отправляет SMS через Twilio
+// SendSMS отправляет SMS через Twilio.
 func (p *TwilioProvider) SendSMS(ctx context.Context, phone, message string) error {
 	// Twilio API endpoint
 	apiURL := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", p.accountSID)
@@ -117,7 +117,7 @@ func (p *TwilioProvider) SendSMS(ctx context.Context, phone, message string) err
 	return nil
 }
 
-// GetName возвращает название провайдера
+// GetName возвращает название провайдера.
 func (p *TwilioProvider) GetName() string {
 	return "Twilio"
 }

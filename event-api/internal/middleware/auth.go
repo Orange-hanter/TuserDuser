@@ -9,7 +9,7 @@ import (
 	"event-api/internal/service"
 )
 
-// AuthMiddleware проверяет JWT токен
+// AuthMiddleware проверяет JWT токен.
 func AuthMiddleware(authService *service.AuthService) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

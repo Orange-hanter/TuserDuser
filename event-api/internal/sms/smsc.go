@@ -13,25 +13,25 @@ import (
 	"go.uber.org/zap"
 )
 
-// SMSCProvider провайдер для SMSC.RU API
+// SMSCProvider провайдер для SMSC.RU API.
 type SMSCProvider struct {
+	client   *http.Client
+	logger   *zap.Logger
 	login    string
 	password string
 	from     string
-	client   *http.Client
-	logger   *zap.Logger
 }
 
-// SMSCResponse ответ от SMSC.RU API
+// SMSCResponse ответ от SMSC.RU API.
 type SMSCResponse struct {
+	Error   string  `json:"error"`
 	ID      int     `json:"id"`
 	Cnt     int     `json:"cnt"`
 	Balance float64 `json:"balance"`
-	Error   string  `json:"error"`
 	ErrCode int     `json:"error_code"`
 }
 
-// NewSMSCProvider создает новый провайдер SMSC.RU
+// NewSMSCProvider создает новый провайдер SMSC.RU.
 func NewSMSCProvider(cfg *Config, logger *zap.Logger) (*SMSCProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("логин для SMSC.RU не указан")
@@ -51,7 +51,7 @@ func NewSMSCProvider(cfg *Config, logger *zap.Logger) (*SMSCProvider, error) {
 	}, nil
 }
 
-// SendSMS отправляет SMS через SMSC.RU
+// SendSMS отправляет SMS через SMSC.RU.
 func (p *SMSCProvider) SendSMS(ctx context.Context, phone, message string) error {
 	// SMSC.RU API endpoint
 	apiURL := "https://smsc.ru/sys/send.php"
@@ -110,7 +110,7 @@ func (p *SMSCProvider) SendSMS(ctx context.Context, phone, message string) error
 	return nil
 }
 
-// GetName возвращает название провайдера
+// GetName возвращает название провайдера.
 func (p *SMSCProvider) GetName() string {
 	return "SMSC.RU"
 }

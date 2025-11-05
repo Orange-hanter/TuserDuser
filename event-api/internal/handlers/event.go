@@ -12,12 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// EventHandler управляет всеми event endpoints
+// EventHandler управляет всеми event endpoints.
 type EventHandler struct {
 	eventService *service.EventService
 }
 
-// NewEventHandler создает новый event handler
+// NewEventHandler создает новый event handler.
 func NewEventHandler(eventService *service.EventService) *EventHandler {
 	return &EventHandler{
 		eventService: eventService,
@@ -32,7 +32,7 @@ func NewEventHandler(eventService *service.EventService) *EventHandler {
 // @Produce json
 // @Success 200 {array} models.Event "Список событий"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/events [get]
+// @Router /v1/api/events [get].
 func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := h.eventService.GetAllEvents(r.Context())
 	if err != nil {
@@ -62,7 +62,7 @@ func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} models.Event "Событие"
 // @Failure 404 {object} models.ErrorResponse "Событие не найдено"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/events/{id} [get]
+// @Router /v1/api/events/{id} [get].
 func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -105,7 +105,7 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 // @Success 201 {object} models.Event "Созданное событие"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/events [post]
+// @Router /v1/api/events [post].
 func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -162,7 +162,7 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]string "message: Событие удалено"
 // @Failure 404 {object} models.ErrorResponse "Событие не найдено"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/events/{id} [delete]
+// @Router /v1/api/events/{id} [delete].
 func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
