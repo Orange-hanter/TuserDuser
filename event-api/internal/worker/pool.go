@@ -21,7 +21,7 @@ type Pool struct {
 }
 
 // NewPool создает новый пул воркеров.
-func NewPool(workers int, queueSize int, logger *zap.Logger) *Pool {
+func NewPool(workers, queueSize int, logger *zap.Logger) *Pool {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Pool{
