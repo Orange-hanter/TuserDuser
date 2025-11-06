@@ -107,8 +107,8 @@ func TestDatabaseStructure(t *testing.T) {
 
 	// Test that methods exist and can be called (on nil DB they will panic)
 	// This just verifies the struct has the expected interface
-	if err := db.Close(); err != nil {
-		// Expected since DB is nil
+	if err := db.Close(); err == nil {
+		t.Error("expected error when closing a nil DB")
 	}
 }
 

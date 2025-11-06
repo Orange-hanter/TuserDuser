@@ -1,7 +1,9 @@
 package migrations
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -81,15 +83,17 @@ func (m *Migrator) createMigrationsTable() error {
 		applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)
 	`
-	_, err := m.db.Exec(query)
+	_, err := m.db.ExecContext(context.Background(), query)
 	return err
 }
 
 // runMigration запускает одну миграцию.
 func (m *Migrator) runMigration(mig migration) error {
+	ctx := context.Background()
 	// Проверяем, была ли уже применена эта миграция
 	var exists bool
-	err := m.db.QueryRow(
+	err := m.db.QueryRowContext(
+		ctx,
 		"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name = $1)",
 		mig.name,
 	).Scan(&exists)
@@ -106,19 +110,20 @@ func (m *Migrator) runMigration(mig migration) error {
 	// Запускаем миграцию
 	m.logger.Info("▶️  Выполняем миграцию", zap.String("name", mig.name))
 
-	tx, err := m.db.Begin()
+	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer rollbackTx(tx, m.logger)
 
 	// Выполняем SQL
-	if _, err := tx.Exec(mig.up); err != nil {
+	if _, err := tx.ExecContext(ctx, mig.up); err != nil {
 		return fmt.Errorf("failed to apply migration %s: %w", mig.name, err)
 	}
 
 	// Записываем в schema_migrations
-	if _, err := tx.Exec(
+	if _, err := tx.ExecContext(
+		ctx,
 		"INSERT INTO schema_migrations (name) VALUES ($1)",
 		mig.name,
 	); err != nil {
@@ -224,25 +229,7 @@ func (m *Migrator) Rollback() error {
 
 		m.logger.Info("▶️  Откатываем миграцию", zap.String("name", mig.name))
 
-		tx, err := m.db.Begin()
-		if err != nil {
-			return err
-		}
-
-		if _, err := tx.Exec(mig.down); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("failed to rollback migration %s: %w", mig.name, err)
-		}
-
-		if _, err := tx.Exec(
-			"DELETE FROM schema_migrations WHERE name = $1",
-			mig.name,
-		); err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		if err := tx.Commit(); err != nil {
+		if err := m.rollbackMigration(mig); err != nil {
 			return err
 		}
 
@@ -251,4 +238,38 @@ func (m *Migrator) Rollback() error {
 
 	m.logger.Info("✅ Все миграции отката успешно выполнены")
 	return nil
+}
+
+func (m *Migrator) rollbackMigration(mig migration) error {
+	ctx := context.Background()
+
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer rollbackTx(tx, m.logger)
+
+	if _, err := tx.ExecContext(ctx, mig.down); err != nil {
+		return fmt.Errorf("failed to rollback migration %s: %w", mig.name, err)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		"DELETE FROM schema_migrations WHERE name = $1",
+		mig.name,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func rollbackTx(tx *sql.Tx, logger *zap.Logger) {
+	if tx == nil {
+		return
+	}
+
+	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		logger.Error("transaction rollback failed", zap.Error(err))
+	}
 }

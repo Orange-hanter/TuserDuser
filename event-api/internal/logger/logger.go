@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// Log is the global zap.Logger used by the application.
 var Log *zap.Logger
 
 // ANSI цвета для консоли.
@@ -23,6 +24,20 @@ const (
 	ColorWhite   = "\033[37m"
 	ColorGray    = "\033[90m"
 )
+
+// Границы для форматирования сообщений.
+const topLine = "╔════════════════════════════════════════════════════════════╗"
+const midLine = "╠════════════════════════════════════════════════════════════╣"
+const bottomLine = "╚════════════════════════════════════════════════════════════╝"
+const sideLine = "║"
+const template = "%s%s%s%s\n"
+
+// drowHeaderLine рисует верхнюю часть рамки с заголовком.
+func drowHeaderLine(output *strings.Builder, title string, color string) {
+	fmt.Fprintf(output, template, color, color, topLine, ColorReset)
+	output.WriteString(title)
+	fmt.Fprintf(output, template, color, color, midLine, ColorReset)
+}
 
 // Init инициализирует логгер с красивым форматированием.
 func Init() {
@@ -83,9 +98,7 @@ func GetLogger() *zap.Logger {
 func FormatError(title string, err error, details ...string) string {
 	var output strings.Builder
 
-	output.WriteString(fmt.Sprintf("%s%s╔════════════════════════════════════════════════════════════╗%s\n", ColorRed, ColorRed, ColorReset))
-	output.WriteString(fmt.Sprintf("%s%s║ ❌ %s%s\n", ColorRed, ColorRed, title, ColorReset))
-	output.WriteString(fmt.Sprintf("%s%s╠════════════════════════════════════════════════════════════╣%s\n", ColorRed, ColorRed, ColorReset))
+	drowHeaderLine(&output, fmt.Sprintf("%s%s║ ❌ %s%s\n", ColorRed, ColorRed, title, ColorReset), ColorRed)
 
 	if err != nil {
 		output.WriteString(fmt.Sprintf("%s%s║ Error: %v%s\n", ColorRed, ColorRed, err, ColorReset))
@@ -95,7 +108,7 @@ func FormatError(title string, err error, details ...string) string {
 		output.WriteString(fmt.Sprintf("%s%s║ → %s%s\n", ColorYellow, ColorYellow, detail, ColorReset))
 	}
 
-	output.WriteString(fmt.Sprintf("%s%s╚════════════════════════════════════════════════════════════╝%s\n", ColorRed, ColorRed, ColorReset))
+	output.WriteString(fmt.Sprintf("%s%s%s%s\n", ColorRed, ColorRed, bottomLine, ColorReset))
 
 	return output.String()
 }
@@ -104,15 +117,12 @@ func FormatError(title string, err error, details ...string) string {
 func FormatSuccess(message string, details ...string) string {
 	var output strings.Builder
 
-	output.WriteString(fmt.Sprintf("%s%s╔════════════════════════════════════════════════════════════╗%s\n", ColorGreen, ColorGreen, ColorReset))
-	output.WriteString(fmt.Sprintf("%s%s║ ✅ %s%s\n", ColorGreen, ColorGreen, message, ColorReset))
-	output.WriteString(fmt.Sprintf("%s%s╠════════════════════════════════════════════════════════════╣%s\n", ColorGreen, ColorGreen, ColorReset))
-
+	drowHeaderLine(&output, fmt.Sprintf("%s%s║ ✅ %s%s\n", ColorGreen, ColorGreen, message, ColorReset), ColorGreen)
 	for _, detail := range details {
 		output.WriteString(fmt.Sprintf("%s%s║ → %s%s\n", ColorCyan, ColorCyan, detail, ColorReset))
 	}
 
-	output.WriteString(fmt.Sprintf("%s%s╚════════════════════════════════════════════════════════════╝%s\n", ColorGreen, ColorGreen, ColorReset))
+	output.WriteString(fmt.Sprintf("%s%s%s%s\n", ColorGreen, ColorGreen, bottomLine, ColorReset))
 
 	return output.String()
 }

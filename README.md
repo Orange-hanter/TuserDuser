@@ -48,7 +48,7 @@ See `event-api/README.md` for details.
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - macOS (for development) or Linux (for deployment)
 - Docker & Docker Compose (optional, for local services)
 
@@ -103,7 +103,7 @@ make vet                         # Run go vet
 
 - Ubuntu 20.04 LTS or newer
 - SSH access with sudo privileges
-- Go 1.22+ (or just copy prebuilt binary)
+- Go 1.25+ (or just copy prebuilt binary)
 
 ### Option 1: Automated Deployment (Recommended)
 
@@ -255,5 +255,5 @@ For issues or questions, open an issue on GitHub.
 ---
 
 **Last Updated**: November 2025
-**Go Version**: 1.22+
+**Go Version**: 1.25+
 **Platforms**: macOS (dev), Linux x86-64 (prod)

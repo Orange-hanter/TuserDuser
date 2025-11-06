@@ -7,7 +7,13 @@ on:
     branches: [master, main, develop]
 
 env:
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.25"
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+  security-events: write
 
 jobs:
   # Job 1: Lint and check code for both backends
@@ -237,27 +243,29 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
+          # Use "fs" (filesystem) scan to analyze source code and dependencies in the repository,
+          # rather than scanning a container image or remote repository.
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "trivy-results.sarif"
+          sarif_file: trivy-results.sarif
 
       - name: Run GoSec Security Scanner
         uses: securego/gosec@master
         with:
-          args: "-no-fail -fmt sarif -out gosec-results.sarif ./event-api/..."
+          args: -no-fail -fmt sarif -out gosec-results.sarif ./event-api/...
 
       - name: Upload GoSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "gosec-results.sarif"
+          sarif_file: gosec-results.sarif
 
   # Job 5: Deploy (only for master/main branch)
   deploy:

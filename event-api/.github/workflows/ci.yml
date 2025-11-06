@@ -7,8 +7,14 @@ on:
     branches: [master, main, develop]
 
 env:
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.25"
   DOCKER_IMAGE: event-api
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+  security-events: write
 
 jobs:
   # Job 1: Lint и проверка кода
@@ -228,27 +234,27 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "trivy-results.sarif"
+          sarif_file: trivy-results.sarif
 
       - name: Run GoSec Security Scanner
         uses: securego/gosec@master
         with:
-          args: "-no-fail -fmt sarif -out gosec-results.sarif ./..."
+          args: -no-fail -fmt sarif -out gosec-results.sarif ./...
 
       - name: Upload GoSec results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "gosec-results.sarif"
+          sarif_file: gosec-results.sarif
 
   # Job 5: Deploy (только для main/master branch)
   deploy:

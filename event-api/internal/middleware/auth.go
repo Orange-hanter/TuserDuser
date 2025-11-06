@@ -17,11 +17,13 @@ func AuthMiddleware(authService *service.AuthService) func(next http.Handler) ht
 			if authHeader == "" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(models.ErrorResponse{
+				if err := json.NewEncoder(w).Encode(models.ErrorResponse{
 					Error:   "unauthorized",
 					Message: "Missing authorization header",
 					Code:    http.StatusUnauthorized,
-				})
+				}); err != nil {
+					http.Error(w, "failed to write response", http.StatusInternalServerError)
+				}
 				return
 			}
 
@@ -30,11 +32,13 @@ func AuthMiddleware(authService *service.AuthService) func(next http.Handler) ht
 			if len(parts) != 2 || parts[0] != "Bearer" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(models.ErrorResponse{
+				if err := json.NewEncoder(w).Encode(models.ErrorResponse{
 					Error:   "unauthorized",
 					Message: "Invalid authorization header format",
 					Code:    http.StatusUnauthorized,
-				})
+				}); err != nil {
+					http.Error(w, "failed to write response", http.StatusInternalServerError)
+				}
 				return
 			}
 
@@ -45,17 +49,23 @@ func AuthMiddleware(authService *service.AuthService) func(next http.Handler) ht
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(models.ErrorResponse{
+				if err := json.NewEncoder(w).Encode(models.ErrorResponse{
 					Error:   "unauthorized",
 					Message: err.Error(),
 					Code:    http.StatusUnauthorized,
-				})
+				}); err != nil {
+					http.Error(w, "failed to write response", http.StatusInternalServerError)
+				}
 				return
 			}
 
 			// Сохраняем claims в контексте запроса
-			r.Header.Set("X-User-ID", claims["user_id"].(string))
-			r.Header.Set("X-User-Email", claims["email"].(string))
+			if uid, ok := claims["user_id"].(string); ok {
+				r.Header.Set("X-User-ID", uid)
+			}
+			if email, ok := claims["email"].(string); ok {
+				r.Header.Set("X-User-Email", email)
+			}
 
 			next.ServeHTTP(w, r)
 		})

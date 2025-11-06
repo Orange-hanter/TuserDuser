@@ -1,0 +1,7 @@
+event-api/** linguist-language=Go
+event-api/bin/** linguist-generated=true
+*.go linguist-detectable=true
+bin/** linguist-generated=true
+*.pb.go linguist-language=Go
+*.mod linguist-language=Go
+README.md linguist-documentation=true

@@ -10,7 +10,7 @@ run:
   # Use go modules in readonly mode (avoids accidental writes)
   modules-download-mode: readonly
   # Optional: specify Go version (used by staticcheck, etc.)
-  # go: "1.22"
+  # go: "1.25"
 
 # Linter configuration
 linters:
