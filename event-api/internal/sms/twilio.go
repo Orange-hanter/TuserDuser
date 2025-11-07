@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,11 @@ type TwilioProvider struct {
 	from       string
 }
 
+var (
+	errMissingTwilioAccountSID = errors.New("twilio missing account sid")
+	errMissingTwilioAuthToken  = errors.New("twilio missing auth token")
+)
+
 // TwilioResponse ответ от Twilio API.
 type TwilioResponse struct {
 	SID         string `json:"sid"`
@@ -38,10 +44,10 @@ type TwilioResponse struct {
 // NewTwilioProvider создает новый провайдер Twilio.
 func NewTwilioProvider(cfg *Config, logger *zap.Logger) (*TwilioProvider, error) {
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("Account SID для Twilio не указан")
+		return nil, errMissingTwilioAccountSID
 	}
 	if cfg.APIToken == "" {
-		return nil, fmt.Errorf("Auth Token для Twilio не указан")
+		return nil, errMissingTwilioAuthToken
 	}
 	if cfg.From == "" {
 		return nil, fmt.Errorf("номер отправителя для Twilio не указан")
@@ -85,7 +91,11 @@ func (p *TwilioProvider) SendSMS(ctx context.Context, phone, message string) err
 	if err != nil {
 		return fmt.Errorf("ошибка отправки запроса: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			p.logger.Warn("Не удалось закрыть тело ответа Twilio", zap.Error(err))
+		}
+	}()
 
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)

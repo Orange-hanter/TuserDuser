@@ -66,7 +66,10 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 	}
 
 	// Создаем пользователя в БД
-	userID := generateID()
+	userID, err := generateID()
+	if err != nil {
+		return nil, "", fmt.Errorf("не удалось сгенерировать идентификатор пользователя: %w", err)
+	}
 	user := &models.User{
 		ID:        userID,
 		Email:     req.Email,
@@ -87,7 +90,10 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 	}
 
 	// Генерируем код верификации
-	code := generateVerificationCode()
+	code, err := generateVerificationCode()
+	if err != nil {
+		return nil, "", fmt.Errorf("не удалось сгенерировать код верификации: %w", err)
+	}
 	fmt.Printf("\nGenerated verification code for %s: %s\n", req.Email, code)
 
 	// Сохраняем код верификации в Redis с TTL 10 минут
@@ -103,14 +109,18 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 	phone := req.Phone
 
 	// Отправка email кода
-	s.workerPool.Submit(func(ctx context.Context) error {
+	if err := s.workerPool.Submit(func(ctx context.Context) error {
 		return s.sendVerificationCode(ctx, email, code)
-	})
+	}); err != nil {
+		s.logger.Error("Не удалось добавить задачу отправки email кода в очередь", zap.Error(err))
+	}
 
 	// Отправка SMS кода
-	s.workerPool.Submit(func(ctx context.Context) error {
+	if err := s.workerPool.Submit(func(ctx context.Context) error {
 		return s.sendSMSVerificationCode(ctx, phone, code)
-	})
+	}); err != nil {
+		s.logger.Error("Не удалось добавить задачу отправки SMS кода в очередь", zap.Error(err))
+	}
 
 	return user, code, nil
 }
@@ -385,15 +395,20 @@ func (s *AuthService) sendSMSVerificationCode(ctx context.Context, phone, code s
 // Вспомогательные функции
 
 // generateID генерирует уникальный ID.
-func generateID() string {
+func generateID() (string, error) {
 	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("rand.Read: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // generateVerificationCode генерирует 6-значный код верификации.
-func generateVerificationCode() string {
+func generateVerificationCode() (string, error) {
 	b := make([]byte, 3)
-	rand.Read(b)
-	return fmt.Sprintf("%06d", int32(b[0])<<16|int32(b[1])<<8|int32(b[2]))[:6]
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("rand.Read: %w", err)
+	}
+	code := fmt.Sprintf("%06d", int(b[0])<<16|int(b[1])<<8|int(b[2]))
+	return code[:6], nil
 }

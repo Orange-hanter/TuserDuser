@@ -1,3 +1,4 @@
+// Package migrations предоставляет инструменты для управления миграциями базы данных.
 package migrations
 
 import (

@@ -1,7 +1,9 @@
+// cmd/logger-demo/main.go
 package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"event-api/internal/logger"
@@ -9,7 +11,11 @@ import (
 
 func main() {
 	logger.Init()
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+		}
+	}()
 
 	separator := strings.Repeat("=", 60)
 

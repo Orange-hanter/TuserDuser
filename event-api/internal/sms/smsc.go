@@ -82,7 +82,11 @@ func (p *SMSCProvider) SendSMS(ctx context.Context, phone, message string) error
 	if err != nil {
 		return fmt.Errorf("ошибка отправки запроса: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			p.logger.Warn("Не удалось закрыть тело ответа SMSC", zap.Error(err))
+		}
+	}()
 
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)

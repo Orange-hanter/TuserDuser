@@ -24,7 +24,7 @@ formatters:
 
     goimports:
       local-prefixes:
-        - event-api # ← теперь массив
+        - event-api
 
 issues:
   max-issues-per-linter: 0

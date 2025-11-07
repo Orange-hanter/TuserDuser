@@ -2,6 +2,10 @@ package handlers
 
 import (
 	"net/http"
+
+	"event-api/internal/logger"
+
+	"go.uber.org/zap"
 )
 
 // HealthCheck проверяет состояние сервиса
@@ -14,5 +18,7 @@ import (
 // @Router /health [get].
 func HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if _, err := w.Write([]byte("OK")); err != nil {
+		logger.Log.Error("failed to write health check response", zap.Error(err))
+	}
 }

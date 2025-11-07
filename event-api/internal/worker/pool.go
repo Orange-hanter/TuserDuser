@@ -1,3 +1,4 @@
+// Package worker provides a worker pool for asynchronous task processing.
 package worker
 
 import (

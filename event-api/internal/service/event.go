@@ -39,7 +39,11 @@ func (s *EventService) GetAllEvents(ctx context.Context) ([]*models.Event, error
 		s.logger.Error("Failed to query events", zap.Error(err))
 		return nil, fmt.Errorf("ошибка при получении событий: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			s.logger.Error("Failed to close rows after querying events", zap.Error(err))
+		}
+	}()
 
 	var events []*models.Event
 	for rows.Next() {

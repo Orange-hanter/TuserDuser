@@ -1,3 +1,4 @@
+// cmd/server/main.go
 package main
 
 import (
@@ -50,7 +51,11 @@ import (
 
 func main() {
 	logger.Init()
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+		}
+	}()
 
 	cfg := config.Load()
 
@@ -77,7 +82,11 @@ func main() {
 		))
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
+		}
+	}()
 
 	// Запускаем миграции
 	migrator := migrations.NewMigrator(db.DB, logger.Log)
@@ -116,7 +125,11 @@ func main() {
 		))
 		os.Exit(1)
 	}
-	defer redis.Close()
+	defer func() {
+		if err := redis.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close redis: %v\n", err)
+		}
+	}()
 
 	// Инициализируем SMS сервис
 	smsConfig := &sms.Config{
@@ -256,5 +269,7 @@ func main() {
 	))
 
 	// Синхронизация логгера перед выходом
-	logger.Sync()
+	if err := logger.Sync(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+	}
 }

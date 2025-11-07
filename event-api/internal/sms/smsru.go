@@ -78,7 +78,11 @@ func (p *SMSRuProvider) SendSMS(ctx context.Context, phone, message string) erro
 	if err != nil {
 		return fmt.Errorf("ошибка отправки запроса: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			p.logger.Warn("Не удалось закрыть тело ответа SMS.RU", zap.Error(err))
+		}
+	}()
 
 	// Чтение ответа
 	body, err := io.ReadAll(resp.Body)
