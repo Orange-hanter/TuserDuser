@@ -10,7 +10,7 @@ set -euo pipefail
 SERVICE_NAME="${1:-event-api}"
 BINARY_PATH="${2:-/opt/event-api/bin/event-api}"
 HEALTH_CHECK_URL="${3:-http://localhost:8080/v1/api/health}"
-BINARY_SOURCE="/tmp/event-api"
+BINARY_SOURCE="/tmp/dist/event-api"
 BACKUP_SCRIPT="/opt/event-api/backup.sh"
 LOG_FILE="/opt/event-api/logs/event-api.log"
 
