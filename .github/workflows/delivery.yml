@@ -71,7 +71,7 @@ jobs:
           source: dist/event-api
           target: /tmp/
 
-      - name: Deploy service
+      - name: Run install script
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -79,9 +79,4 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ env.DEPLOY_PORT }}
           script: |
-            set -euo pipefail
-            sudo systemctl stop ${{ env.SERVICE_NAME }} || true
-            sudo install -o ${{ env.REMOTE_OWNER }} -g ${{ env.REMOTE_GROUP }} -m 755 /tmp/event-api ${{ env.REMOTE_BINARY_PATH }}
-            sudo systemctl start ${{ env.SERVICE_NAME }}
-            sudo systemctl status --no-pager ${{ env.SERVICE_NAME }}
-            curl -fsS ${{ env.HEALTHCHECK_URL }}
+            bash /opt/event-api/scripts/install.sh "${{ env.SERVICE_NAME }}" "${{ env.REMOTE_BINARY_PATH }}" "${{ env.HEALTHCHECK_URL }}"

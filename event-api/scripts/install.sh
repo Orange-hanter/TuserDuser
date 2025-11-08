@@ -1,0 +1,161 @@
+#!/bin/bash
+
+# Event API Installation and Deployment Script
+# This script is meant to run on the server after the binary is copied to /tmp
+# Usage: ./install.sh [SERVICE_NAME] [BINARY_PATH] [HEALTH_CHECK_URL]
+
+set -euo pipefail
+
+# Configuration
+SERVICE_NAME="${1:-event-api}"
+BINARY_PATH="${2:-/opt/event-api/bin/event-api}"
+HEALTH_CHECK_URL="${3:-http://localhost:8080/v1/api/health}"
+BINARY_SOURCE="/tmp/event-api"
+BACKUP_SCRIPT="/opt/event-api/backup.sh"
+LOG_FILE="/opt/event-api/logs/event-api.log"
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Helper functions
+log() {
+	echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
+}
+
+success() {
+	echo -e "${GREEN}✅ $1${NC}"
+}
+
+warning() {
+	echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+error() {
+	echo -e "${RED}❌ $1${NC}" >&2
+	exit 1
+}
+
+# Main deployment steps
+main() {
+	log "Starting Event API deployment..."
+	echo ""
+
+	# Step 1: Verify source binary exists
+	if [ ! -f "$BINARY_SOURCE" ]; then
+		error "Binary not found at $BINARY_SOURCE"
+	fi
+	success "Source binary found: $BINARY_SOURCE"
+	echo ""
+
+	# Step 2: Run backup if available
+	if [ -f "$BACKUP_SCRIPT" ]; then
+		log "Running backup script..."
+		if bash "$BACKUP_SCRIPT" 2>&1; then
+			success "Backup completed successfully"
+		else
+			warning "Backup script failed, but continuing with deployment"
+		fi
+	else
+		warning "Backup script not found at $BACKUP_SCRIPT, skipping backup"
+	fi
+	echo ""
+
+	# Step 3: Stop the service
+	log "Stopping $SERVICE_NAME service..."
+	if sudo systemctl stop "$SERVICE_NAME" 2>&1; then
+		success "Service stopped"
+	else
+		warning "Service was not running or failed to stop, continuing..."
+	fi
+	sleep 2
+	echo ""
+
+	# Step 4: Backup old binary
+	if [ -f "$BINARY_PATH" ]; then
+		BACKUP_BINARY="${BINARY_PATH}.backup.$(date +%s)"
+		log "Backing up existing binary to $BACKUP_BINARY..."
+		if sudo cp "$BINARY_PATH" "$BACKUP_BINARY"; then
+			success "Old binary backed up"
+		else
+			warning "Failed to backup old binary, but continuing..."
+		fi
+	fi
+	echo ""
+
+	# Step 5: Install new binary with correct permissions
+	log "Installing new binary..."
+	if sudo install -o eventapi -g eventapi -m 755 "$BINARY_SOURCE" "$BINARY_PATH"; then
+		success "Binary installed and permissions set"
+	else
+		error "Failed to install binary"
+	fi
+	echo ""
+
+	# Step 6: Start the service
+	log "Starting $SERVICE_NAME service..."
+	if sudo systemctl start "$SERVICE_NAME"; then
+		success "Service started"
+	else
+		error "Failed to start service"
+	fi
+	sleep 2
+	echo ""
+
+	# Step 7: Check service status
+	log "Checking service status..."
+	if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+		success "Service is running"
+		echo ""
+		sudo systemctl status --no-pager "$SERVICE_NAME" | head -10
+	else
+		error "Service is not running"
+	fi
+	echo ""
+
+	# Step 8: Health check
+	log "Performing health check at $HEALTH_CHECK_URL..."
+	if command -v curl &>/dev/null; then
+		HEALTH_RESPONSE=$(curl -s -w "\n%{http_code}" "$HEALTH_CHECK_URL" 2>&1 || echo "error")
+		HTTP_CODE=$(echo "$HEALTH_RESPONSE" | tail -1)
+
+		if [ "$HTTP_CODE" = "200" ]; then
+			success "Health check passed (HTTP $HTTP_CODE)"
+		else
+			warning "Health check returned HTTP $HTTP_CODE, but service is running"
+		fi
+	else
+		warning "curl not found, skipping health check"
+	fi
+	echo ""
+
+	# Step 9: Show recent logs
+	log "Last 20 lines of service logs:"
+	echo ""
+	if [ -f "$LOG_FILE" ]; then
+		tail -20 "$LOG_FILE"
+	else
+		warning "Log file not found at $LOG_FILE"
+		log "Trying journalctl..."
+		sudo journalctl -u "$SERVICE_NAME" --no-pager -n 20 2>/dev/null || warning "journalctl not available"
+	fi
+	echo ""
+
+	# Cleanup
+	log "Cleaning up temporary files..."
+	if rm -f "$BINARY_SOURCE"; then
+		success "Temporary files cleaned up"
+	else
+		warning "Failed to remove temporary binary"
+	fi
+	echo ""
+
+	success "Deployment completed successfully!"
+	log "Service $SERVICE_NAME is ready at $HEALTH_CHECK_URL"
+}
+
+# Run main function
+main "$@"
