@@ -146,7 +146,7 @@ STAGING_SSH_PORT
 
 # Сборка и push образа
 - name: Build and push Docker image
-  uses: docker/build-push-action@v5
+  uses: docker/build-push-action@v6
   with:
     context: .
     push: true
@@ -180,7 +180,7 @@ STAGING_SSH_PORT
     password: ${{ secrets.GITHUB_TOKEN }}
 
 - name: Build and push Docker image
-  uses: docker/build-push-action@v5
+  uses: docker/build-push-action@v6
   with:
     context: .
     push: true
