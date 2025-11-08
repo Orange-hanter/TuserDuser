@@ -61,10 +61,6 @@ jobs:
           name: event-api-linux-amd64
           path: dist
 
-      - name: Verify binary
-        run: |
-          echo ${{ secrets.DEPLOY_HOST }} ${{ secrets.DEPLOY_USER }} ${{ secrets.DEPLOY_SSH_KEY }}
-
       - name: Copy binary to server
         uses: appleboy/scp-action@v1
         with:
