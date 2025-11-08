@@ -1,0 +1,87 @@
+name: Delivery
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: delivery-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25"
+  SERVICE_NAME: event-api
+  REMOTE_BINARY_PATH: /opt/event-api/bin/event-api
+  REMOTE_OWNER: eventapi
+  REMOTE_GROUP: eventapi
+  HEALTHCHECK_URL: https://api.tuserduser.online/health
+  DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Build Linux binary
+        run: |
+          cd event-api
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/event-api ./cmd/server
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-api-linux-amd64
+          path: event-api/dist/event-api
+          if-no-files-found: error
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: Staging
+    steps:
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: event-api-linux-amd64
+          path: dist
+
+      - name: Copy binary to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
+          source: dist/event-api
+          target: /tmp/
+
+      - name: Deploy service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
+          script: |
+            set -euo pipefail
+            sudo systemctl stop ${{ env.SERVICE_NAME }} || true
+            sudo install -o ${{ env.REMOTE_OWNER }} -g ${{ env.REMOTE_GROUP }} -m 755 /tmp/event-api ${{ env.REMOTE_BINARY_PATH }}
+            sudo systemctl start ${{ env.SERVICE_NAME }}
+            sudo systemctl status --no-pager ${{ env.SERVICE_NAME }}
+            curl -fsS ${{ env.HEALTHCHECK_URL }}

@@ -12,8 +12,6 @@ plugins:
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:
-    - node@22.16.0
-    - python@3.10.8
     - go@1.25.4
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
@@ -21,7 +19,6 @@ lint:
     - actionlint@1.7.8
     - checkov@3.2.490
     - git-diff-check
-    - gofmt@1.20.4
     - golangci-lint2@2.6.1
     - hadolint@2.14.0
     - markdownlint@0.45.0
@@ -32,6 +29,18 @@ lint:
     - shfmt@3.6.0
     - trufflehog@3.90.13
     - yamllint@1.37.1
+  ignore:
+    # Ignore non-Go or generated artifacts for golangci-lint to keep signal high
+    - linters: [golangci-lint2]
+      paths:
+        - Docs/**
+        - Resources/**
+        - event-api/bin/**
+        - event-api/docs/**
+        - event-api/DOC/**
+        - event-api/scripts/**
+        - event-api/internal/migrations/**
+
 actions:
   enabled:
     - trunk-announce
