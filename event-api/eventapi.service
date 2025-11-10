@@ -1,0 +1,26 @@
+[Unit]
+Description=Event API Service
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=eventapi
+Group=eventapi
+WorkingDirectory=/opt/event-api
+EnvironmentFile=/opt/event-api/.env
+ExecStart=/opt/event-api/bin/event-api
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/opt/event-api/logs/event-api.log
+StandardError=append:/opt/event-api/logs/event-api-error.log
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/event-api
+
+[Install]
+WantedBy=multi-user.target
