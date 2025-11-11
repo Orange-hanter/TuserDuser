@@ -24,27 +24,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/health": {
-            "get": {
-                "description": "Возвращает статус OK если сервис работает",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Проверка здоровья сервиса",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/api/auth/login": {
+        "/api/auth/login": {
             "post": {
                 "description": "Аутентифицирует пользователя и возвращает JWT токены",
                 "consumes": [
@@ -90,14 +70,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/api/auth/logout": {
+        "/api/auth/logout": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Отзывает JWT токен пользователя",
+                "description": "Инвалидирует refresh токен пользователя",
                 "consumes": [
                     "application/json"
                 ],
@@ -110,16 +90,10 @@ const docTemplate = `{
                 "summary": "Выход из системы",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Bearer токен",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Токен в теле запроса (опционально)",
+                        "description": "Refresh токен для инвалидации",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/models.LogoutRequest"
                         }
@@ -127,20 +101,16 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "message:string",
+                        "description": "Успешный выход",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "Token не найден",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Внутренняя ошибка сервера",
+                        "description": "Неверный формат запроса",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -148,24 +118,21 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/api/auth/me": {
+        "/api/auth/me": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Возвращает информацию о текущем аутентифицированном пользователе",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Возвращает данные текущего авторизованного пользователя",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "auth"
                 ],
-                "summary": "Получить текущего пользователя",
+                "summary": "Получить информацию о текущем пользователе",
                 "responses": {
                     "200": {
                         "description": "Информация о пользователе",
@@ -174,13 +141,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Пользователь не аутентифицирован",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Пользователь не найден",
+                        "description": "Не авторизован",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -188,7 +149,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/api/auth/register": {
+        "/api/auth/register": {
             "post": {
                 "description": "Создает нового пользователя и отправляет код верификации",
                 "consumes": [
@@ -235,7 +196,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/api/auth/verify": {
+        "/api/auth/verify": {
             "post": {
                 "description": "Проверяет код верификации для подтверждения email и возвращает JWT токен",
                 "consumes": [
@@ -270,6 +231,26 @@ const docTemplate = `{
                         "description": "Неверный код или формат запроса",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Возвращает статус OK если сервис работает",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Проверка здоровья сервиса",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }

@@ -139,20 +139,7 @@ info:
   title: Event API
   version: "1.0"
 paths:
-  /health:
-    get:
-      description: Возвращает статус OK если сервис работает
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Проверка здоровья сервиса
-      tags:
-      - health
-  /v1/api/auth/login:
+  /api/auth/login:
     post:
       consumes:
       - application/json
@@ -182,36 +169,29 @@ paths:
       summary: Вход в систему
       tags:
       - auth
-  /v1/api/auth/logout:
+  /api/auth/logout:
     post:
       consumes:
       - application/json
-      description: Отзывает JWT токен пользователя
+      description: Инвалидирует refresh токен пользователя
       parameters:
-      - description: Bearer токен
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      - description: Токен в теле запроса (опционально)
+      - description: Refresh токен для инвалидации
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/models.LogoutRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: message:string
+          description: Успешный выход
           schema:
-            additionalProperties: true
+            additionalProperties:
+              type: string
             type: object
         "400":
-          description: Token не найден
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "500":
-          description: Внутренняя ошибка сервера
+          description: Неверный формат запроса
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -219,11 +199,9 @@ paths:
       summary: Выход из системы
       tags:
       - auth
-  /v1/api/auth/me:
+  /api/auth/me:
     get:
-      consumes:
-      - application/json
-      description: Возвращает информацию о текущем аутентифицированном пользователе
+      description: Возвращает данные текущего авторизованного пользователя
       produces:
       - application/json
       responses:
@@ -232,19 +210,15 @@ paths:
           schema:
             $ref: '#/definitions/models.User'
         "401":
-          description: Пользователь не аутентифицирован
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "404":
-          description: Пользователь не найден
+          description: Не авторизован
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Получить текущего пользователя
+      summary: Получить информацию о текущем пользователе
       tags:
       - auth
-  /v1/api/auth/register:
+  /api/auth/register:
     post:
       consumes:
       - application/json
@@ -275,7 +249,7 @@ paths:
       summary: Регистрация нового пользователя
       tags:
       - auth
-  /v1/api/auth/verify:
+  /api/auth/verify:
     post:
       consumes:
       - application/json
@@ -302,6 +276,19 @@ paths:
       summary: Верификация email
       tags:
       - auth
+  /health:
+    get:
+      description: Возвращает статус OK если сервис работает
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Проверка здоровья сервиса
+      tags:
+      - health
   /v1/api/events:
     get:
       description: Возвращает список всех событий

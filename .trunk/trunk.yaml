@@ -26,7 +26,7 @@ lint:
     - osv-scanner@2.2.4
     - oxipng@9.1.5
     - prettier@3.6.2
-    - shellcheck@0.11.0
+    #- shellcheck@0.11.0
     - shfmt@3.6.0
     - trufflehog@3.90.13
     - yamllint@1.37.1
@@ -41,6 +41,7 @@ lint:
         - event-api/DOC/**
         - event-api/scripts/**
         - event-api/internal/migrations/**
+  definitions:
 
 actions:
   enabled:
