@@ -41,8 +41,10 @@ import (
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
 // @host api.tuserduser.online
-// @BasePath /v1
 // @schemes https http
+
+// @host localhost:8080
+// @schemes http
 
 // @securityDefinitions.apikey BearerAuth
 // @in header

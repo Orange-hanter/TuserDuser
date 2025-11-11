@@ -1,6 +1,5 @@
 {
     "schemes": [
-        "https",
         "http"
     ],
     "swagger": "2.0",
@@ -19,8 +18,7 @@
         },
         "version": "1.0"
     },
-    "host": "api.tuserduser.online",
-    "basePath": "/v1",
+    "host": "localhost:8080",
     "paths": {
         "/health": {
             "get": {
@@ -510,7 +508,6 @@
                     "additionalProperties": true
                 },
                 "duration": {
-                    "description": "в минутах",
                     "type": "integer"
                 },
                 "end": {

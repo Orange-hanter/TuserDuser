@@ -512,7 +512,6 @@ const docTemplate = `{
                     "additionalProperties": true
                 },
                 "duration": {
-                    "description": "в минутах",
                     "type": "integer"
                 },
                 "end": {
@@ -633,12 +632,12 @@ const docTemplate = `{
     }
 }`
 
-// SwaggerInfo holds exported Swagger Info so clients can modify it.
+// SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "api.tuserduser.online",
-	BasePath:         "/v1",
-	Schemes:          []string{"https", "http"},
+	Host:             "localhost:8080",
+	BasePath:         "",
+	Schemes:          []string{"http"},
 	Title:            "Event API",
 	Description:      "API для управления событиями и аутентификации пользователей",
 	InfoInstanceName: "swagger",

@@ -1,4 +1,4 @@
-.PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore
+.PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore deploy-nginx deploy-nginx-interactive logs-access-staging logs-error-staging logs-access-api logs-error-api logs-nginx-access logs-nginx-error logs-all-errors logs-follow-api logs-follow-staging
 
 build:
 	go build -o bin/server ./cmd/server
@@ -121,6 +121,54 @@ restore:
 	fi
 	./scripts/restore.sh $(FILE)
 
+# Nginx configuration deployment
+# Деплой конфигурации nginx
+REMOTE_HOST ?= 5.35.127.138
+REMOTE_USER ?= root
+SSH_KEY ?= ~/.ssh/deployer_eventapi_root
+NGINX_SOURCE ?= nginx/nginx-staging.conf
+NGINX_DEST ?= /etc/nginx/sites-available/staging
+SITE_NAME ?= staging
+
+deploy-nginx:
+	@echo "🚀 Deploying nginx configuration..."
+	@./scripts/deploy-nginx.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --source $(NGINX_SOURCE) --dest $(NGINX_DEST) --site $(SITE_NAME) --auto
+
+deploy-nginx-interactive:
+	@echo "🚀 Deploying nginx configuration (interactive mode)..."
+	@./scripts/deploy-nginx.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --source $(NGINX_SOURCE) --dest $(NGINX_DEST) --site $(SITE_NAME)
+
+# Просмотр логов nginx на удаленном сервере
+# Remote nginx logs viewing
+LOG_LINES ?= 50
+
+logs-access-staging:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type access-staging --lines $(LOG_LINES)
+
+logs-error-staging:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type error-staging --lines $(LOG_LINES)
+
+logs-access-api:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type access-api --lines $(LOG_LINES)
+
+logs-error-api:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type error-api --lines $(LOG_LINES)
+
+logs-nginx-access:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type nginx-access --lines $(LOG_LINES)
+
+logs-nginx-error:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type nginx-error --lines $(LOG_LINES)
+
+logs-all-errors:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type all-errors --lines $(LOG_LINES)
+
+logs-follow-api:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type access-api --follow
+
+logs-follow-staging:
+	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type access-staging --follow
+
 # Полная очистка
 clean:
 	@echo "🧹 Cleaning up..."
@@ -168,6 +216,24 @@ help:
 	@echo "  Database:"
 	@echo "    make backup             - Create database backup"
 	@echo "    make restore FILE=...   - Restore from backup"
+	@echo ""
+	@echo "  Nginx Deployment:"
+	@echo "    make deploy-nginx              - Deploy nginx config (auto)"
+	@echo "    make deploy-nginx-interactive  - Deploy nginx config (with confirmation)"
+	@echo ""
+	@echo "  Remote Nginx Logs:"
+	@echo "    make logs-access-staging    - View staging access logs"
+	@echo "    make logs-error-staging     - View staging error logs"
+	@echo "    make logs-access-api        - View API access logs"
+	@echo "    make logs-error-api         - View API error logs"
+	@echo "    make logs-nginx-access      - View main nginx access logs"
+	@echo "    make logs-nginx-error       - View main nginx error logs"
+	@echo "    make logs-all-errors        - View all error logs"
+	@echo "    make logs-follow-api        - Follow API logs in real-time"
+	@echo "    make logs-follow-staging    - Follow staging logs in real-time"
+	@echo ""
+	@echo "  Logs Options (use with LOG_LINES=N):"
+	@echo "    make logs-access-api LOG_LINES=100"
 	@echo ""
 	@echo "  Other:"
 	@echo "    make clean              - Clean build artifacts"
