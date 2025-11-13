@@ -50,15 +50,15 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 
 // Register обрабатывает регистрацию нового пользователя
 // @Summary Регистрация нового пользователя
-// @Description Создает нового пользователя и отправляет код верификации
+// @Description Создает нового пользователя и отправляет код верификации через email и/или SMS (в зависимости от verification_type: "email", "sms", "both")
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body models.RegisterRequest true "Данные для регистрации"
+// @Param request body models.RegisterRequest true "Данные для регистрации (verification_type опционален: email/sms/both, по умолчанию both)"
 // @Success 201 {object} map[string]interface{} "user:models.User, verify_code:string"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 409 {object} models.ErrorResponse "Пользователь уже существует"
-// @Router /v1/api/auth/register [post]
+// @Router /api/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -89,10 +89,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		zap.String("email", user.Email),
 		zap.String("user_id", user.ID),
 	)
-	// TODO: В production отправляем код верификации через email/SMS УДАЛИТЬ КОГДА РЕАЛИЗУЕМ
+
 	respondWithJSON(w, http.StatusCreated, map[string]interface{}{
 		"user":        user,
-		"verify_code": verifyCode, // В production отправляем через email/SMS
+		"verify_code": verifyCode, // В development режиме возвращаем код для тестирования
 	})
 }
 

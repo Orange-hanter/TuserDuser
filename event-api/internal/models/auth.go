@@ -15,9 +15,10 @@ type User struct {
 
 // RegisterRequest - запрос для регистрации.
 type RegisterRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Phone    string `json:"phone" binding:"required"`
-	Password string `json:"password" binding:"required,min=8"`
+	Email            string `json:"email" binding:"required,email"`
+	Phone            string `json:"phone" binding:"required"`
+	Password         string `json:"password" binding:"required,min=8"`
+	VerificationType string `json:"verification_type,omitempty"` // "email", "sms", "both" (default: "both")
 }
 
 // VerifyRequest - запрос для верификации кода.

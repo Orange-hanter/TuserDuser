@@ -1,3 +1,5 @@
+// Package config реализует загрузку и хранение конфигурации приложения.
+//
 // internal/config/config.go
 package config
 
@@ -10,31 +12,52 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config структура для хранения конфигурации приложения.
 type Config struct {
-	RedisPort          string
-	DBSSLMode          string
-	SMSFrom            string
-	JWTSecret          string
-	SMSAPIToken        string
-	SMSAPIKey          string
-	DBHost             string
-	DBPort             string
-	DBUser             string
-	SMSProvider        string
-	Env                string
-	DBName             string
-	DBPassword         string
-	RedisPassword      string
-	RedisHost          string
+	// General config
 	Port               string
+	Env                string
 	CORSAllowedOrigins []string
-	DBMinConn          int
-	RedisDB            int
-	DBMaxConn          int
 	ShutdownTimeout    int
-	JWTExpiration      int64
+
+	// JWT config
+	JWTSecret     string
+	JWTExpiration int64
+
+	// Database config
+	DBHost     string
+	DBPort     string
+	DBUser     string
+	DBPassword string
+	DBName     string
+	DBSSLMode  string
+	DBMaxConn  int
+	DBMinConn  int
+
+	// Redis config
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+	RedisDB       int
+
+	// SMS config
+	SMSProvider string
+	SMSAPIKey   string
+	SMSAPIToken string
+	SMSFrom     string
+
+	// Email config
+	EmailProvider string
+	EmailAPIKey   string
+	EmailFrom     string
+	EmailFromName string
+	SMTPHost      string
+	SMTPPort      int
+	SMTPUsername  string
+	SMTPPassword  string
 }
 
+// Load загружает конфигурацию из переменных окружения.
 func Load() *Config {
 	if err := godotenv.Load(); err != nil {
 		log.Println("⚠️  .env не найден, используются системные переменные")
@@ -74,6 +97,16 @@ func Load() *Config {
 		SMSAPIKey:   getEnv("SMS_API_KEY", ""),
 		SMSAPIToken: getEnv("SMS_API_TOKEN", ""),
 		SMSFrom:     getEnv("SMS_FROM", ""),
+
+		// Email config
+		EmailProvider: getEnv("EMAIL_PROVIDER", "mock"),
+		EmailAPIKey:   getEnv("EMAIL_API_KEY", ""),
+		EmailFrom:     getEnv("EMAIL_FROM", "noreply@tuserduser.online"),
+		EmailFromName: getEnv("EMAIL_FROM_NAME", "TuserDuser"),
+		SMTPHost:      getEnv("SMTP_HOST", ""),
+		SMTPPort:      getEnvAsInt("SMTP_PORT", 587),
+		SMTPUsername:  getEnv("SMTP_USERNAME", ""),
+		SMTPPassword:  getEnv("SMTP_PASSWORD", ""),
 	}
 }
 

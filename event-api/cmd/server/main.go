@@ -12,6 +12,7 @@ import (
 
 	"event-api/internal/config"
 	"event-api/internal/database"
+	"event-api/internal/email"
 	"event-api/internal/handlers"
 	"event-api/internal/logger"
 	"event-api/internal/middleware"
@@ -24,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/cors"
 	httpSwagger "github.com/swaggo/http-swagger"
+	"go.uber.org/zap"
 
 	_ "event-api/docs" // This is required for Swagger
 )
@@ -151,12 +153,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Инициализируем Email сервис
+	emailConfig := &email.Config{
+		Provider:     cfg.EmailProvider,
+		APIKey:       cfg.EmailAPIKey,
+		SMTPHost:     cfg.SMTPHost,
+		SMTPPort:     cfg.SMTPPort,
+		SMTPUsername: cfg.SMTPUsername,
+		SMTPPassword: cfg.SMTPPassword,
+		From:         cfg.EmailFrom,
+		FromName:     cfg.EmailFromName,
+	}
+
+	emailService, err := email.NewService(emailConfig, logger.Log)
+	if err != nil {
+		fmt.Println(logger.FormatError(
+			"Failed to Initialize Email Service",
+			err,
+			"Provider: "+cfg.EmailProvider,
+		))
+		os.Exit(1)
+	}
+
+	logger.Log.Info("✅ Email service initialized",
+		zap.String("provider", cfg.EmailProvider),
+		zap.String("from", cfg.EmailFrom),
+	)
+
 	// Инициализируем worker pool
 	workerPool := worker.NewPool(5, 100, logger.Log)
 	workerPool.Start()
 
 	// Инициализируем сервисы
-	authService := service.NewAuthService(cfg, db.DB, redis, smsService, workerPool, logger.Log)
+	authService := service.NewAuthService(cfg, db.DB, redis, smsService, emailService, workerPool, logger.Log)
 	eventService := service.NewEventService(db.DB, logger.Log)
 
 	// Инициализируем handlers

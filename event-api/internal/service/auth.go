@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"event-api/internal/config"
+	"event-api/internal/email"
 	"event-api/internal/models"
 	redisClient "event-api/internal/redis"
 	"event-api/internal/sms"
@@ -25,6 +26,7 @@ type AuthService struct {
 	db         *sql.DB
 	redis      *redisClient.Client
 	sms        *sms.Service
+	email      *email.Service
 	workerPool *worker.Pool
 	logger     *zap.Logger
 }
@@ -37,12 +39,13 @@ type VerificationCode struct {
 }
 
 // NewAuthService создает новый сервис аутентификации.
-func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, sms *sms.Service, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
+func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, sms *sms.Service, email *email.Service, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		cfg:        cfg,
 		db:         db,
 		redis:      redis,
 		sms:        sms,
+		email:      email,
 		workerPool: workerPool,
 		logger:     logger,
 	}
@@ -104,22 +107,30 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 		return nil, "", fmt.Errorf("ошибка при сохранении кода верификации в Redis: %w", err)
 	}
 
-	// Асинхронная отправка кодов верификации (email и SMS)
+	// Асинхронная отправка кодов верификации (email и/или SMS)
 	email := req.Email
 	phone := req.Phone
+	verificationType := req.VerificationType
+	if verificationType == "" {
+		verificationType = "both" // По умолчанию отправляем и email, и SMS
+	}
 
 	// Отправка email кода
-	if err := s.workerPool.Submit(func(ctx context.Context) error {
-		return s.sendVerificationCode(ctx, email, code)
-	}); err != nil {
-		s.logger.Error("Не удалось добавить задачу отправки email кода в очередь", zap.Error(err))
+	if verificationType == "email" || verificationType == "both" {
+		if err := s.workerPool.Submit(func(ctx context.Context) error {
+			return s.sendEmailVerificationCode(ctx, email, code)
+		}); err != nil {
+			s.logger.Error("Не удалось добавить задачу отправки email кода в очередь", zap.Error(err))
+		}
 	}
 
 	// Отправка SMS кода
-	if err := s.workerPool.Submit(func(ctx context.Context) error {
-		return s.sendSMSVerificationCode(ctx, phone, code)
-	}); err != nil {
-		s.logger.Error("Не удалось добавить задачу отправки SMS кода в очередь", zap.Error(err))
+	if verificationType == "sms" || verificationType == "both" {
+		if err := s.workerPool.Submit(func(ctx context.Context) error {
+			return s.sendSMSVerificationCode(ctx, phone, code)
+		}); err != nil {
+			s.logger.Error("Не удалось добавить задачу отправки SMS кода в очередь", zap.Error(err))
+		}
 	}
 
 	return user, code, nil
@@ -346,24 +357,32 @@ func (s *AuthService) ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 	return claims, nil
 }
 
-// sendVerificationCode отправляет код верификации по email
-// В будущем здесь будет реальная интеграция с email сервисом.
-func (s *AuthService) sendVerificationCode(ctx context.Context, email, code string) error {
-	s.logger.Info("Отправка кода верификации (асинхронно)",
-		zap.String("email", email),
+// sendEmailVerificationCode отправляет код верификации по email.
+func (s *AuthService) sendEmailVerificationCode(ctx context.Context, emailAddr, code string) error {
+	s.logger.Info("Отправка кода верификации по email (асинхронно)",
+		zap.String("email", emailAddr),
 		zap.String("code", code),
 	)
 
-	// Симуляция отправки email
-	time.Sleep(100 * time.Millisecond)
+	// Проверяем, инициализирован ли email сервис
+	if s.email == nil {
+		s.logger.Warn("Email сервис не инициализирован, код не отправлен",
+			zap.String("email", emailAddr),
+		)
+		return fmt.Errorf("email сервис не инициализирован")
+	}
 
-	// В production здесь будет:
-	// - SMTP отправка
-	// - SendGrid/Mailgun API
-	// - Очередь сообщений (RabbitMQ/Kafka)
+	// Отправка email через email сервис
+	if err := s.email.SendVerificationHTMLEmail(ctx, emailAddr, code); err != nil {
+		s.logger.Error("Ошибка при отправке email кода верификации",
+			zap.String("email", emailAddr),
+			zap.Error(err),
+		)
+		return err
+	}
 
-	s.logger.Info("Код верификации отправлен (асинхронно)",
-		zap.String("email", email),
+	s.logger.Info("Email код верификации успешно отправлен",
+		zap.String("email", emailAddr),
 	)
 
 	return nil
