@@ -34,10 +34,10 @@ REMOTE_HOST="5.35.127.138"
 REMOTE_USER="root"
 SSH_KEY="$HOME/.ssh/deployer_eventapi_root"
 SOURCE_ENV=".env"
-DEST_ENV="/root/event-api/.env"
+DEST_ENV="/opt/event-api/.env"
 CREATE_BACKUP=true
 RESTART_SERVICE=true
-SERVICE_NAME="eventapi"
+SERVICE_NAME="event-api"
 DRY_RUN=false
 
 # Функция для вывода сообщений
@@ -250,17 +250,13 @@ echo ""
 # Шаг 4: Проверка существующего файла на сервере
 log_info "Проверка существующего .env на сервере..."
 
-if [ "$DRY_RUN" = false ]; then
-	if ssh_execute "test -f $DEST_ENV" 2>/dev/null; then
-		log_success "Файл существует: $DEST_ENV"
-		remote_lines=$(ssh_execute "wc -l < $DEST_ENV 2>/dev/null | tr -d ' '")
-		log_info "  Строк: $remote_lines"
-	else
-		log_warning "Файл не существует на сервере (будет создан)"
-		CREATE_BACKUP=false
-	fi
+if ssh_execute "test -f $DEST_ENV" 2>/dev/null; then
+	log_success "Файл существует: $DEST_ENV"
+	remote_lines=$(ssh_execute "wc -l < $DEST_ENV 2>/dev/null | tr -d ' '")
+	log_info "  Строк: $remote_lines"
 else
-	log_info "[DRY-RUN] Проверка существующего файла пропущена"
+	log_warning "Файл не существует на сервере (будет создан)"
+	CREATE_BACKUP=false
 fi
 echo ""
 
@@ -323,7 +319,7 @@ if [ "$RESTART_SERVICE" = true ]; then
 
 				# Показываем последние логи
 				log_info "Последние логи сервиса:"
-				ssh_execute "sudo journalctl -u $SERVICE_NAME -n 5 --no-pager" || true
+				ssh_execute "sudo journalctl -u $SERVICE_NAME -n 15 --no-pager" || true
 			else
 				log_error "Сервис не запущен!"
 				log_error "Проверьте логи: sudo journalctl -u $SERVICE_NAME -n 50"
