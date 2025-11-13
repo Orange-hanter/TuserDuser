@@ -1,4 +1,4 @@
-.PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore deploy-nginx deploy-nginx-interactive logs-access-staging logs-error-staging logs-access-api logs-error-api logs-nginx-access logs-nginx-error logs-all-errors logs-follow-api logs-follow-staging
+.PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore deploy-nginx deploy-nginx-interactive deploy-env deploy-env-check deploy-env-no-restart logs-access-staging logs-error-staging logs-access-api logs-error-api logs-nginx-access logs-nginx-error logs-all-errors logs-follow-api logs-follow-staging
 
 build:
 	go build -o bin/server ./cmd/server
@@ -169,6 +169,16 @@ logs-follow-api:
 logs-follow-staging:
 	@./scripts/view-nginx-logs.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --type access-staging --follow
 
+# Configuration Deployment
+deploy-env:
+	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY)
+
+deploy-env-check:
+	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --dry-run
+
+deploy-env-no-restart:
+	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --no-restart
+
 # Полная очистка
 clean:
 	@echo "🧹 Cleaning up..."
@@ -231,6 +241,11 @@ help:
 	@echo "    make logs-all-errors        - View all error logs"
 	@echo "    make logs-follow-api        - Follow API logs in real-time"
 	@echo "    make logs-follow-staging    - Follow staging logs in real-time"
+	@echo ""
+	@echo "  Configuration Deployment:"
+	@echo "    make deploy-env             - Deploy .env to server (with backup & restart)"
+	@echo "    make deploy-env-check       - Check what would be deployed (dry-run)"
+	@echo "    make deploy-env-no-restart  - Deploy .env without restarting service"
 	@echo ""
 	@echo "  Logs Options (use with LOG_LINES=N):"
 	@echo "    make logs-access-api LOG_LINES=100"
