@@ -37,23 +37,11 @@ func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := h.eventService.GetAllEvents(r.Context())
 	if err != nil {
 		logger.Log.Error("Ошибка при получении событий", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "internal_error",
-			Message: "Ошибка при получении событий",
-			Code:    http.StatusInternalServerError,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа GetAllEvents internal_error", zap.Error(err))
-		}
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при получении событий")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(events); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа GetAllEvents success", zap.Error(err))
-	}
+	respondWithJSON(w, http.StatusOK, events)
 }
 
 // GetEventByID получает событие по ID
@@ -70,38 +58,18 @@ func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "ID события обязателен",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа GetEventByID bad_request", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "ID события обязателен")
 		return
 	}
 
 	event, err := h.eventService.GetEventByID(r.Context(), id)
 	if err != nil {
 		logger.Log.Error("Ошибка при получении события", zap.String("id", id), zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "not_found",
-			Message: "Событие не найдено",
-			Code:    http.StatusNotFound,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа GetEventByID not_found", zap.Error(err))
-		}
+		respondWithError(w, http.StatusNotFound, "not_found", "Событие не найдено")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(event); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа GetEventByID success", zap.Error(err))
-	}
+	respondWithJSON(w, http.StatusOK, event)
 }
 
 // CreateEvent создает новое событие
@@ -120,54 +88,25 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге CreateEventRequest", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "Неверный формат запроса",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа CreateEvent bad_request", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
 		return
 	}
 
 	// Валидация
 	if req.Type == "" || req.PriceType == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "validation_error",
-			Message: "Type и PriceType обязательны",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа CreateEvent validation_error", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Type и PriceType обязательны")
 		return
 	}
 
 	event, err := h.eventService.CreateEvent(r.Context(), &req)
 	if err != nil {
 		logger.Log.Error("Ошибка при создании события", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "internal_error",
-			Message: "Ошибка при создании события",
-			Code:    http.StatusInternalServerError,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа CreateEvent internal_error", zap.Error(err))
-		}
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при создании события")
 		return
 	}
 
 	logger.Log.Info("Событие создано", zap.String("id", event.ID))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(event); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа CreateEvent success", zap.Error(err))
-	}
+	respondWithJSON(w, http.StatusCreated, event)
 }
 
 // DeleteEvent удаляет событие
@@ -184,40 +123,19 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "ID события обязателен",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа DeleteEvent bad_request", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "ID события обязателен")
 		return
 	}
 
 	err := h.eventService.DeleteEvent(r.Context(), id)
 	if err != nil {
 		logger.Log.Error("Ошибка при удалении события", zap.String("id", id), zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "not_found",
-			Message: err.Error(),
-			Code:    http.StatusNotFound,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа DeleteEvent not_found", zap.Error(err))
-		}
+		respondWithError(w, http.StatusNotFound, "not_found", err.Error())
 		return
 	}
 
 	logger.Log.Info("Событие удалено", zap.String("id", id))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{
+	respondWithJSON(w, http.StatusOK, map[string]string{
 		"message": "Событие удалено",
-	}); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа DeleteEvent success", zap.Error(err))
-	}
+	})
 }

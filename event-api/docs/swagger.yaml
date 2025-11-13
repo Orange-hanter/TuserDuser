@@ -95,6 +95,9 @@ definitions:
         type: string
       phone:
         type: string
+      verification_type:
+        description: '"email", "sms", "both" (default: "both")'
+        type: string
     required:
     - email
     - password
@@ -222,9 +225,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Создает нового пользователя и отправляет код верификации
+      description: 'Создает нового пользователя и отправляет код верификации через
+        email и/или SMS (в зависимости от verification_type: "email", "sms", "both")'
       parameters:
-      - description: Данные для регистрации
+      - description: 'Данные для регистрации (verification_type опционален: email/sms/both,
+          по умолчанию both)'
         in: body
         name: request
         required: true

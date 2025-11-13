@@ -151,7 +151,7 @@ const docTemplate = `{
         },
         "/api/auth/register": {
             "post": {
-                "description": "Создает нового пользователя и отправляет код верификации",
+                "description": "Создает нового пользователя и отправляет код верификации через email и/или SMS (в зависимости от verification_type: \"email\", \"sms\", \"both\")",
                 "consumes": [
                     "application/json"
                 ],
@@ -164,7 +164,7 @@ const docTemplate = `{
                 "summary": "Регистрация нового пользователя",
                 "parameters": [
                     {
-                        "description": "Данные для регистрации",
+                        "description": "Данные для регистрации (verification_type опционален: email/sms/both, по умолчанию both)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -560,6 +560,10 @@ const docTemplate = `{
                     "minLength": 8
                 },
                 "phone": {
+                    "type": "string"
+                },
+                "verification_type": {
+                    "description": "\"email\", \"sms\", \"both\" (default: \"both\")",
                     "type": "string"
                 }
             }

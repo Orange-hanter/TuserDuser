@@ -24,8 +24,31 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 	}
 }
 
+// respondWithError отправляет JSON ответ с ошибкой
+func respondWithError(w http.ResponseWriter, statusCode int, errorType, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(models.ErrorResponse{
+		Error:   errorType,
+		Message: message,
+		Code:    statusCode,
+	}); err != nil {
+		logger.Log.Error("Ошибка при отправке ответа с ошибкой",
+			zap.String("error_type", errorType),
+			zap.Error(err))
+	}
+}
+
+// respondWithJSON отправляет JSON ответ с данными
+func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		logger.Log.Error("Ошибка при отправке JSON ответа", zap.Error(err))
+	}
+}
+
 // Register обрабатывает регистрацию нового пользователя
-// POST /v1/api/auth/register
 // @Summary Регистрация нового пользователя
 // @Description Создает нового пользователя и отправляет код верификации
 // @Tags auth
@@ -35,62 +58,30 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 // @Success 201 {object} map[string]interface{} "user:models.User, verify_code:string"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 409 {object} models.ErrorResponse "Пользователь уже существует"
-// @Router /v1/api/auth/register [post].
+// @Router /v1/api/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге RegisterRequest", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "Неверный формат запроса",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Register bad_request", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
 		return
 	}
 
 	// Валидация
 	if req.Email == "" || req.Password == "" || req.Phone == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "validation_error",
-			Message: "Email, password и phone обязательны",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Register validation_error", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Email, password и phone обязательны")
 		return
 	}
 
 	if len(req.Password) < 8 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "validation_error",
-			Message: "Пароль должен быть минимум 8 символов",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Register password_validation", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Пароль должен быть минимум 8 символов")
 		return
 	}
 
 	user, verifyCode, err := h.authService.Register(&req)
 	if err != nil {
 		logger.Log.Error("Ошибка при регистрации", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "conflict",
-			Message: err.Error(),
-			Code:    http.StatusConflict,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Register conflict", zap.Error(err))
-		}
+		respondWithError(w, http.StatusConflict, "conflict", err.Error())
 		return
 	}
 
@@ -98,19 +89,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		zap.String("email", user.Email),
 		zap.String("user_id", user.ID),
 	)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+	// TODO: В production отправляем код верификации через email/SMS УДАЛИТЬ КОГДА РЕАЛИЗУЕМ
+	respondWithJSON(w, http.StatusCreated, map[string]interface{}{
 		"user":        user,
 		"verify_code": verifyCode, // В production отправляем через email/SMS
-	}); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа Register success", zap.Error(err))
-	}
+	})
 }
 
 // Verify проверяет код верификации
-// POST /v1/api/auth/verify
 // @Summary Верификация email
 // @Description Проверяет код верификации для подтверждения email и возвращает JWT токен
 // @Tags auth
@@ -119,49 +105,27 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Param request body models.VerifyRequest true "Код верификации"
 // @Success 200 {object} models.AuthResponse "Email верифицирован, токен выдан"
 // @Failure 400 {object} models.ErrorResponse "Неверный код или формат запроса"
-// @Router /v1/api/auth/verify [post].
+// @Router /api/auth/verify [post]
 func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге VerifyRequest", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "Неверный формат запроса",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Verify bad_request", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
 		return
 	}
 
 	authResponse, err := h.authService.VerifyAndIssueToken(req.Email, req.Code)
 	if err != nil {
 		logger.Log.Warn("Ошибка при верификации", zap.String("email", req.Email), zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "verification_failed",
-			Message: err.Error(),
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Verify verification_failed", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "verification_failed", err.Error())
 		return
 	}
 
 	logger.Log.Info("Email верифицирован и токен выдан", zap.String("email", req.Email))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(authResponse); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа Verify success", zap.Error(err))
-	}
+	respondWithJSON(w, http.StatusOK, authResponse)
 }
 
 // Login аутентифицирует пользователя и выдает JWT
-// POST /v1/api/auth/login
 // @Summary Вход в систему
 // @Description Аутентифицирует пользователя и возвращает JWT токены
 // @Tags auth
@@ -171,61 +135,37 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} models.AuthResponse "Успешная аутентификация"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 401 {object} models.ErrorResponse "Неверные учетные данные"
-// @Router /v1/api/auth/login [post].
+// @Router /api/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге LoginRequest", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "Неверный формат запроса",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Login bad_request", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
 		return
 	}
 
 	authResponse, err := h.authService.Login(&req)
 	if err != nil {
-		logger.Log.Warn("Ошибка при входе", zap.String("email", req.Email) /*, zap.Error(err)*/)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "unauthorized",
-			Message: err.Error(),
-			Code:    http.StatusUnauthorized,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Login unauthorized", zap.Error(err))
-		}
+		logger.Log.Warn("Ошибка при входе", zap.String("email", req.Email))
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
 	}
 
 	logger.Log.Info("Пользователь успешно вошел", zap.String("email", req.Email))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(authResponse); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа Login success", zap.Error(err))
-	}
+	respondWithJSON(w, http.StatusOK, authResponse)
 }
 
-// Logout отзывает JWT токен
-// POST /v1/api/auth/logout
+// Logout выходит из системы (инвалидирует токены)
 // @Summary Выход из системы
-// @Description Отзывает JWT токен пользователя
+// @Description Инвалидирует refresh токен пользователя
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param Authorization header string true "Bearer токен"
-// @Param request body models.LogoutRequest false "Токен в теле запроса (опционально)"
-// @Success 200 {object} map[string]interface{} "message:string"
-// @Failure 400 {object} models.ErrorResponse "Token не найден"
-// @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/auth/logout [post].
+// @Param request body models.LogoutRequest true "Refresh токен для инвалидации"
+// @Success 200 {object} map[string]string "Успешный выход"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Router /api/auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 
@@ -246,90 +186,46 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if token == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "bad_request",
-			Message: "Token не найден",
-			Code:    http.StatusBadRequest,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Logout token_missing", zap.Error(err))
-		}
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Token не найден")
 		return
 	}
 
 	err := h.authService.Logout(token)
 	if err != nil {
 		logger.Log.Error("Ошибка при выходе", zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "internal_error",
-			Message: "Ошибка при выходе",
-			Code:    http.StatusInternalServerError,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа Logout internal_error", zap.Error(err))
-		}
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при выходе")
 		return
 	}
 
 	logger.Log.Info("Пользователь успешно вышел")
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Успешно вышли из системы",
-	}); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа Logout success", zap.Error(err))
-	}
+	})
 }
 
-// GetMe возвращает текущего пользователя
-// GET /v1/api/auth/me
-// @Summary Получить текущего пользователя
-// @Description Возвращает информацию о текущем аутентифицированном пользователе
+// GetMe возвращает информацию о текущем пользователе
+// @Summary Получить информацию о текущем пользователе
+// @Description Возвращает данные текущего авторизованного пользователя
 // @Tags auth
-// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} models.User "Информация о пользователе"
-// @Failure 401 {object} models.ErrorResponse "Пользователь не аутентифицирован"
-// @Failure 404 {object} models.ErrorResponse "Пользователь не найден"
-// @Router /v1/api/auth/me [get].
+// @Failure 401 {object} models.ErrorResponse "Не авторизован"
+// @Router /api/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	// UserID поставляется middleware AuthMiddleware
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "unauthorized",
-			Message: "User not found in context",
-			Code:    http.StatusUnauthorized,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа GetMe unauthorized", zap.Error(err))
-		}
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", "User not found in context")
 		return
 	}
 
 	user, err := h.authService.GetUserByID(userID)
 	if err != nil {
 		logger.Log.Error("Ошибка при получении пользователя", zap.String("user_id", userID), zap.Error(err))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-			Error:   "not_found",
-			Message: "Пользователь не найден",
-			Code:    http.StatusNotFound,
-		}); err != nil {
-			logger.Log.Error("Ошибка при отправке ответа GetMe not_found", zap.Error(err))
-		}
+		respondWithError(w, http.StatusNotFound, "not_found", "Пользователь не найден")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(user); err != nil {
-		logger.Log.Error("Ошибка при отправке ответа GetMe success", zap.Error(err))
-	}
+	respondWithJSON(w, http.StatusOK, user)
 }
