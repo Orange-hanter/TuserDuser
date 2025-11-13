@@ -1,4 +1,4 @@
-.PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore deploy-nginx deploy-nginx-interactive deploy-env deploy-env-check deploy-env-no-restart logs-access-staging logs-error-staging logs-access-api logs-error-api logs-nginx-access logs-nginx-error logs-all-errors logs-follow-api logs-follow-staging
+.PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore deploy-nginx deploy-nginx-interactive deploy-env deploy-env-check deploy-env-no-restart logs-access-staging logs-error-staging logs-access-api logs-error-api logs-nginx-access logs-nginx-error logs-all-errors logs-follow-api logs-follow-staging test-email test-email-smtp
 
 build:
 	go build -o bin/server ./cmd/server
@@ -173,11 +173,23 @@ logs-follow-staging:
 deploy-env:
 	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY)
 
+# Configuration Deployment
+deploy-env-staging:
+	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) -s ./.env.staging
+
 deploy-env-check:
 	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --dry-run
 
 deploy-env-no-restart:
 	@./scripts/deploy-env.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) --key $(SSH_KEY) --no-restart
+
+# Email testing helpers
+test-email:
+	@./scripts/test-email.sh
+
+test-email-smtp:
+	@echo "🧪 Running SMTP integration test (requires SMTP_HOST, SMTP_PORT, EMAIL_FROM, EMAIL_TO)"
+	go test -v ./internal/email -run TestSMTPIntegrationSendEmail
 
 # Полная очистка
 clean:
@@ -202,6 +214,8 @@ help:
 	@echo "    make test-race          - Run tests with race detector"
 	@echo "    make test-coverage      - Generate coverage report (HTML)"
 	@echo "    make ci-test            - Run tests as in CI pipeline"
+	@echo "    make test-email-smtp    - Run SMTP integration email test (requires env vars)"
+	@echo "    make test-email         - Trigger mock email via register endpoint"
 	@echo ""
 	@echo "  Code Quality:"
 	@echo "    make lint               - Run golangci-lint"

@@ -24,6 +24,7 @@ curl -X POST http://localhost:8080/v1/api/auth/register \
 ```
 
 **Verify in Redis:**
+
 ```bash
 docker exec -it event_api_redis redis-cli -a devpass GET verify:test@example.com
 # Returns: "123456"
@@ -44,6 +45,7 @@ curl -X POST http://localhost:8080/v1/api/auth/verify \
 ```
 
 **Verify code deleted from Redis:**
+
 ```bash
 docker exec -it event_api_redis redis-cli -a devpass EXISTS verify:test@example.com
 # Returns: 0 (key deleted)
@@ -59,6 +61,31 @@ curl -X POST http://localhost:8080/v1/api/auth/login \
 # Response:
 # {"access_token":"eyJ...","user":{...}}
 ```
+
+### 5. SMTP Email Integration Test (real email)
+
+Requires a reachable SMTP server and credentials. Set the following env vars, then run the focused test:
+
+```bash
+export SMTP_HOST="smtp.example.com"
+export SMTP_PORT="587"        # or 465 for SSL
+export SMTP_USERNAME="user@example.com"
+export SMTP_PASSWORD="your_app_password"
+export EMAIL_FROM="from@example.com"
+export EMAIL_FROM_NAME="Event API"
+export EMAIL_TO="recipient@example.com"
+
+# Run only the SMTP email test
+make test-email-smtp
+# or directly
+go test -v ./internal/email -run TestSMTPIntegrationSendEmail
+```
+
+Notes:
+
+- Port 465 uses SSL; 587 typically uses STARTTLS (handled automatically).
+- Some providers require app passwords (e.g., Gmail) or SMTP enabled in account settings.
+- The test is skipped if required env vars are not set.
 
 ### 5. Test Protected Endpoint
 
@@ -83,6 +110,7 @@ curl -X POST http://localhost:8080/v1/api/auth/logout \
 ```
 
 **Verify token in blacklist:**
+
 ```bash
 docker exec -it event_api_redis redis-cli -a devpass EXISTS "blacklist:$TOKEN"
 # Returns: 1 (token blacklisted)
@@ -92,6 +120,7 @@ docker exec -it event_api_redis redis-cli -a devpass TTL "blacklist:$TOKEN"
 ```
 
 **Try to use blacklisted token:**
+
 ```bash
 curl -X GET http://localhost:8080/v1/api/auth/me \
   -H "Authorization: Bearer $TOKEN"
@@ -103,16 +132,19 @@ curl -X GET http://localhost:8080/v1/api/auth/me \
 ### 7. Test Events CRUD
 
 **Get all events:**
+
 ```bash
 curl -X GET http://localhost:8080/v1/api/events
 ```
 
 **Get specific event:**
+
 ```bash
 curl -X GET http://localhost:8080/v1/api/events/{id}
 ```
 
 **Create event (protected):**
+
 ```bash
 curl -X POST http://localhost:8080/v1/api/events \
   -H "Authorization: Bearer $NEW_TOKEN" \
@@ -130,6 +162,7 @@ curl -X POST http://localhost:8080/v1/api/events \
 ```
 
 **Delete event (protected):**
+
 ```bash
 curl -X DELETE http://localhost:8080/v1/api/events/{id} \
   -H "Authorization: Bearer $NEW_TOKEN"
@@ -138,6 +171,7 @@ curl -X DELETE http://localhost:8080/v1/api/events/{id} \
 ## Redis Key Patterns
 
 ### Verification Codes
+
 ```
 Key Pattern: verify:{email}
 Example: verify:user@example.com
@@ -146,6 +180,7 @@ TTL: 600 seconds (10 minutes)
 ```
 
 ### Token Blacklist
+
 ```
 Key Pattern: blacklist:{jwt_token}
 Example: blacklist:eyJhbGc...
@@ -156,6 +191,7 @@ TTL: 3600 seconds (1 hour - same as token expiration)
 ## Monitoring Redis
 
 ### Connect to Redis CLI
+
 ```bash
 docker exec -it event_api_redis redis-cli -a devpass
 ```
@@ -199,6 +235,7 @@ FLUSHDB
 ## Expected Redis State
 
 ### After Registration
+
 ```bash
 127.0.0.1:6379> KEYS *
 1) "verify:user@example.com"
@@ -211,12 +248,14 @@ FLUSHDB
 ```
 
 ### After Verification
+
 ```bash
 127.0.0.1:6379> KEYS verify:*
 (empty array)
 ```
 
 ### After Logout
+
 ```bash
 127.0.0.1:6379> KEYS *
 1) "blacklist:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -231,6 +270,7 @@ FLUSHDB
 ## Performance Testing
 
 ### Concurrent Registrations
+
 ```bash
 # Install Apache Bench
 brew install httpd  # macOS
@@ -241,6 +281,7 @@ ab -n 100 -c 10 -p register.json -T application/json \
 ```
 
 ### Redis Performance
+
 ```bash
 # Connect to Redis
 docker exec -it event_api_redis redis-cli -a devpass
@@ -252,16 +293,19 @@ redis-benchmark -a devpass -q -n 10000
 ## Cleanup
 
 ### Clear Redis Data
+
 ```bash
 docker exec -it event_api_redis redis-cli -a devpass FLUSHDB
 ```
 
 ### Clear Database
+
 ```bash
 docker exec -it event_api_postgres psql -U devuser -d event_api -c "TRUNCATE users, events, verification_codes CASCADE;"
 ```
 
 ### Restart Services
+
 ```bash
 docker-compose restart
 make run
@@ -270,6 +314,7 @@ make run
 ## Troubleshooting
 
 ### Redis Connection Failed
+
 ```bash
 # Check Redis is running
 docker ps | grep redis
@@ -283,6 +328,7 @@ docker exec -it event_api_redis redis-cli -a devpass ping
 ```
 
 ### Verification Code Not Found
+
 ```bash
 # Check if code exists
 docker exec -it event_api_redis redis-cli -a devpass GET verify:user@example.com
@@ -293,6 +339,7 @@ docker exec -it event_api_redis redis-cli -a devpass TTL verify:user@example.com
 ```
 
 ### Token Always Rejected
+
 ```bash
 # Check if token is blacklisted
 docker exec -it event_api_redis redis-cli -a devpass KEYS blacklist:*
