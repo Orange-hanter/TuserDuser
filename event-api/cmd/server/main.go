@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -53,38 +55,20 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 
-func run() error {
+func run(versionInfo VersionInfo) error {
 	logger.Init()
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
-		}
-	}()
+	defer syncLogger()
+
+	logVersionInfo(versionInfo)
 
 	cfg := config.Load()
 
 	// Инициализируем подключение к БД
-	dbConfig := &database.Config{
-		Host:     cfg.DBHost,
-		Port:     cfg.DBPort,
-		User:     cfg.DBUser,
-		Password: cfg.DBPassword,
-		DBName:   cfg.DBName,
-		SSLMode:  cfg.DBSSLMode,
-		MaxConn:  cfg.DBMaxConn,
-		MinConn:  cfg.DBMinConn,
-	}
-
-	db, err := database.NewDatabase(dbConfig, logger.Log)
+	db, err := initDatabase(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database (host=%s, port=%s, db=%s): %w",
-			cfg.DBHost, cfg.DBPort, cfg.DBName, err)
+		return err
 	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
-		}
-	}()
+	defer closeDatabase(db)
 
 	// Запускаем миграции
 	migrator := migrations.NewMigrator(db.DB, logger.Log)
@@ -100,52 +84,22 @@ func run() error {
 	))
 
 	// Инициализируем подключение к Redis
-	redisConfig := &redisClient.Config{
-		Host:     cfg.RedisHost,
-		Port:     cfg.RedisPort,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
-	}
-
-	redis, err := redisClient.NewClient(redisConfig, logger.Log)
+	redis, err := initRedis(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to connect to Redis (host=%s, port=%s): %w",
-			cfg.RedisHost, cfg.RedisPort, err)
+		return err
 	}
-	defer func() {
-		if err := redis.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to close redis: %v\n", err)
-		}
-	}()
+	defer closeRedis(redis)
 
 	// Инициализируем SMS сервис
-	smsConfig := &sms.Config{
-		Provider: cfg.SMSProvider,
-		APIKey:   cfg.SMSAPIKey,
-		APIToken: cfg.SMSAPIToken,
-		From:     cfg.SMSFrom,
-	}
-
-	smsService, err := sms.NewService(smsConfig, logger.Log)
+	smsService, err := initSMSService(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to initialize SMS service (provider=%s): %w", cfg.SMSProvider, err)
+		return err
 	}
 
 	// Инициализируем Email сервис
-	emailConfig := &email.Config{
-		Provider:     cfg.EmailProvider,
-		APIKey:       cfg.EmailAPIKey,
-		SMTPHost:     cfg.SMTPHost,
-		SMTPPort:     cfg.SMTPPort,
-		SMTPUsername: cfg.SMTPUsername,
-		SMTPPassword: cfg.SMTPPassword,
-		From:         cfg.EmailFrom,
-		FromName:     cfg.EmailFromName,
-	}
-
-	emailService, err := email.NewService(emailConfig, logger.Log)
+	emailService, err := initEmailService(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to initialize email service (provider=%s): %w", cfg.EmailProvider, err)
+		return err
 	}
 
 	logger.Log.Info("✅ Email service initialized",
@@ -165,50 +119,7 @@ func run() error {
 	authHandler := handlers.NewAuthHandler(authService)
 	eventHandler := handlers.NewEventHandler(eventService)
 
-	r := chi.NewRouter()
-
-	// Middleware
-	r.Use(middleware.SecurityHeaders)
-
-	// Health check (без версии)
-	r.Get("/health", handlers.HealthCheck)
-
-	// API v1 routes
-	r.Route("/v1", func(r chi.Router) {
-		// Auth routes (public)
-		r.Post("/api/auth/register", authHandler.Register)
-		r.Post("/api/auth/verify", authHandler.Verify)
-		r.Post("/api/auth/login", authHandler.Login)
-
-		// Auth routes (protected)
-		r.Post("/api/auth/logout", authHandler.Logout)
-		r.With(middleware.AuthMiddleware(authService)).Get("/api/auth/me", authHandler.GetMe)
-
-		// Events routes (public)
-		r.Get("/api/events", eventHandler.GetAllEvents)
-		r.Get("/api/events/{id}", eventHandler.GetEventByID)
-
-		// Events routes (protected)
-		r.With(middleware.AuthMiddleware(authService)).Post("/api/events", eventHandler.CreateEvent)
-		r.With(middleware.AuthMiddleware(authService)).Delete("/api/events/{id}", eventHandler.DeleteEvent)
-	})
-
-	// Swagger routes
-	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"),
-	))
-
-	// CORS
-	c := cors.New(cors.Options{
-		AllowedOrigins:   cfg.CORSAllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
-		ExposedHeaders:   []string{"Content-Length", "X-JSON-Response"},
-		AllowCredentials: true,
-		MaxAge:           3600, // 1 час
-	})
-
-	handler := c.Handler(r)
+	handler := buildHTTPHandler(cfg, authHandler, eventHandler, authService, versionInfo)
 
 	// Создаем HTTP сервер с явными настройками
 	srv := &http.Server{
@@ -266,16 +177,178 @@ func run() error {
 		"Resources cleaned up",
 	))
 
-	// Синхронизация логгера перед выходом
-	if err := logger.Sync(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
-	}
 	return nil
 }
 
 func main() {
-	if err := run(); err != nil {
+	showVersion := parseVersionFlag()
+	versionInfo := newVersionInfo()
+
+	if showVersion {
+		fmt.Println(versionInfo.String())
+		return
+	}
+
+	if err := run(versionInfo); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func parseVersionFlag() bool {
+	showVersion := flag.Bool("version", false, "Print version information and exit")
+	flag.BoolVar(showVersion, "v", false, "Print version information and exit")
+	flag.Parse()
+	return *showVersion
+}
+
+func versionHandler(info VersionInfo) http.HandlerFunc {
+	response := info
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			logger.Log.Error("failed to write version response", zap.Error(err))
+			http.Error(w, "failed to render version info", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func logVersionInfo(info VersionInfo) {
+	logger.Log.Info("backend version",
+		zap.String("version", info.Version),
+		zap.String("commit", info.Commit),
+		zap.String("build_time", info.BuildTime),
+		zap.String("go_version", info.GoVersion),
+	)
+}
+
+func syncLogger() {
+	if err := logger.Sync(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+	}
+}
+
+func initDatabase(cfg *config.Config) (*database.Database, error) {
+	config := &database.Config{
+		Host:     cfg.DBHost,
+		Port:     cfg.DBPort,
+		User:     cfg.DBUser,
+		Password: cfg.DBPassword,
+		DBName:   cfg.DBName,
+		SSLMode:  cfg.DBSSLMode,
+		MaxConn:  cfg.DBMaxConn,
+		MinConn:  cfg.DBMinConn,
+	}
+
+	db, err := database.NewDatabase(config, logger.Log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database (host=%s, port=%s, db=%s): %w",
+			cfg.DBHost, cfg.DBPort, cfg.DBName, err)
+	}
+	return db, nil
+}
+
+func closeDatabase(db *database.Database) {
+	if db == nil {
+		return
+	}
+	if err := db.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
+	}
+}
+
+func initRedis(cfg *config.Config) (*redisClient.Client, error) {
+	config := &redisClient.Config{
+		Host:     cfg.RedisHost,
+		Port:     cfg.RedisPort,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
+	}
+
+	client, err := redisClient.NewClient(config, logger.Log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis (host=%s, port=%s): %w",
+			cfg.RedisHost, cfg.RedisPort, err)
+	}
+	return client, nil
+}
+
+func closeRedis(client *redisClient.Client) {
+	if client == nil {
+		return
+	}
+	if err := client.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to close redis: %v\n", err)
+	}
+}
+
+func initSMSService(cfg *config.Config) (*sms.Service, error) {
+	config := &sms.Config{
+		Provider: cfg.SMSProvider,
+		APIKey:   cfg.SMSAPIKey,
+		APIToken: cfg.SMSAPIToken,
+		From:     cfg.SMSFrom,
+	}
+
+	service, err := sms.NewService(config, logger.Log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize SMS service (provider=%s): %w", cfg.SMSProvider, err)
+	}
+	return service, nil
+}
+
+func initEmailService(cfg *config.Config) (*email.Service, error) {
+	config := &email.Config{
+		Provider:     cfg.EmailProvider,
+		APIKey:       cfg.EmailAPIKey,
+		SMTPHost:     cfg.SMTPHost,
+		SMTPPort:     cfg.SMTPPort,
+		SMTPUsername: cfg.SMTPUsername,
+		SMTPPassword: cfg.SMTPPassword,
+		From:         cfg.EmailFrom,
+		FromName:     cfg.EmailFromName,
+	}
+
+	service, err := email.NewService(config, logger.Log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize email service (provider=%s): %w", cfg.EmailProvider, err)
+	}
+	return service, nil
+}
+
+func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, authService *service.AuthService, versionInfo VersionInfo) http.Handler {
+	r := chi.NewRouter()
+	r.Use(middleware.SecurityHeaders)
+	r.Get("/health", handlers.HealthCheck)
+	r.Get("/version", versionHandler(versionInfo))
+
+	r.Route("/v1", func(r chi.Router) {
+		r.Post("/api/auth/register", authHandler.Register)
+		r.Post("/api/auth/verify", authHandler.Verify)
+		r.Post("/api/auth/login", authHandler.Login)
+
+		r.Post("/api/auth/logout", authHandler.Logout)
+		r.With(middleware.AuthMiddleware(authService)).Get("/api/auth/me", authHandler.GetMe)
+
+		r.Get("/api/events", eventHandler.GetAllEvents)
+		r.Get("/api/events/{id}", eventHandler.GetEventByID)
+		r.With(middleware.AuthMiddleware(authService)).Post("/api/events", eventHandler.CreateEvent)
+		r.With(middleware.AuthMiddleware(authService)).Delete("/api/events/{id}", eventHandler.DeleteEvent)
+	})
+
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
+		ExposedHeaders:   []string{"Content-Length", "X-JSON-Response"},
+		AllowCredentials: true,
+		MaxAge:           3600,
+	})
+
+	return c.Handler(r)
 }

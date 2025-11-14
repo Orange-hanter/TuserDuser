@@ -1,7 +1,12 @@
 .PHONY: build run test test-verbose test-coverage test-race lint fmt vet docker docker-build docker-run logger-demo docker-up docker-down docker-logs ci-test deploy backup restore deploy-nginx deploy-nginx-interactive deploy-env deploy-env-check deploy-env-no-restart logs-access-staging logs-error-staging logs-access-api logs-error-api logs-nginx-access logs-nginx-error logs-all-errors logs-follow-api logs-follow-staging test-email test-email-smtp
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT ?= $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo none)
+BUILD_TIME ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS = -X 'main.Version=$(VERSION)' -X 'main.Commit=$(COMMIT)' -X 'main.BuildTime=$(BUILD_TIME)'
+
 build:
-	go build -o bin/server ./cmd/server
+	go build -ldflags "$(LDFLAGS)" -o bin/server ./cmd/server
 
 run: build
 	./bin/server
