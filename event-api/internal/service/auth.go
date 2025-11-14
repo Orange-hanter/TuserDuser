@@ -5,7 +5,10 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"event-api/internal/config"
@@ -38,6 +41,25 @@ type VerificationCode struct {
 	Email     string
 }
 
+const (
+	pendingUserTTL   = 10 * time.Minute
+	errGetUserFormat = "ошибка при получении пользователя: %w"
+	errEmailRequired = "email не указан"
+)
+
+var errPendingUserNotFound = errors.New("pending user not found")
+
+type pendingUser struct {
+	ID                string    `json:"id"`
+	Email             string    `json:"email"`
+	Phone             string    `json:"phone"`
+	Password          string    `json:"password"`
+	VerificationType  string    `json:"verification_type"`
+	VerificationCode  string    `json:"verification_code"`
+	CreatedAt         time.Time `json:"created_at"`
+	OriginalUpdatedAt time.Time `json:"updated_at"`
+}
+
 // NewAuthService создает новый сервис аутентификации.
 func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, sms *sms.Service, email *email.Service, workerPool *worker.Pool, logger *zap.Logger) *AuthService {
 	return &AuthService{
@@ -53,69 +75,102 @@ func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, s
 
 // Register регистрирует нового пользователя.
 func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, string, error) {
-	// Проверяем, не существует ли уже пользователь с этим email
-	var existingUserID string
-	err := s.db.QueryRow("SELECT id FROM users WHERE email = $1", req.Email).Scan(&existingUserID)
-	if err == nil {
-		return nil, "", fmt.Errorf("пользователь с таким email уже существует")
-	} else if err != sql.ErrNoRows {
-		return nil, "", fmt.Errorf("ошибка при проверке существования пользователя: %w", err)
+	if err := s.ensureRegisterDependencies(); err != nil {
+		return nil, "", err
 	}
 
-	// Хешируем пароль
+	email := normalizeEmail(req.Email)
+	if email == "" {
+		return nil, "", errors.New(errEmailRequired)
+	}
+
+	ctx := context.Background()
+	if err := s.ensureUserDoesNotExist(ctx, email); err != nil {
+		return nil, "", err
+	}
+	if err := s.ensureNoPendingRegistration(ctx, email); err != nil {
+		return nil, "", err
+	}
+
+	pending, code, err := s.buildPendingUser(req, email)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if err := s.savePendingUser(ctx, pending); err != nil {
+		return nil, "", err
+	}
+
+	s.dispatchVerificationTasks(req.Email, req.Phone, pending.VerificationType, code)
+	return pending.toModel(false), code, nil
+}
+
+func (s *AuthService) ensureRegisterDependencies() error {
+	if s.db == nil {
+		return fmt.Errorf("database клиент не инициализирован")
+	}
+	if s.redis == nil {
+		return fmt.Errorf("redis клиент не инициализирован")
+	}
+	return nil
+}
+
+func (s *AuthService) ensureUserDoesNotExist(ctx context.Context, email string) error {
+	var existingUserID string
+	err := s.db.QueryRowContext(ctx, "SELECT id FROM users WHERE email = $1", email).Scan(&existingUserID)
+	if err == nil {
+		return fmt.Errorf("пользователь с таким email уже существует")
+	}
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("ошибка при проверке существования пользователя: %w", err)
+	}
+	return nil
+}
+
+func (s *AuthService) ensureNoPendingRegistration(ctx context.Context, email string) error {
+	pendingKey := pendingUserKey(email)
+	pendingExists, err := s.redis.Exists(ctx, pendingKey)
+	if err != nil {
+		return fmt.Errorf("ошибка при проверке незавершенной регистрации: %w", err)
+	}
+	if pendingExists {
+		return fmt.Errorf("регистрация уже ожидает подтверждения")
+	}
+	return nil
+}
+
+func (s *AuthService) buildPendingUser(req *models.RegisterRequest, email string) (*pendingUser, string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, "", fmt.Errorf("ошибка при хешировании пароля: %w", err)
 	}
-
-	// Создаем пользователя в БД
 	userID, err := generateID()
 	if err != nil {
 		return nil, "", fmt.Errorf("не удалось сгенерировать идентификатор пользователя: %w", err)
 	}
-	user := &models.User{
-		ID:        userID,
-		Email:     req.Email,
-		Phone:     req.Phone,
-		Password:  string(hashedPassword),
-		Verified:  false,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	verificationType := req.VerificationType
+	if verificationType == "" {
+		verificationType = "both"
 	}
-
-	query := `
-		INSERT INTO users (id, email, phone, password, verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`
-	_, err = s.db.Exec(query, user.ID, user.Email, user.Phone, user.Password, user.Verified, user.CreatedAt, user.UpdatedAt)
-	if err != nil {
-		return nil, "", fmt.Errorf("ошибка при сохранении пользователя: %w", err)
-	}
-
-	// Генерируем код верификации
 	code, err := generateVerificationCode()
 	if err != nil {
 		return nil, "", fmt.Errorf("не удалось сгенерировать код верификации: %w", err)
 	}
-	fmt.Printf("\nGenerated verification code for %s: %s\n", req.Email, code)
-
-	// Сохраняем код верификации в Redis с TTL 10 минут
-	ctx := context.Background()
-	verifyKey := fmt.Sprintf("verify:%s", req.Email)
-	err = s.redis.Set(ctx, verifyKey, code, 10*time.Minute)
-	if err != nil {
-		return nil, "", fmt.Errorf("ошибка при сохранении кода верификации в Redis: %w", err)
+	pending := &pendingUser{
+		ID:                userID,
+		Email:             email,
+		Phone:             strings.TrimSpace(req.Phone),
+		Password:          string(hashedPassword),
+		VerificationType:  verificationType,
+		VerificationCode:  code,
+		CreatedAt:         time.Now(),
+		OriginalUpdatedAt: time.Now(),
 	}
+	return pending, code, nil
+}
 
-	// Асинхронная отправка кодов верификации (email и/или SMS)
-	email := req.Email
-	phone := req.Phone
-	verificationType := req.VerificationType
-	if verificationType == "" {
-		verificationType = "both" // По умолчанию отправляем и email, и SMS
-	}
-
-	// Отправка email кода
+// dispatchVerificationTasks schedules async verification deliveries so registration flow stays fast.
+func (s *AuthService) dispatchVerificationTasks(email, phone, verificationType, code string) {
 	if verificationType == "email" || verificationType == "both" {
 		if err := s.workerPool.Submit(func(ctx context.Context) error {
 			return s.sendEmailVerificationCode(ctx, email, code)
@@ -123,8 +178,6 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 			s.logger.Error("Не удалось добавить задачу отправки email кода в очередь", zap.Error(err))
 		}
 	}
-
-	// Отправка SMS кода
 	if verificationType == "sms" || verificationType == "both" {
 		if err := s.workerPool.Submit(func(ctx context.Context) error {
 			return s.sendSMSVerificationCode(ctx, phone, code)
@@ -132,63 +185,85 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, strin
 			s.logger.Error("Не удалось добавить задачу отправки SMS кода в очередь", zap.Error(err))
 		}
 	}
-
-	return user, code, nil
 }
 
 // VerifyCode проверяет код верификации и подтверждает email.
 func (s *AuthService) VerifyCode(email, code string) error {
-	ctx := context.Background()
-	verifyKey := fmt.Sprintf("verify:%s", email)
+	if s.redis == nil {
+		return fmt.Errorf("redis клиент не инициализирован")
+	}
 
-	// Получаем код верификации из Redis
+	ctx := context.Background()
+	normalizedEmail := normalizeEmail(email)
+
+	if normalizedEmail == "" {
+		return errors.New(errEmailRequired)
+	}
+
+	// Пробуем обработать незавершенную регистрацию
+	if pending, err := s.loadPendingUser(ctx, normalizedEmail); err == nil {
+		if pending.VerificationCode != code {
+			return fmt.Errorf("неверный код верификации")
+		}
+		pending.OriginalUpdatedAt = time.Now()
+		if err := s.persistPendingUser(ctx, pending); err != nil {
+			return err
+		}
+		s.deletePendingUser(ctx, normalizedEmail)
+		return nil
+	} else if err != errPendingUserNotFound {
+		return err
+	}
+
+	// Fallback: поддержка старого сценария, когда пользователь уже существовал в БД
+	verifyKey := fmt.Sprintf("verify:%s", normalizedEmail)
 	storedCode, err := s.redis.Get(ctx, verifyKey)
 	if err != nil {
 		return fmt.Errorf("код верификации не найден или истек срок действия")
 	}
-
-	// Проверяем правильность кода
 	if storedCode != code {
 		return fmt.Errorf("неверный код верификации")
 	}
-
-	// Обновляем статус верификации пользователя в БД
-	_, err = s.db.Exec(
+	_, err = s.db.ExecContext(
+		ctx,
 		"UPDATE users SET verified = true, updated_at = $1 WHERE email = $2",
-		time.Now(), email,
+		time.Now(), normalizedEmail,
 	)
 	if err != nil {
 		return fmt.Errorf("ошибка при обновлении статуса верификации: %w", err)
 	}
-
-	// Удаляем использованный код из Redis
 	if err := s.redis.Del(ctx, verifyKey); err != nil {
 		s.logger.Error("Ошибка при удалении кода верификации из Redis", zap.Error(err))
-		// Не возвращаем ошибку, так как верификация уже прошла успешно
 	}
-
 	return nil
 }
 
 // VerifyAndIssueToken проверяет код верификации и возвращает JWT токен.
 func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthResponse, error) {
+	normalizedEmail := normalizeEmail(email)
+	if normalizedEmail == "" {
+		return nil, errors.New(errEmailRequired)
+	}
+
 	// Проверяем код верификации
-	if err := s.VerifyCode(email, code); err != nil {
+	if err := s.VerifyCode(normalizedEmail, code); err != nil {
 		return nil, err
 	}
 
 	// Получаем пользователя из БД
 	var user models.User
-	err := s.db.QueryRow(
+	ctx := context.Background()
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT id, email, phone, password, verified, created_at, updated_at FROM users WHERE email = $1",
-		email,
+		normalizedEmail,
 	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден после верификации")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("ошибка при получении пользователя: %w", err)
+		return nil, fmt.Errorf(errGetUserFormat, err)
 	}
 
 	// Генерируем JWT токен
@@ -214,18 +289,25 @@ func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthRespo
 
 // Login аутентифицирует пользователя и выдает JWT токен.
 func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
+	email := normalizeEmail(req.Email)
+	if email == "" {
+		return nil, errors.New(errEmailRequired)
+	}
+
 	// Получаем пользователя из БД
 	var user models.User
-	err := s.db.QueryRow(
+	ctx := context.Background()
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT id, email, phone, password, verified, created_at, updated_at FROM users WHERE email = $1",
-		req.Email,
+		email,
 	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("ошибка при получении пользователя: %w", err)
+		return nil, fmt.Errorf(errGetUserFormat, err)
 	}
 
 	// Проверяем пароль
@@ -273,7 +355,9 @@ func (s *AuthService) Logout(token string) error {
 // GetUserByID получает пользователя по ID.
 func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 	var user models.User
-	err := s.db.QueryRow(
+	ctx := context.Background()
+	err := s.db.QueryRowContext(
+		ctx,
 		"SELECT id, email, phone, verified, created_at, updated_at FROM users WHERE id = $1",
 		userID,
 	).Scan(&user.ID, &user.Email, &user.Phone, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
@@ -282,7 +366,7 @@ func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 		return nil, fmt.Errorf("пользователь не найден")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("ошибка при получении пользователя: %w", err)
+		return nil, fmt.Errorf(errGetUserFormat, err)
 	}
 
 	return &models.User{
@@ -412,6 +496,79 @@ func (s *AuthService) sendSMSVerificationCode(ctx context.Context, phone, code s
 }
 
 // Вспомогательные функции
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func pendingUserKey(email string) string {
+	return fmt.Sprintf("pending:user:%s", normalizeEmail(email))
+}
+
+func (p *pendingUser) toModel(verified bool) *models.User {
+	if p == nil {
+		return nil
+	}
+	return &models.User{
+		ID:        p.ID,
+		Email:     p.Email,
+		Phone:     p.Phone,
+		Password:  p.Password,
+		Verified:  verified,
+		CreatedAt: p.CreatedAt,
+		UpdatedAt: p.OriginalUpdatedAt,
+	}
+}
+
+func (s *AuthService) savePendingUser(ctx context.Context, pending *pendingUser) error {
+	data, err := json.Marshal(pending)
+	if err != nil {
+		return fmt.Errorf("не удалось сериализовать данные пользователя для Redis: %w", err)
+	}
+	if err := s.redis.Set(ctx, pendingUserKey(pending.Email), data, pendingUserTTL); err != nil {
+		return fmt.Errorf("ошибка при сохранении данных регистрации в Redis: %w", err)
+	}
+	return nil
+}
+
+func (s *AuthService) loadPendingUser(ctx context.Context, email string) (*pendingUser, error) {
+	key := pendingUserKey(email)
+	exists, err := s.redis.Exists(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при проверке незавершенной регистрации: %w", err)
+	}
+	if !exists {
+		return nil, errPendingUserNotFound
+	}
+	raw, err := s.redis.Get(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении незавершенной регистрации: %w", err)
+	}
+	var pending pendingUser
+	if err := json.Unmarshal([]byte(raw), &pending); err != nil {
+		return nil, fmt.Errorf("не удалось распарсить данные незавершенной регистрации: %w", err)
+	}
+	return &pending, nil
+}
+
+func (s *AuthService) deletePendingUser(ctx context.Context, email string) {
+	if err := s.redis.Del(ctx, pendingUserKey(email)); err != nil {
+		s.logger.Warn("Не удалось удалить незавершенную регистрацию", zap.String("email", email), zap.Error(err))
+	}
+}
+
+func (s *AuthService) persistPendingUser(ctx context.Context, pending *pendingUser) error {
+	now := time.Now()
+	query := `
+		INSERT INTO users (id, email, phone, password, verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	_, err := s.db.ExecContext(ctx, query, pending.ID, pending.Email, pending.Phone, pending.Password, true, pending.CreatedAt, now)
+	if err != nil {
+		return fmt.Errorf("ошибка при сохранении пользователя после верификации: %w", err)
+	}
+	return nil
+}
 
 // generateID генерирует уникальный ID.
 func generateID() (string, error) {
