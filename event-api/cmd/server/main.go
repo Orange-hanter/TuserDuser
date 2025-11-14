@@ -62,6 +62,7 @@ func run(versionInfo VersionInfo) error {
 	logVersionInfo(versionInfo)
 
 	cfg := config.Load()
+	logConfig(cfg)
 
 	// Инициализируем подключение к БД
 	db, err := initDatabase(cfg)
@@ -220,6 +221,27 @@ func logVersionInfo(info VersionInfo) {
 		zap.String("commit", info.Commit),
 		zap.String("build_time", info.BuildTime),
 		zap.String("go_version", info.GoVersion),
+	)
+}
+
+func logConfig(cfg *config.Config) {
+	logger.Log.Info("configuration loaded",
+		zap.String("env", cfg.Env),
+		zap.String("port", cfg.Port),
+		zap.Int("shutdown_timeout", cfg.ShutdownTimeout),
+		zap.Int("cors_origins", len(cfg.CORSAllowedOrigins)),
+		zap.String("db_host", cfg.DBHost),
+		zap.String("db_name", cfg.DBName),
+		zap.Int("db_max_conn", cfg.DBMaxConn),
+		zap.Int("db_min_conn", cfg.DBMinConn),
+		zap.String("redis_host", cfg.RedisHost),
+		zap.Int("redis_db", cfg.RedisDB),
+		zap.String("sms_provider", cfg.SMSProvider),
+		zap.String("sms_from", cfg.SMSFrom),
+		zap.String("email_provider", cfg.EmailProvider),
+		zap.String("email_from", cfg.EmailFrom),
+		zap.String("smtp_host", cfg.SMTPHost),
+		zap.Int("smtp_port", cfg.SMTPPort),
 	)
 }
 
