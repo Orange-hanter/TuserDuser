@@ -1,3 +1,4 @@
+// Package middleware предоставляет промежуточное ПО для HTTP серверов.
 package middleware
 
 import (

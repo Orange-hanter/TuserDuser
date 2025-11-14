@@ -1,3 +1,4 @@
+// Package redis предоставляет функциональность для взаимодействия с Redis.
 package redis
 
 import (

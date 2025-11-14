@@ -22,7 +22,7 @@ type MailgunProvider struct {
 // NewMailgunProvider создает новый Mailgun провайдер.
 func NewMailgunProvider(cfg *Config, logger *zap.Logger) (*MailgunProvider, error) {
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("Mailgun API key не указан")
+		return nil, fmt.Errorf("mailgun api key не указан")
 	}
 	if cfg.From == "" {
 		return nil, fmt.Errorf("email отправителя не указан")
@@ -81,11 +81,15 @@ func (p *MailgunProvider) send(ctx context.Context, data url.Values) error {
 	if err != nil {
 		return fmt.Errorf("ошибка отправки запроса: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			p.logger.Error("failed to close Mailgun response body", zap.Error(cerr))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Mailgun API error (status %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("mailgun API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	return nil

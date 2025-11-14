@@ -13,8 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// SMSCProvider провайдер для SMSC.RU API.
-type SMSCProvider struct {
+// CProvider провайдер для SMSC.RU API.
+type CProvider struct {
 	client   *http.Client
 	logger   *zap.Logger
 	login    string
@@ -22,8 +22,8 @@ type SMSCProvider struct {
 	from     string
 }
 
-// SMSCResponse ответ от SMSC.RU API.
-type SMSCResponse struct {
+// CResponse ответ от SMSC.RU API.
+type CResponse struct {
 	Error   string  `json:"error"`
 	ID      int     `json:"id"`
 	Cnt     int     `json:"cnt"`
@@ -32,7 +32,7 @@ type SMSCResponse struct {
 }
 
 // NewSMSCProvider создает новый провайдер SMSC.RU.
-func NewSMSCProvider(cfg *Config, logger *zap.Logger) (*SMSCProvider, error) {
+func NewSMSCProvider(cfg *Config, logger *zap.Logger) (*CProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("логин для SMSC.RU не указан")
 	}
@@ -40,7 +40,7 @@ func NewSMSCProvider(cfg *Config, logger *zap.Logger) (*SMSCProvider, error) {
 		return nil, fmt.Errorf("пароль для SMSC.RU не указан")
 	}
 
-	return &SMSCProvider{
+	return &CProvider{
 		login:    cfg.APIKey,
 		password: cfg.APIToken,
 		from:     cfg.From,
@@ -52,7 +52,7 @@ func NewSMSCProvider(cfg *Config, logger *zap.Logger) (*SMSCProvider, error) {
 }
 
 // SendSMS отправляет SMS через SMSC.RU.
-func (p *SMSCProvider) SendSMS(ctx context.Context, phone, message string) error {
+func (p *CProvider) SendSMS(ctx context.Context, phone, message string) error {
 	// SMSC.RU API endpoint
 	apiURL := "https://smsc.ru/sys/send.php"
 
@@ -95,7 +95,7 @@ func (p *SMSCProvider) SendSMS(ctx context.Context, phone, message string) error
 	}
 
 	// Парсинг JSON ответа
-	var smscResp SMSCResponse
+	var smscResp CResponse
 	if err := json.Unmarshal(body, &smscResp); err != nil {
 		return fmt.Errorf("ошибка парсинга ответа: %w", err)
 	}
@@ -115,6 +115,6 @@ func (p *SMSCProvider) SendSMS(ctx context.Context, phone, message string) error
 }
 
 // GetName возвращает название провайдера.
-func (p *SMSCProvider) GetName() string {
+func (p *CProvider) GetName() string {
 	return "SMSC.RU"
 }

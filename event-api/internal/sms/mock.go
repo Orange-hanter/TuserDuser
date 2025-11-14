@@ -1,3 +1,4 @@
+// Package sms предоставляет функциональность для отправки SMS сообщений.
 package sms
 
 import (
@@ -21,7 +22,7 @@ func NewMockProvider(logger *zap.Logger) *MockProvider {
 }
 
 // SendSMS имитирует отправку SMS.
-func (p *MockProvider) SendSMS(ctx context.Context, phone, message string) error {
+func (p *MockProvider) SendSMS(_ context.Context, phone, message string) error {
 	p.logger.Info("📱 [MOCK SMS] Отправка сообщения",
 		zap.String("phone", phone),
 		zap.String("message", message),

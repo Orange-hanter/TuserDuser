@@ -13,16 +13,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// SMSRuProvider провайдер для SMS.RU API.
-type SMSRuProvider struct {
+// RuProvider провайдер для SMS.RU API.
+type RuProvider struct {
 	apiID  string
 	from   string
 	client *http.Client
 	logger *zap.Logger
 }
 
-// SMSRuResponse ответ от SMS.RU API.
-type SMSRuResponse struct {
+// RuResponse ответ от SMS.RU API.
+type RuResponse struct {
 	Status     string `json:"status"`
 	StatusCode int    `json:"status_code"`
 	SMS        map[string]struct {
@@ -34,12 +34,12 @@ type SMSRuResponse struct {
 }
 
 // NewSMSRuProvider создает новый провайдер SMS.RU.
-func NewSMSRuProvider(cfg *Config, logger *zap.Logger) (*SMSRuProvider, error) {
+func NewSMSRuProvider(cfg *Config, logger *zap.Logger) (*RuProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("API ключ для SMS.RU не указан")
 	}
 
-	return &SMSRuProvider{
+	return &RuProvider{
 		apiID: cfg.APIKey,
 		from:  cfg.From,
 		client: &http.Client{
@@ -50,7 +50,7 @@ func NewSMSRuProvider(cfg *Config, logger *zap.Logger) (*SMSRuProvider, error) {
 }
 
 // SendSMS отправляет SMS через SMS.RU.
-func (p *SMSRuProvider) SendSMS(ctx context.Context, phone, message string) error {
+func (p *RuProvider) SendSMS(ctx context.Context, phone, message string) error {
 	// SMS.RU API endpoint
 	apiURL := "https://sms.ru/sms/send"
 
@@ -91,7 +91,7 @@ func (p *SMSRuProvider) SendSMS(ctx context.Context, phone, message string) erro
 	}
 
 	// Парсинг JSON ответа
-	var smsResp SMSRuResponse
+	var smsResp RuResponse
 	if err := json.Unmarshal(body, &smsResp); err != nil {
 		return fmt.Errorf("ошибка парсинга ответа: %w", err)
 	}
@@ -110,6 +110,6 @@ func (p *SMSRuProvider) SendSMS(ctx context.Context, phone, message string) erro
 }
 
 // GetName возвращает название провайдера.
-func (p *SMSRuProvider) GetName() string {
+func (p *RuProvider) GetName() string {
 	return "SMS.RU"
 }

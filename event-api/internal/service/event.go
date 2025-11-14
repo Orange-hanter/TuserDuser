@@ -34,7 +34,7 @@ func (s *EventService) GetAllEvents(ctx context.Context) ([]*models.Event, error
 		ORDER BY start_time DESC
 	`
 
-	rows, err := s.db.Query(query)
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		s.logger.Error("Failed to query events", zap.Error(err))
 		return nil, fmt.Errorf("ошибка при получении событий: %w", err)
@@ -101,7 +101,7 @@ func (s *EventService) GetEventByID(ctx context.Context, id string) (*models.Eve
 	var event models.Event
 	var detailsJSON []byte
 
-	err := s.db.QueryRow(query, id).Scan(
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&event.ID,
 		&event.Type,
 		&event.StartTime,
@@ -149,7 +149,7 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 	var event models.Event
 	var returnedDetailsJSON []byte
 
-	err = s.db.QueryRow(query,
+	err = s.db.QueryRowContext(ctx, query,
 		req.Type,
 		req.StartTime,
 		req.EndTime,
@@ -196,7 +196,7 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 func (s *EventService) DeleteEvent(ctx context.Context, id string) error {
 	query := `DELETE FROM events WHERE id = $1`
 
-	result, err := s.db.Exec(query, id)
+	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
 		s.logger.Error("Failed to delete event", zap.String("id", id), zap.Error(err))
 		return fmt.Errorf("ошибка при удалении события: %w", err)

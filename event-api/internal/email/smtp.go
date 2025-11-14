@@ -42,6 +42,9 @@ func NewSMTPProvider(cfg *Config, logger *zap.Logger) (*SMTPProvider, error) {
 
 // SendEmail отправляет текстовый email через SMTP.
 func (p *SMTPProvider) SendEmail(ctx context.Context, to, subject, body string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	from := p.config.From
 	fromName := p.config.FromName
 	if fromName != "" {
@@ -62,15 +65,18 @@ func (p *SMTPProvider) SendEmail(ctx context.Context, to, subject, body string) 
 
 	// Для портов 465 (SSL) и 587 (TLS)
 	if p.config.SMTPPort == 465 {
-		return p.sendWithSSL(addr, to, msg)
+		return p.sendWithSSL(ctx, addr, to, msg)
 	}
 
 	// Для порта 587 или других с STARTTLS
-	return smtp.SendMail(addr, p.auth, p.config.From, []string{to}, msg)
+	return p.sendWithStartTLS(ctx, addr, to, msg)
 }
 
 // SendHTMLEmail отправляет HTML email через SMTP.
 func (p *SMTPProvider) SendHTMLEmail(ctx context.Context, to, subject, htmlBody string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	from := p.config.From
 	fromName := p.config.FromName
 	if fromName != "" {
@@ -91,29 +97,47 @@ func (p *SMTPProvider) SendHTMLEmail(ctx context.Context, to, subject, htmlBody 
 	addr := fmt.Sprintf("%s:%d", p.config.SMTPHost, p.config.SMTPPort)
 
 	if p.config.SMTPPort == 465 {
-		return p.sendWithSSL(addr, to, msg)
+		return p.sendWithSSL(ctx, addr, to, msg)
 	}
 
-	return smtp.SendMail(addr, p.auth, p.config.From, []string{to}, msg)
+	return p.sendWithStartTLS(ctx, addr, to, msg)
 }
 
 // sendWithSSL отправляет email через SSL соединение (порт 465).
-func (p *SMTPProvider) sendWithSSL(addr, to string, msg []byte) error {
+func (p *SMTPProvider) sendWithSSL(ctx context.Context, addr, to string, msg []byte) error {
 	tlsConfig := &tls.Config{
 		ServerName: p.config.SMTPHost,
+		MinVersion: tls.VersionTLS12,
 	}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	dialer := &tls.Dialer{Config: tlsConfig}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("ошибка подключения к SMTP серверу: %w", err)
 	}
-	defer conn.Close()
+
+	defer func() {
+		if cerr := conn.Close(); cerr != nil {
+			p.logger.Error("failed to close Mailgun response body", zap.Error(cerr))
+		}
+	}()
 
 	client, err := smtp.NewClient(conn, p.config.SMTPHost)
 	if err != nil {
 		return fmt.Errorf("ошибка создания SMTP клиента: %w", err)
 	}
-	defer client.Close()
+
+	defer func() {
+		if cerr := client.Close(); cerr != nil {
+			p.logger.Error("failed to close Mailgun response body", zap.Error(cerr))
+		}
+	}()
 
 	if p.auth != nil {
 		if err = client.Auth(p.auth); err != nil {
@@ -145,6 +169,13 @@ func (p *SMTPProvider) sendWithSSL(addr, to string, msg []byte) error {
 	}
 
 	return client.Quit()
+}
+
+func (p *SMTPProvider) sendWithStartTLS(ctx context.Context, addr, to string, msg []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return smtp.SendMail(addr, p.auth, p.config.From, []string{to}, msg)
 }
 
 // GetName возвращает имя провайдера.

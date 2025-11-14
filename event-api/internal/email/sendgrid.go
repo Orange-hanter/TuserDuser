@@ -105,7 +105,12 @@ func (p *SendGridProvider) send(ctx context.Context, to, subject, contentType, b
 	if err != nil {
 		return fmt.Errorf("ошибка отправки запроса: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			p.logger.Error("failed to close Mailgun response body", zap.Error(cerr))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		var errorResp map[string]interface{}

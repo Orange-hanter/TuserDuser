@@ -16,7 +16,7 @@ import (
 // @Produce plain
 // @Success 200 {string} string "OK"
 // @Router /health [get].
-func HealthCheck(w http.ResponseWriter, r *http.Request) {
+func HealthCheck(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("OK")); err != nil {
 		logger.Log.Error("failed to write health check response", zap.Error(err))

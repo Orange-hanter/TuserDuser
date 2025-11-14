@@ -1,3 +1,4 @@
+// Package service предоставляет сервисы для аутентификации и авторизации.
 package service
 
 import (

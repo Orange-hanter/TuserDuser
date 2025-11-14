@@ -53,7 +53,7 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 
-func main() {
+func run() error {
 	logger.Init()
 	defer func() {
 		if err := logger.Sync(); err != nil {
@@ -77,14 +77,8 @@ func main() {
 
 	db, err := database.NewDatabase(dbConfig, logger.Log)
 	if err != nil {
-		fmt.Println(logger.FormatError(
-			"Failed to Connect to Database",
-			err,
-			"Host: "+cfg.DBHost,
-			"Port: "+cfg.DBPort,
-			"Database: "+cfg.DBName,
-		))
-		os.Exit(1)
+		return fmt.Errorf("failed to connect to database (host=%s, port=%s, db=%s): %w",
+			cfg.DBHost, cfg.DBPort, cfg.DBName, err)
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -95,13 +89,7 @@ func main() {
 	// Запускаем миграции
 	migrator := migrations.NewMigrator(db.DB, logger.Log)
 	if err := migrator.RunMigrations(); err != nil {
-		fmt.Println(logger.FormatError(
-			"Migration Execution Failed",
-			err,
-			"Check your database connection",
-			"Ensure all migration files are valid",
-		))
-		os.Exit(1)
+		return fmt.Errorf("migration execution failed: %w", err)
 	}
 
 	fmt.Println(logger.FormatSuccess(
@@ -121,13 +109,8 @@ func main() {
 
 	redis, err := redisClient.NewClient(redisConfig, logger.Log)
 	if err != nil {
-		fmt.Println(logger.FormatError(
-			"Failed to Connect to Redis",
-			err,
-			"Host: "+cfg.RedisHost,
-			"Port: "+cfg.RedisPort,
-		))
-		os.Exit(1)
+		return fmt.Errorf("failed to connect to Redis (host=%s, port=%s): %w",
+			cfg.RedisHost, cfg.RedisPort, err)
 	}
 	defer func() {
 		if err := redis.Close(); err != nil {
@@ -145,12 +128,7 @@ func main() {
 
 	smsService, err := sms.NewService(smsConfig, logger.Log)
 	if err != nil {
-		fmt.Println(logger.FormatError(
-			"Failed to Initialize SMS Service",
-			err,
-			"Provider: "+cfg.SMSProvider,
-		))
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize SMS service (provider=%s): %w", cfg.SMSProvider, err)
 	}
 
 	// Инициализируем Email сервис
@@ -167,12 +145,7 @@ func main() {
 
 	emailService, err := email.NewService(emailConfig, logger.Log)
 	if err != nil {
-		fmt.Println(logger.FormatError(
-			"Failed to Initialize Email Service",
-			err,
-			"Provider: "+cfg.EmailProvider,
-		))
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize email service (provider=%s): %w", cfg.EmailProvider, err)
 	}
 
 	logger.Log.Info("✅ Email service initialized",
@@ -239,8 +212,12 @@ func main() {
 
 	// Создаем HTTP сервер с явными настройками
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: handler,
+		Addr:              ":" + cfg.Port,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	// Канал для сигналов graceful shutdown
@@ -258,13 +235,7 @@ func main() {
 	// Запуск сервера в горутине
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Println(logger.FormatError(
-				"Server Launch Failed",
-				err,
-				"Port: "+cfg.Port,
-				"Environment: "+cfg.Env,
-			))
-			os.Exit(1)
+			logger.Log.Error("server failed", zap.Error(err))
 		}
 	}()
 
@@ -285,12 +256,8 @@ func main() {
 
 	// Graceful shutdown сервера
 	if err := srv.Shutdown(ctx); err != nil {
-		fmt.Println(logger.FormatError(
-			"Server Shutdown Failed",
-			err,
-			"Forced shutdown may cause data loss",
-		))
-		os.Exit(1)
+		logger.Log.Error("Server Shutdown Failed", zap.Error(err))
+		return err
 	}
 
 	fmt.Println(logger.FormatSuccess(
@@ -302,5 +269,13 @@ func main() {
 	// Синхронизация логгера перед выходом
 	if err := logger.Sync(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+	}
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }

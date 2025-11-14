@@ -1,3 +1,4 @@
+// Package models содержит модели данных, используемые в системе аутентификации.
 package models
 
 import "time"

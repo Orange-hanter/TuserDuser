@@ -1,11 +1,13 @@
+// Package database предоставляет функциональность для взаимодействия с базой данных PostgreSQL.
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // register postgres driver
 	"go.uber.org/zap"
 )
 
@@ -50,25 +52,12 @@ func NewDatabase(cfg *Config, logger *zap.Logger) (*Database, error) {
 	db.SetMaxIdleConns(cfg.MinConn)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// Проверка подключения
-	ctx := make(chan error, 1)
-	go func() {
-		if err := db.Ping(); err != nil {
-			ctx <- fmt.Errorf("failed to ping database: %w", err)
-		}
-		ctx <- nil
-	}()
-
-	// Ждем максимум 5 секунд
-	select {
-	case err := <-ctx:
-		if err != nil {
-			logger.Error("Ошибка при проверке подключения", zap.Error(err))
-			return nil, err
-		}
-	case <-time.After(5 * time.Second):
-		logger.Error("Timeout при подключении к БД")
-		return nil, fmt.Errorf("database connection timeout")
+	// Проверка подключения с таймаутом
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		logger.Error("Ошибка при проверке подключения", zap.Error(err))
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	logger.Info("✅ Успешно подключились к БД",
@@ -94,29 +83,29 @@ func (d *Database) Close() error {
 
 // Health проверяет здоровье подключения к БД.
 func (d *Database) Health() error {
-	return d.DB.Ping()
+	return d.DB.PingContext(context.Background())
 }
 
 // Query выполняет SELECT запрос.
 func (d *Database) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	d.Logger.Debug("Выполняем запрос", zap.String("query", query))
-	return d.DB.Query(query, args...)
+	return d.DB.QueryContext(context.Background(), query, args...)
 }
 
 // QueryRow выполняет SELECT запрос, возвращающий одну строку.
 func (d *Database) QueryRow(query string, args ...interface{}) *sql.Row {
 	d.Logger.Debug("Выполняем QueryRow", zap.String("query", query))
-	return d.DB.QueryRow(query, args...)
+	return d.DB.QueryRowContext(context.Background(), query, args...)
 }
 
 // Exec выполняет INSERT/UPDATE/DELETE запрос.
 func (d *Database) Exec(query string, args ...interface{}) (sql.Result, error) {
 	d.Logger.Debug("Выполняем Exec", zap.String("query", query))
-	return d.DB.Exec(query, args...)
+	return d.DB.ExecContext(context.Background(), query, args...)
 }
 
 // BeginTx начинает новую транзакцию.
 func (d *Database) BeginTx() (*sql.Tx, error) {
 	d.Logger.Debug("Начинаем транзакцию")
-	return d.DB.Begin()
+	return d.DB.BeginTx(context.Background(), nil)
 }
