@@ -25,6 +25,7 @@ type Config struct {
 	SMTPPort     int
 	SMTPUsername string
 	SMTPPassword string
+	UseSSL       bool
 
 	// Общие настройки
 	From     string // Email отправителя

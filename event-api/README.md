@@ -43,7 +43,7 @@ REST API для управления событиями с аутентифик�
 
 ## 📦 Зависимости
 
-```
+```text
 github.com/go-chi/chi/v5 v5.2.3         # HTTP роутер
 github.com/golang-jwt/jwt/v5 v5.3.0     # JWT
 golang.org/x/crypto v0.43.0             # Bcrypt
@@ -58,7 +58,7 @@ github.com/redis/go-redis/v9 v9.x       # Redis клиент
 
 ## 🏗️ Структура проекта
 
-```
+```text
 event-api/
 ├── cmd/
 │   └── server/
@@ -175,14 +175,16 @@ make docker-run
 ## 📖 Swagger документация
 
 Интерактивная API документация доступна по адресу:
-**http://localhost:8080/swagger/index.html**
+**<http://localhost:8080/swagger/index.html>**
 
 Для генерации обновленной документации:
+
 ```bash
 make swagger
 ```
 
 Документация включает:
+
 - ✅ Все доступные endpoints
 - ✅ Модели запросов и ответов
 - ✅ Примеры использования
@@ -197,6 +199,7 @@ API использует семантическое версионировани
 - **Будущие версии**: Новые версии будут добавляться как `v2`, `v3` и т.д.
 
 Пример:
+
 ```
 GET /v1/api/auth/me     # Текущая версия
 GET /v2/api/auth/me     # Будущая версия (когда будет готова)
@@ -286,12 +289,20 @@ pkill -TERM -f "bin/server"
 Приложение использует Zap для структурированного логирования:
 
 ```json
-{"level":"info","ts":1761425592.289552,"caller":"server/main.go:57","msg":"Сервер запущен","port":":8080","env":"development"}
+{
+  "level": "info",
+  "ts": 1761425592.289552,
+  "caller": "server/main.go:57",
+  "msg": "Сервер запущен",
+  "port": ":8080",
+  "env": "development"
+}
 ```
 
 ## � Хранилища данных
 
 ### PostgreSQL
+
 - **Пользователи**: id, email, phone, password (bcrypt), verified, timestamps
 - **События**: id, type, start_time, end_time, duration, place, price_type, need_registration, details (JSONB)
 - **Миграции**: Автоматическое применение схемы при старте
@@ -299,6 +310,7 @@ pkill -TERM -f "bin/server"
 См. [DOC/DATABASE.md](DOC/DATABASE.md) для подробностей
 
 ### Redis
+
 - **Коды верификации**: `verify:{email}` → `{code}` (TTL: 10 минут)
 - **Token Blacklist**: `blacklist:{jwt}` → `"1"` (TTL: время жизни токена)
 - **Автоматическое удаление**: Истекшие ключи удаляются автоматически
@@ -351,6 +363,7 @@ make check
 ```
 
 Подробнее:
+
 - 📖 [CI/CD Quick Start](./CI_CD_QUICKSTART.md)
 - 📚 [Полная документация CI/CD](./CI_CD.md)
 
@@ -398,6 +411,7 @@ MIT
 ## 👨‍💻 Автор
 
 Event API Team
+
 ## �🚧 Планы развития
 
 - [x] Интеграция с БД (PostgreSQL) ✅

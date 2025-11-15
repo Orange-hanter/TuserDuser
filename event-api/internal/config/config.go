@@ -55,6 +55,7 @@ type Config struct {
 	SMTPPort      int
 	SMTPUsername  string
 	SMTPPassword  string
+	SMTPUseSSL    bool
 }
 
 // Load загружает конфигурацию из переменных окружения.
@@ -107,6 +108,7 @@ func Load() *Config {
 		SMTPPort:      getEnvAsInt("SMTP_PORT", 587),
 		SMTPUsername:  getEnv("SMTP_USERNAME", ""),
 		SMTPPassword:  getEnv("SMTP_PASSWORD", ""),
+		SMTPUseSSL:    getEnvAsBool("SMTP_USE_SSL", false),
 	}
 }
 
@@ -121,6 +123,18 @@ func getEnvAsInt(key string, fallback int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
+		}
+	}
+	return fallback
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	if value := os.Getenv(key); value != "" {
+		switch strings.ToLower(value) {
+		case "1", "true", "t", "yes", "y", "on":
+			return true
+		case "0", "false", "f", "no", "n", "off":
+			return false
 		}
 	}
 	return fallback

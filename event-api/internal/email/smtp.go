@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -14,6 +15,7 @@ type SMTPProvider struct {
 	config *Config
 	logger *zap.Logger
 	auth   smtp.Auth
+	useSSL bool
 }
 
 // NewSMTPProvider создает новый SMTP провайдер.
@@ -28,6 +30,13 @@ func NewSMTPProvider(cfg *Config, logger *zap.Logger) (*SMTPProvider, error) {
 		return nil, fmt.Errorf("email отправителя не указан")
 	}
 
+	host, scheme := normalizeSMTPHost(cfg.SMTPHost)
+	if host == "" {
+		return nil, fmt.Errorf("SMTP host не указан")
+	}
+	cfg.SMTPHost = host
+	useSSL := cfg.UseSSL || scheme == "smtps" || cfg.SMTPPort == 465
+
 	var auth smtp.Auth
 	if cfg.SMTPUsername != "" && cfg.SMTPPassword != "" {
 		auth = smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
@@ -37,6 +46,7 @@ func NewSMTPProvider(cfg *Config, logger *zap.Logger) (*SMTPProvider, error) {
 		config: cfg,
 		logger: logger,
 		auth:   auth,
+		useSSL: useSSL,
 	}, nil
 }
 
@@ -63,8 +73,7 @@ func (p *SMTPProvider) SendEmail(ctx context.Context, to, subject, body string) 
 
 	addr := fmt.Sprintf("%s:%d", p.config.SMTPHost, p.config.SMTPPort)
 
-	// Для портов 465 (SSL) и 587 (TLS)
-	if p.config.SMTPPort == 465 {
+	if p.useSSL {
 		return p.sendWithSSL(ctx, addr, to, msg)
 	}
 
@@ -96,7 +105,7 @@ func (p *SMTPProvider) SendHTMLEmail(ctx context.Context, to, subject, htmlBody 
 
 	addr := fmt.Sprintf("%s:%d", p.config.SMTPHost, p.config.SMTPPort)
 
-	if p.config.SMTPPort == 465 {
+	if p.useSSL {
 		return p.sendWithSSL(ctx, addr, to, msg)
 	}
 
@@ -124,7 +133,7 @@ func (p *SMTPProvider) sendWithSSL(ctx context.Context, addr, to string, msg []b
 
 	defer func() {
 		if cerr := conn.Close(); cerr != nil {
-			p.logger.Error("failed to close Mailgun response body", zap.Error(cerr))
+			p.logger.Error("failed to close SMTP TLS connection", zap.Error(cerr))
 		}
 	}()
 
@@ -135,7 +144,7 @@ func (p *SMTPProvider) sendWithSSL(ctx context.Context, addr, to string, msg []b
 
 	defer func() {
 		if cerr := client.Close(); cerr != nil {
-			p.logger.Error("failed to close Mailgun response body", zap.Error(cerr))
+			p.logger.Error("failed to close SMTP client", zap.Error(cerr))
 		}
 	}()
 
@@ -181,4 +190,19 @@ func (p *SMTPProvider) sendWithStartTLS(ctx context.Context, addr, to string, ms
 // GetName возвращает имя провайдера.
 func (p *SMTPProvider) GetName() string {
 	return "smtp"
+}
+
+func normalizeSMTPHost(host string) (string, string) {
+	host = strings.TrimSpace(host)
+	scheme := ""
+	switch {
+	case strings.HasPrefix(host, "smtps://"):
+		scheme = "smtps"
+		host = strings.TrimPrefix(host, "smtps://")
+	case strings.HasPrefix(host, "smtp://"):
+		scheme = "smtp"
+		host = strings.TrimPrefix(host, "smtp://")
+	}
+	host = strings.TrimSuffix(host, "/")
+	return host, scheme
 }

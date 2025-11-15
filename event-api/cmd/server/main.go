@@ -205,7 +205,7 @@ func parseVersionFlag() bool {
 
 func versionHandler(info VersionInfo) http.HandlerFunc {
 	response := info
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			logger.Log.Error("failed to write version response", zap.Error(err))
@@ -328,6 +328,7 @@ func initEmailService(cfg *config.Config) (*email.Service, error) {
 		SMTPPort:     cfg.SMTPPort,
 		SMTPUsername: cfg.SMTPUsername,
 		SMTPPassword: cfg.SMTPPassword,
+		UseSSL:       cfg.SMTPUseSSL,
 		From:         cfg.EmailFrom,
 		FromName:     cfg.EmailFromName,
 	}
