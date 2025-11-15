@@ -67,6 +67,12 @@ func AuthMiddleware(authService *service.AuthService) func(next http.Handler) ht
 			if email, ok := claims["email"].(string); ok {
 				r.Header.Set("X-User-Email", email)
 			}
+			if role, ok := claims["role"].(string); ok {
+				r.Header.Set("X-User-Role", role)
+			} else {
+				// По умолчанию присваиваем роль user, если она не указана в токене
+				r.Header.Set("X-User-Role", models.RoleUser)
+			}
 
 			next.ServeHTTP(w, r)
 		})

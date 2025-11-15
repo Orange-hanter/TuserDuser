@@ -15,11 +15,13 @@ import (
 )
 
 type mockAuthService struct {
-	registerFn func(*models.RegisterRequest) (*models.User, string, error)
-	verifyFn   func(string, string) (*models.AuthResponse, error)
-	loginFn    func(*models.LoginRequest) (*models.AuthResponse, error)
-	logoutFn   func(string) error
-	getUserFn  func(string) (*models.User, error)
+	registerFn    func(*models.RegisterRequest) (*models.User, string, error)
+	verifyFn      func(string, string) (*models.AuthResponse, error)
+	loginFn       func(*models.LoginRequest) (*models.AuthResponse, error)
+	logoutFn      func(string) error
+	getUserFn     func(string) (*models.User, error)
+	updateRoleFn  func(string, string) error
+	getAllUsersFn func() ([]*models.User, error)
 }
 
 func (m *mockAuthService) Register(req *models.RegisterRequest) (*models.User, string, error) {
@@ -55,6 +57,20 @@ func (m *mockAuthService) GetUserByID(userID string) (*models.User, error) {
 		return m.getUserFn(userID)
 	}
 	return nil, errors.New("getUser not implemented")
+}
+
+func (m *mockAuthService) UpdateUserRole(userID, role string) error {
+	if m.updateRoleFn != nil {
+		return m.updateRoleFn(userID, role)
+	}
+	return errors.New("updateRole not implemented")
+}
+
+func (m *mockAuthService) GetAllUsers() ([]*models.User, error) {
+	if m.getAllUsersFn != nil {
+		return m.getAllUsersFn()
+	}
+	return nil, errors.New("getAllUsers not implemented")
 }
 
 func TestRegisterHandler(t *testing.T) {

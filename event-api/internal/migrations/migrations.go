@@ -3,11 +3,15 @@ package migrations
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Migrator управляет миграциями БД.
@@ -56,6 +60,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createEventsReviewTables,
 			down: dropEventsReviewTables,
 		},
+		{
+			name: "005_add_role_to_users",
+			up:   addRoleToUsers,
+			down: dropRoleFromUsers,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -70,6 +79,12 @@ func (m *Migrator) RunMigrations() error {
 	}
 
 	m.logger.Info("✅ Все миграции успешно выполнены")
+
+	// After applying schema migrations, ensure default admin exists (idempotent)
+	if err := m.seedDefaultAdmin(); err != nil {
+		m.logger.Warn("Не удалось выполнить инициализацию администратора", zap.Error(err))
+		// Do not fail startup because of seeding; just warn.
+	}
 	return nil
 }
 
@@ -315,6 +330,24 @@ DROP TABLE IF EXISTS events_rejected;
 DROP TABLE IF EXISTS events_pending;
 `
 
+// addRoleToUsers добавляет колонку role в таблицу users.
+const addRoleToUsers = `
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'
+CHECK (role IN ('user', 'creator', 'support', 'admin'));
+
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+-- Установим роль 'user' для всех существующих пользователей
+UPDATE users SET role = 'user' WHERE role IS NULL OR role = '';
+`
+
+// dropRoleFromUsers удаляет колонку role из таблицы users.
+const dropRoleFromUsers = `
+DROP INDEX IF EXISTS idx_users_role;
+ALTER TABLE users DROP COLUMN IF EXISTS role;
+`
+
 // Rollback откатывает все миграции (только для разработки!)
 func (m *Migrator) Rollback() error {
 	m.logger.Warn("⚠️  Откатываем все миграции (только для разработки!)")
@@ -375,4 +408,101 @@ func rollbackTx(tx *sql.Tx, logger *zap.Logger) {
 	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 		logger.Error("transaction rollback failed", zap.Error(err))
 	}
+}
+
+// seedDefaultAdmin creates a default admin user if none exists yet. Idempotent.
+func (m *Migrator) seedDefaultAdmin() error {
+	ctx := context.Background()
+
+	var exists bool
+	if err := m.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE role = 'admin')").Scan(&exists); err != nil {
+		return fmt.Errorf("failed to check existing admin: %w", err)
+	}
+	if exists {
+		m.logger.Info("👮 Администратор уже существует — пропускаем инициализацию")
+		return nil
+	}
+
+	// Read defaults from environment, with sensible fallbacks
+	email := os.Getenv("ADMIN_EMAIL")
+	if email == "" {
+		email = "admin@example.com"
+	}
+	phone := os.Getenv("ADMIN_PHONE")
+	if phone == "" {
+		phone = "+70000000000"
+	}
+	password := os.Getenv("ADMIN_PASSWORD")
+	generatedPassword := false
+	if password == "" {
+		// Generate a random 16-hex password
+		b := make([]byte, 12)
+		if _, err := rand.Read(b); err == nil {
+			password = "Adm_" + hex.EncodeToString(b)
+			generatedPassword = true
+		} else {
+			// Fallback hardcoded, user should change it ASAP
+			password = "Adm_ChangeMe123!"
+			generatedPassword = true
+		}
+	}
+
+	// Hash password
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash default admin password: %w", err)
+	}
+
+	// Generate textual ID
+	idBytes := make([]byte, 16)
+	if _, err := rand.Read(idBytes); err != nil {
+		return fmt.Errorf("failed to generate admin id: %w", err)
+	}
+	adminID := hex.EncodeToString(idBytes)
+
+	// Try to insert. If email conflicts but no admin exists, we'll attempt a fallback email once.
+	inserted, err := m.tryInsertAdmin(ctx, adminID, email, phone, string(hash))
+	if err != nil {
+		return err
+	}
+	if !inserted {
+		// Re-check if an admin appeared concurrently
+		if err := m.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE role = 'admin')").Scan(&exists); err == nil && exists {
+			m.logger.Info("👮 Администратор был создан параллельно — пропускаем")
+			return nil
+		}
+		// Fallback email to avoid collision
+		fallbackEmail := fmt.Sprintf("admin+%s@local", adminID[:6])
+		inserted2, err2 := m.tryInsertAdmin(ctx, adminID, fallbackEmail, phone, string(hash))
+		if err2 != nil {
+			return err2
+		}
+		if !inserted2 {
+			return fmt.Errorf("could not create default admin: email conflicts; set unique ADMIN_EMAIL env var")
+		}
+		email = fallbackEmail
+	}
+
+	// Log credentials info (password only if it was generated here)
+	fields := []zap.Field{zap.String("email", email), zap.String("phone", phone)}
+	if generatedPassword {
+		fields = append(fields, zap.String("password", password))
+		m.logger.Warn("🚨 Создан администратор по умолчанию. ОБЯЗАТЕЛЬНО смените пароль при первом входе!", fields...)
+	} else {
+		m.logger.Info("✅ Администратор по умолчанию создан (использованы переменные окружения)", fields...)
+	}
+	return nil
+}
+
+func (m *Migrator) tryInsertAdmin(ctx context.Context, id, email, phone, passwordHash string) (bool, error) {
+	res, err := m.db.ExecContext(ctx, `
+		INSERT INTO users (id, email, phone, password, role, verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'admin', TRUE, NOW(), NOW())
+		ON CONFLICT (email) DO NOTHING
+	`, id, email, phone, passwordHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to insert default admin: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	return rows > 0, nil
 }

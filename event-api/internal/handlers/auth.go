@@ -18,6 +18,8 @@ type AuthService interface {
 	Login(*models.LoginRequest) (*models.AuthResponse, error)
 	Logout(token string) error
 	GetUserByID(userID string) (*models.User, error)
+	UpdateUserRole(userID, role string) error
+	GetAllUsers() ([]*models.User, error)
 }
 
 // AuthHandler управляет всеми auth endpoints.
@@ -236,4 +238,80 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, user)
+}
+
+// UpdateUserRole обновляет роль пользователя (только для администраторов)
+// @Summary Обновить роль пользователя
+// @Description Позволяет администратору назначить роль creator или support пользователю
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.UpdateRoleRequest true "Данные для обновления роли"
+// @Success 200 {object} models.User "Обновленный пользователь"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Failure 403 {object} models.ErrorResponse "Недостаточно прав"
+// @Failure 404 {object} models.ErrorResponse "Пользователь не найден"
+// @Router /api/admin/users/role [put]
+func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	var req models.UpdateRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге UpdateRoleRequest", zap.Error(err))
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
+		return
+	}
+
+	// Валидация роли
+	validRoles := map[string]bool{
+		models.RoleUser:    true,
+		models.RoleCreator: true,
+		models.RoleSupport: true,
+		models.RoleAdmin:   true,
+	}
+
+	if !validRoles[req.Role] {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Недопустимая роль")
+		return
+	}
+
+	if err := h.authService.UpdateUserRole(req.UserID, req.Role); err != nil {
+		logger.Log.Error("Ошибка при обновлении роли", zap.Error(err))
+		respondWithError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+
+	user, err := h.authService.GetUserByID(req.UserID)
+	if err != nil {
+		logger.Log.Error("Ошибка при получении обновленного пользователя", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при получении пользователя")
+		return
+	}
+
+	logger.Log.Info("Роль пользователя обновлена",
+		zap.String("user_id", req.UserID),
+		zap.String("new_role", req.Role),
+	)
+
+	respondWithJSON(w, http.StatusOK, user)
+}
+
+// GetAllUsers возвращает список всех пользователей (только для администраторов)
+// @Summary Получить список всех пользователей
+// @Description Возвращает список всех пользователей системы
+// @Tags admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} models.User "Список пользователей"
+// @Failure 403 {object} models.ErrorResponse "Недостаточно прав"
+// @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
+// @Router /api/admin/users [get]
+func (h *AuthHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.authService.GetAllUsers()
+	if err != nil {
+		logger.Log.Error("Ошибка при получении списка пользователей", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при получении пользователей")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, users)
 }

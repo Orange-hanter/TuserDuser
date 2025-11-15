@@ -347,22 +347,34 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 	r.Get("/version", versionHandler(versionInfo))
 
 	r.Route("/v1", func(r chi.Router) {
+		// Public auth endpoints
 		r.Post("/api/auth/register", authHandler.Register)
 		r.Post("/api/auth/verify", authHandler.Verify)
 		r.Post("/api/auth/login", authHandler.Login)
-
 		r.Post("/api/auth/logout", authHandler.Logout)
-		r.With(middleware.AuthMiddleware(authService)).Get("/api/auth/me", authHandler.GetMe)
 
+		// Public event endpoints (read-only, no auth required)
 		r.Get("/api/events", eventHandler.GetApprovedEvents)
 		r.Get("/api/events/approved", eventHandler.GetApprovedEvents)
 		r.Get("/api/events/{id}", eventHandler.GetEventByID)
 
+		// Authenticated user endpoints
 		authenticated := r.With(middleware.AuthMiddleware(authService))
-		authenticated.Post("/api/events", eventHandler.CreateEvent)
-		authenticated.Delete("/api/events/{id}", eventHandler.DeleteEvent)
-		authenticated.Get("/api/events/pending", eventHandler.GetPendingEvents)
-		authenticated.Post("/api/events/{id}/review", eventHandler.ReviewPendingEvent)
+		authenticated.Get("/api/auth/me", authHandler.GetMe)
+
+		// Creator/Admin: Create events (requires creator or admin role)
+		creatorOrAdmin := authenticated.With(middleware.RequireCreatorOrAdmin)
+		creatorOrAdmin.Post("/api/events", eventHandler.CreateEvent)
+		creatorOrAdmin.Delete("/api/events/{id}", eventHandler.DeleteEvent)
+
+		// Admin only: Event moderation endpoints
+		adminOnly := authenticated.With(middleware.RequireAdmin)
+		adminOnly.Get("/api/events/pending", eventHandler.GetPendingEvents)
+		adminOnly.Post("/api/events/{id}/review", eventHandler.ReviewPendingEvent)
+
+		// Admin only: User management
+		adminOnly.Get("/api/admin/users", authHandler.GetAllUsers)
+		adminOnly.Put("/api/admin/users/role", authHandler.UpdateUserRole)
 	})
 
 	r.Get("/swagger/*", httpSwagger.Handler(

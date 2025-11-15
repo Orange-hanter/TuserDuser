@@ -3,6 +3,14 @@ package models
 
 import "time"
 
+// Роли пользователей в системе
+const (
+	RoleUser    = "user"    // Обычный пользователь - может просматривать события
+	RoleCreator = "creator" // Создатель - может создавать события
+	RoleSupport = "support" // Поддержка - зарезервировано для будущего функционала
+	RoleAdmin   = "admin"   // Администратор - полные права
+)
+
 // User представляет пользователя в системе.
 type User struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -11,6 +19,7 @@ type User struct {
 	Email     string    `json:"email"`
 	Phone     string    `json:"phone"`
 	Password  string    `json:"-"`
+	Role      string    `json:"role"`
 	Verified  bool      `json:"verified"`
 }
 
@@ -66,6 +75,7 @@ type Claims struct {
 	UserID   string `json:"user_id"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
+	Role     string `json:"role"`
 	Verified bool   `json:"verified"`
 	Exp      int64  `json:"exp"`
 	Iat      int64  `json:"iat"`

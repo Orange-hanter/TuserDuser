@@ -55,6 +55,7 @@ type pendingUser struct {
 	Email             string    `json:"email"`
 	Phone             string    `json:"phone"`
 	Password          string    `json:"password"`
+	Role              string    `json:"role"`
 	VerificationType  string    `json:"verification_type"`
 	VerificationCode  string    `json:"verification_code"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -162,6 +163,7 @@ func (s *AuthService) buildPendingUser(req *models.RegisterRequest, email string
 		Email:             email,
 		Phone:             strings.TrimSpace(req.Phone),
 		Password:          string(hashedPassword),
+		Role:              models.RoleUser,
 		VerificationType:  verificationType,
 		VerificationCode:  code,
 		CreatedAt:         time.Now(),
@@ -256,9 +258,9 @@ func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthRespo
 	ctx := context.Background()
 	err := s.db.QueryRowContext(
 		ctx,
-		"SELECT id, email, phone, password, verified, created_at, updated_at FROM users WHERE email = $1",
+		"SELECT id, email, phone, password, role, verified, created_at, updated_at FROM users WHERE email = $1",
 		normalizedEmail,
-	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Role, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден после верификации")
@@ -279,6 +281,7 @@ func (s *AuthService) VerifyAndIssueToken(email, code string) (*models.AuthRespo
 			ID:        user.ID,
 			Email:     user.Email,
 			Phone:     user.Phone,
+			Role:      user.Role,
 			Verified:  user.Verified,
 			CreatedAt: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
@@ -300,9 +303,9 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 	ctx := context.Background()
 	err := s.db.QueryRowContext(
 		ctx,
-		"SELECT id, email, phone, password, verified, created_at, updated_at FROM users WHERE email = $1",
+		"SELECT id, email, phone, password, role, verified, created_at, updated_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.Phone, &user.Password, &user.Role, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден")
@@ -329,6 +332,7 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 			ID:        user.ID,
 			Email:     user.Email,
 			Phone:     user.Phone,
+			Role:      user.Role,
 			Verified:  user.Verified,
 			CreatedAt: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
@@ -359,9 +363,9 @@ func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 	ctx := context.Background()
 	err := s.db.QueryRowContext(
 		ctx,
-		"SELECT id, email, phone, verified, created_at, updated_at FROM users WHERE id = $1",
+		"SELECT id, email, phone, role, verified, created_at, updated_at FROM users WHERE id = $1",
 		userID,
-	).Scan(&user.ID, &user.Email, &user.Phone, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.Verified, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("пользователь не найден")
@@ -374,6 +378,7 @@ func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 		ID:        user.ID,
 		Email:     user.Email,
 		Phone:     user.Phone,
+		Role:      user.Role,
 		Verified:  user.Verified,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
@@ -394,6 +399,64 @@ func (s *AuthService) IsTokenBlacklisted(token string) bool {
 	return exists
 }
 
+// UpdateUserRole обновляет роль пользователя.
+func (s *AuthService) UpdateUserRole(userID, role string) error {
+	ctx := context.Background()
+	query := `UPDATE users SET role = $1, updated_at = $2 WHERE id = $3`
+
+	result, err := s.db.ExecContext(ctx, query, role, time.Now(), userID)
+	if err != nil {
+		s.logger.Error("Ошибка при обновлении роли", zap.String("user_id", userID), zap.Error(err))
+		return fmt.Errorf("ошибка при обновлении роли: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("ошибка при проверке обновления: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("пользователь не найден")
+	}
+
+	s.logger.Info("Роль пользователя обновлена", zap.String("user_id", userID), zap.String("role", role))
+	return nil
+}
+
+// GetAllUsers возвращает список всех пользователей.
+func (s *AuthService) GetAllUsers() ([]*models.User, error) {
+	ctx := context.Background()
+	query := `SELECT id, email, phone, role, verified, created_at, updated_at FROM users ORDER BY created_at DESC`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		s.logger.Error("Ошибка при получении списка пользователей", zap.Error(err))
+		return nil, fmt.Errorf("ошибка при получении пользователей: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			s.logger.Error("Ошибка при закрытии rows", zap.Error(err))
+		}
+	}()
+
+	var users []*models.User
+	for rows.Next() {
+		var user models.User
+		if err := rows.Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.Verified, &user.CreatedAt, &user.UpdatedAt); err != nil {
+			s.logger.Error("Ошибка при сканировании пользователя", zap.Error(err))
+			continue
+		}
+		users = append(users, &user)
+	}
+
+	if err := rows.Err(); err != nil {
+		s.logger.Error("Ошибка при итерации пользователей", zap.Error(err))
+		return nil, fmt.Errorf("ошибка при обработке пользователей: %w", err)
+	}
+
+	return users, nil
+}
+
 // GenerateJWT генерирует JWT токен.
 func (s *AuthService) GenerateJWT(user *models.User) (string, time.Time, error) {
 	expiresAt := time.Now().Add(time.Duration(s.cfg.JWTExpiration) * time.Second)
@@ -402,6 +465,7 @@ func (s *AuthService) GenerateJWT(user *models.User) (string, time.Time, error) 
 		"user_id":  user.ID,
 		"email":    user.Email,
 		"phone":    user.Phone,
+		"role":     user.Role,
 		"verified": user.Verified,
 		"exp":      expiresAt.Unix(),
 		"iat":      time.Now().Unix(),
@@ -515,6 +579,7 @@ func (p *pendingUser) toModel(verified bool) *models.User {
 		Email:     p.Email,
 		Phone:     p.Phone,
 		Password:  p.Password,
+		Role:      p.Role,
 		Verified:  verified,
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.OriginalUpdatedAt,
@@ -561,10 +626,10 @@ func (s *AuthService) deletePendingUser(ctx context.Context, email string) {
 func (s *AuthService) persistPendingUser(ctx context.Context, pending *pendingUser) error {
 	now := time.Now()
 	query := `
-		INSERT INTO users (id, email, phone, password, verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (id, email, phone, password, role, verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
-	_, err := s.db.ExecContext(ctx, query, pending.ID, pending.Email, pending.Phone, pending.Password, true, pending.CreatedAt, now)
+	_, err := s.db.ExecContext(ctx, query, pending.ID, pending.Email, pending.Phone, pending.Password, pending.Role, true, pending.CreatedAt, now)
 	if err != nil {
 		return fmt.Errorf("ошибка при сохранении пользователя после верификации: %w", err)
 	}
