@@ -354,10 +354,15 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 		r.Post("/api/auth/logout", authHandler.Logout)
 		r.With(middleware.AuthMiddleware(authService)).Get("/api/auth/me", authHandler.GetMe)
 
-		r.Get("/api/events", eventHandler.GetAllEvents)
+		r.Get("/api/events", eventHandler.GetApprovedEvents)
+		r.Get("/api/events/approved", eventHandler.GetApprovedEvents)
 		r.Get("/api/events/{id}", eventHandler.GetEventByID)
-		r.With(middleware.AuthMiddleware(authService)).Post("/api/events", eventHandler.CreateEvent)
-		r.With(middleware.AuthMiddleware(authService)).Delete("/api/events/{id}", eventHandler.DeleteEvent)
+
+		authenticated := r.With(middleware.AuthMiddleware(authService))
+		authenticated.Post("/api/events", eventHandler.CreateEvent)
+		authenticated.Delete("/api/events/{id}", eventHandler.DeleteEvent)
+		authenticated.Get("/api/events/pending", eventHandler.GetPendingEvents)
+		authenticated.Post("/api/events/{id}/review", eventHandler.ReviewPendingEvent)
 	})
 
 	r.Get("/swagger/*", httpSwagger.Handler(

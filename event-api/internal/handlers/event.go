@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"event-api/internal/logger"
 	"event-api/internal/models"
@@ -24,20 +25,41 @@ func NewEventHandler(eventService *service.EventService) *EventHandler {
 	}
 }
 
-// GetAllEvents получает все события
-// GET /v1/api/events
-// @Summary Получить все события
-// @Description Возвращает список всех событий
+// GetApprovedEvents получает все одобренные события
+// GET /v1/api/events/approved
+// @Summary Получить одобренные события
+// @Description Возвращает список всех событий, доступных публично
 // @Tags events
 // @Produce json
 // @Success 200 {array} models.Event "Список событий"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /v1/api/events [get].
-func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
-	events, err := h.eventService.GetAllEvents(r.Context())
+// @Router /v1/api/events/approved [get]
+func (h *EventHandler) GetApprovedEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := h.eventService.GetApprovedEvents(r.Context())
 	if err != nil {
 		logger.Log.Error("Ошибка при получении событий", zap.Error(err))
 		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при получении событий")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, events)
+}
+
+// GetPendingEvents получает события, ожидающие модерации
+// GET /v1/api/events/pending
+// @Summary Получить события на модерации
+// @Description Возвращает список событий в статусе pending (требуется авторизация)
+// @Tags events
+// @Produce json
+// @Success 200 {array} models.PendingEvent
+// @Failure 401 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /v1/api/events/pending [get]
+func (h *EventHandler) GetPendingEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := h.eventService.GetPendingEvents(r.Context())
+	if err != nil {
+		logger.Log.Error("Ошибка при получении событий на модерации", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при получении событий на модерации")
 		return
 	}
 
@@ -80,7 +102,7 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param request body models.CreateEventRequest true "Данные события"
-// @Success 201 {object} models.Event "Созданное событие"
+// @Success 201 {object} models.PendingEvent "Событие, отправленное на модерацию"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
 // @Router /v1/api/events [post].
@@ -107,6 +129,63 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	logger.Log.Info("Событие создано", zap.String("id", event.ID))
 	respondWithJSON(w, http.StatusCreated, event)
+}
+
+// ReviewPendingEvent одобряет или отклоняет событие
+// POST /v1/api/events/{id}/review
+// @Summary Одобрить или отклонить событие
+// @Description Переводит событие из очереди модерации в основной список или архив
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param id path string true "ID события"
+// @Param request body models.ReviewEventRequest true "Данные решения"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /v1/api/events/{id}/review [post]
+func (h *EventHandler) ReviewPendingEvent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "bad_request", "ID события обязателен")
+		return
+	}
+
+	var req models.ReviewEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
+		return
+	}
+
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Action обязателен")
+		return
+	}
+
+	rejectAction := action == models.EventStatusRejected || action == "reject" || action == "block"
+	if rejectAction && strings.TrimSpace(req.Comment) == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Комментарий обязателен при отклонении")
+		return
+	}
+
+	switch action {
+	case "approve":
+		action = models.EventStatusApproved
+	case "reject", "block":
+		action = models.EventStatusRejected
+	}
+
+	if err := h.eventService.ReviewPendingEvent(r.Context(), id, action, req.Comment); err != nil {
+		logger.Log.Error("Ошибка при изменении статуса события", zap.String("id", id), zap.Error(err))
+		respondWithError(w, http.StatusBadRequest, "review_failed", err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{
+		"status": action,
+	})
 }
 
 // DeleteEvent удаляет событие

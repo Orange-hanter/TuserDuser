@@ -51,6 +51,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createVerificationCodesTable,
 			down: dropVerificationCodesTable,
 		},
+		{
+			name: "004_create_events_review_pipeline",
+			up:   createEventsReviewTables,
+			down: dropEventsReviewTables,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -211,6 +216,103 @@ ON CONFLICT DO NOTHING;
 // dropEventsTable - SQL для удаления таблицы events.
 const dropEventsTable = `
 DROP TABLE IF EXISTS events CASCADE;
+`
+
+const createEventsReviewTables = `
+CREATE TABLE IF NOT EXISTS events_pending (
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	type VARCHAR(100) NOT NULL,
+	start_time TIMESTAMPTZ NOT NULL,
+	end_time TIMESTAMPTZ NOT NULL,
+	duration INTEGER NOT NULL,
+	place VARCHAR(255),
+	price_type VARCHAR(50) NOT NULL DEFAULT 'free',
+	need_registration BOOLEAN NOT NULL DEFAULT false,
+	details JSONB NOT NULL DEFAULT '{}'::jsonb,
+	status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+	review_comment TEXT,
+	created_at TIMESTAMPTZ DEFAULT NOW(),
+	updated_at TIMESTAMPTZ DEFAULT NOW(),
+	reviewed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_pending_status ON events_pending(status);
+CREATE INDEX IF NOT EXISTS idx_events_pending_created_at ON events_pending(created_at);
+
+CREATE TABLE IF NOT EXISTS events_rejected (
+	id UUID PRIMARY KEY,
+	type VARCHAR(100) NOT NULL,
+	start_time TIMESTAMPTZ NOT NULL,
+	end_time TIMESTAMPTZ NOT NULL,
+	duration INTEGER NOT NULL,
+	place VARCHAR(255),
+	price_type VARCHAR(50) NOT NULL DEFAULT 'free',
+	need_registration BOOLEAN NOT NULL DEFAULT false,
+	details JSONB NOT NULL DEFAULT '{}'::jsonb,
+	review_comment TEXT,
+	created_at TIMESTAMPTZ DEFAULT NOW(),
+	updated_at TIMESTAMPTZ DEFAULT NOW(),
+	rejected_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_rejected_rejected_at ON events_rejected(rejected_at);
+
+CREATE OR REPLACE FUNCTION handle_events_pending_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.status = 'approved' AND OLD.status <> 'approved' THEN
+		INSERT INTO events (id, type, start_time, end_time, duration, place, price_type, need_registration, details, created_at, updated_at)
+		VALUES (NEW.id, NEW.type, NEW.start_time, NEW.end_time, NEW.duration, NEW.place, NEW.price_type, NEW.need_registration, NEW.details, NEW.created_at, NOW())
+		ON CONFLICT (id) DO UPDATE SET
+			type = EXCLUDED.type,
+			start_time = EXCLUDED.start_time,
+			end_time = EXCLUDED.end_time,
+			duration = EXCLUDED.duration,
+			place = EXCLUDED.place,
+			price_type = EXCLUDED.price_type,
+			need_registration = EXCLUDED.need_registration,
+			details = EXCLUDED.details,
+			updated_at = NOW();
+
+		DELETE FROM events_pending WHERE id = NEW.id;
+		RETURN NULL;
+	ELSIF NEW.status = 'rejected' AND OLD.status <> 'rejected' THEN
+		INSERT INTO events_rejected (id, type, start_time, end_time, duration, place, price_type, need_registration, details, review_comment, created_at, updated_at, rejected_at)
+		VALUES (NEW.id, NEW.type, NEW.start_time, NEW.end_time, NEW.duration, NEW.place, NEW.price_type, NEW.need_registration, NEW.details, NEW.review_comment, NEW.created_at, NEW.updated_at, NOW())
+		ON CONFLICT (id) DO UPDATE SET
+			type = EXCLUDED.type,
+			start_time = EXCLUDED.start_time,
+			end_time = EXCLUDED.end_time,
+			duration = EXCLUDED.duration,
+			place = EXCLUDED.place,
+			price_type = EXCLUDED.price_type,
+			need_registration = EXCLUDED.need_registration,
+			details = EXCLUDED.details,
+			review_comment = EXCLUDED.review_comment,
+			updated_at = NOW(),
+			rejected_at = NOW();
+
+		DELETE FROM events_pending WHERE id = NEW.id;
+		RETURN NULL;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_events_pending_status_change ON events_pending;
+
+CREATE TRIGGER trg_events_pending_status_change
+AFTER UPDATE OF status ON events_pending
+FOR EACH ROW
+WHEN (OLD.status IS DISTINCT FROM NEW.status)
+EXECUTE FUNCTION handle_events_pending_status_change();
+`
+
+const dropEventsReviewTables = `
+DROP TRIGGER IF EXISTS trg_events_pending_status_change ON events_pending;
+DROP FUNCTION IF EXISTS handle_events_pending_status_change;
+DROP TABLE IF EXISTS events_rejected;
+DROP TABLE IF EXISTS events_pending;
 `
 
 // Rollback откатывает все миграции (только для разработки!)

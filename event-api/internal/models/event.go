@@ -17,6 +17,20 @@ type Event struct {
 	NeedRegistration bool                   `json:"needReg" db:"need_registration"`
 }
 
+// PendingEvent представляет событие в очереди модерации.
+type PendingEvent struct {
+	Event
+	Status        string     `json:"status" db:"status"`
+	ReviewComment string     `json:"reviewComment,omitempty" db:"review_comment"`
+	ReviewedAt    *time.Time `json:"reviewedAt,omitempty" db:"reviewed_at"`
+}
+
+const (
+	EventStatusPending  = "pending"
+	EventStatusApproved = "approved"
+	EventStatusRejected = "rejected"
+)
+
 // CreateEventRequest - запрос для создания события.
 type CreateEventRequest struct {
 	StartTime        time.Time              `json:"start" binding:"required"`
@@ -27,6 +41,12 @@ type CreateEventRequest struct {
 	PriceType        string                 `json:"priceType" binding:"required"`
 	Duration         int                    `json:"duration" binding:"required"`
 	NeedRegistration bool                   `json:"needReg"`
+}
+
+// ReviewEventRequest описывает действие по одобрению/отклонению события.
+type ReviewEventRequest struct {
+	Action  string `json:"action" binding:"required"`
+	Comment string `json:"comment"`
 }
 
 // UpdateEventRequest - запрос для обновления события.
