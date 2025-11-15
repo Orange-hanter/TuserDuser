@@ -7,18 +7,26 @@ import (
 
 	"event-api/internal/logger"
 	"event-api/internal/models"
-	"event-api/internal/service"
 
 	"go.uber.org/zap"
 )
 
+// AuthService описывает необходимые методы для обслуживания auth endpoints.
+type AuthService interface {
+	Register(*models.RegisterRequest) (*models.User, string, error)
+	VerifyAndIssueToken(email, code string) (*models.AuthResponse, error)
+	Login(*models.LoginRequest) (*models.AuthResponse, error)
+	Logout(token string) error
+	GetUserByID(userID string) (*models.User, error)
+}
+
 // AuthHandler управляет всеми auth endpoints.
 type AuthHandler struct {
-	authService *service.AuthService
+	authService AuthService
 }
 
 // NewAuthHandler создает новый auth handler.
-func NewAuthHandler(authService *service.AuthService) *AuthHandler {
+func NewAuthHandler(authService AuthService) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 	}

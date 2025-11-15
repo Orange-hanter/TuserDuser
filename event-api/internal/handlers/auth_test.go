@@ -3,269 +3,306 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"event-api/internal/config"
 	"event-api/internal/logger"
 	"event-api/internal/models"
-	"event-api/internal/service"
-	"event-api/internal/worker"
 
 	"go.uber.org/zap"
 )
 
-func init() {
-	// Initialize logger for tests
-	logger.Log, _ = zap.NewDevelopment()
+type mockAuthService struct {
+	registerFn func(*models.RegisterRequest) (*models.User, string, error)
+	verifyFn   func(string, string) (*models.AuthResponse, error)
+	loginFn    func(*models.LoginRequest) (*models.AuthResponse, error)
+	logoutFn   func(string) error
+	getUserFn  func(string) (*models.User, error)
+}
+
+func (m *mockAuthService) Register(req *models.RegisterRequest) (*models.User, string, error) {
+	if m.registerFn != nil {
+		return m.registerFn(req)
+	}
+	return nil, "", errors.New("register not implemented")
+}
+
+func (m *mockAuthService) VerifyAndIssueToken(email, code string) (*models.AuthResponse, error) {
+	if m.verifyFn != nil {
+		return m.verifyFn(email, code)
+	}
+	return nil, errors.New("verify not implemented")
+}
+
+func (m *mockAuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
+	if m.loginFn != nil {
+		return m.loginFn(req)
+	}
+	return nil, errors.New("login not implemented")
+}
+
+func (m *mockAuthService) Logout(token string) error {
+	if m.logoutFn != nil {
+		return m.logoutFn(token)
+	}
+	return errors.New("logout not implemented")
+}
+
+func (m *mockAuthService) GetUserByID(userID string) (*models.User, error) {
+	if m.getUserFn != nil {
+		return m.getUserFn(userID)
+	}
+	return nil, errors.New("getUser not implemented")
 }
 
 func TestRegisterHandler(t *testing.T) {
-	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	testLogger, _ := zap.NewDevelopment()
-	workerPool := worker.NewPool(2, 10, testLogger)
-	workerPool.Start()
-	defer workerPool.Shutdown()
+	logger.Log = zap.NewNop()
 
-	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
-	handler := NewAuthHandler(authService)
-
-	tests := []struct {
-		name           string
-		payload        models.RegisterRequest
-		expectedStatus int
-	}{
-		{
-			name: "valid registration",
-			payload: models.RegisterRequest{
-				Email:    "test@example.com",
-				Phone:    "+79991234567",
-				Password: "password123",
-			},
-			expectedStatus: http.StatusCreated,
-		},
-		{
-			name: "missing email",
-			payload: models.RegisterRequest{
-				Phone:    "+79991234567",
-				Password: "password123",
-			},
-			expectedStatus: http.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.payload)
-			req := httptest.NewRequest("POST", "/api/auth/register", bytes.NewReader(body))
-			w := httptest.NewRecorder()
-
-			handler.Register(w, req)
-
-			if w.Code != tt.expectedStatus {
-				t.Errorf("Register() status = %v, want %v", w.Code, tt.expectedStatus)
+	validUser := &models.User{ID: "u1", Email: "test@example.com"}
+	mockSvc := &mockAuthService{
+		registerFn: func(req *models.RegisterRequest) (*models.User, string, error) {
+			if req.Email != validUser.Email {
+				t.Fatalf("unexpected email: %s", req.Email)
 			}
-		})
+			return validUser, "123456", nil
+		},
 	}
+	handler := NewAuthHandler(mockSvc)
+
+	t.Run("valid registration", func(t *testing.T) {
+		payload := models.RegisterRequest{
+			Email:    validUser.Email,
+			Phone:    "+79991234567",
+			Password: "password123",
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		handler.Register(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("expected status 201, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["verify_code"] != "123456" {
+			t.Fatalf("expected verify_code 123456, got %v", resp["verify_code"])
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		called := false
+		reqPayload := models.RegisterRequest{Phone: "+79991234567", Password: "password123"}
+		body, _ := json.Marshal(reqPayload)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		mockSvc.registerFn = func(req *models.RegisterRequest) (*models.User, string, error) {
+			called = true
+			return nil, "", nil
+		}
+
+		handler.Register(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", w.Code)
+		}
+		if called {
+			t.Fatalf("service should not be called on validation error")
+		}
+	})
 }
 
 func TestVerifyHandler(t *testing.T) {
-	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	testLogger, _ := zap.NewDevelopment()
-	workerPool := worker.NewPool(2, 10, testLogger)
-	workerPool.Start()
-	defer workerPool.Shutdown()
+	logger.Log = zap.NewNop()
+	mockSvc := &mockAuthService{}
+	handler := NewAuthHandler(mockSvc)
 
-	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
-	handler := NewAuthHandler(authService)
+	t.Run("valid verification", func(t *testing.T) {
+		mockSvc.verifyFn = func(email, code string) (*models.AuthResponse, error) {
+			return &models.AuthResponse{AccessToken: "token"}, nil
+		}
 
-	// Регистрируем пользователя для получения кода
-	user, code, _ := authService.Register(&models.RegisterRequest{
-		Email:    "verify@example.com",
-		Phone:    "+79991234567",
-		Password: "password123",
+		payload := models.VerifyRequest{Email: "verify@example.com", Code: "123456"}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/verify", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		handler.Verify(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
 	})
 
-	tests := []struct {
-		name           string
-		payload        models.VerifyRequest
-		expectedStatus int
-	}{
-		{
-			name: "valid verification",
-			payload: models.VerifyRequest{
-				Email: user.Email,
-				Code:  code,
-			},
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name: "wrong code",
-			payload: models.VerifyRequest{
-				Email: user.Email,
-				Code:  "000000",
-			},
-			expectedStatus: http.StatusBadRequest,
-		},
-	}
+	t.Run("verification failed", func(t *testing.T) {
+		mockSvc.verifyFn = func(email, code string) (*models.AuthResponse, error) {
+			return nil, errors.New("invalid code")
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.payload)
-			req := httptest.NewRequest("POST", "/api/auth/verify", bytes.NewReader(body))
-			w := httptest.NewRecorder()
+		payload := models.VerifyRequest{Email: "verify@example.com", Code: "000"}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/verify", bytes.NewReader(body))
+		w := httptest.NewRecorder()
 
-			handler.Verify(w, req)
-
-			if w.Code != tt.expectedStatus {
-				t.Errorf("Verify() status = %v, want %v", w.Code, tt.expectedStatus)
-			}
-		})
-	}
+		handler.Verify(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
 }
 
 func TestLoginHandler(t *testing.T) {
-	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	testLogger, _ := zap.NewDevelopment()
-	workerPool := worker.NewPool(2, 10, testLogger)
-	workerPool.Start()
-	defer workerPool.Shutdown()
+	logger.Log = zap.NewNop()
+	mockSvc := &mockAuthService{}
+	handler := NewAuthHandler(mockSvc)
 
-	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
-	handler := NewAuthHandler(authService)
-
-	// Регистрируем и верифицируем пользователя
-	user, code, _ := authService.Register(&models.RegisterRequest{
-		Email:    "login@example.com",
-		Phone:    "+79991234567",
-		Password: "password123",
-	})
-	authService.VerifyCode(user.Email, code)
-
-	tests := []struct {
-		name           string
-		payload        models.LoginRequest
-		expectedStatus int
-	}{
-		{
-			name: "valid login",
-			payload: models.LoginRequest{
-				Email:    "login@example.com",
-				Password: "password123",
-			},
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name: "wrong password",
-			payload: models.LoginRequest{
-				Email:    "login@example.com",
-				Password: "wrongpassword",
-			},
-			expectedStatus: http.StatusUnauthorized,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.payload)
-			req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(body))
-			w := httptest.NewRecorder()
-
-			handler.Login(w, req)
-
-			if w.Code != tt.expectedStatus {
-				t.Errorf("Login() status = %v, want %v", w.Code, tt.expectedStatus)
+	t.Run("login success", func(t *testing.T) {
+		mockSvc.loginFn = func(req *models.LoginRequest) (*models.AuthResponse, error) {
+			if req.Email != "login@example.com" {
+				t.Fatalf("unexpected email %s", req.Email)
 			}
-		})
-	}
+			return &models.AuthResponse{AccessToken: "token"}, nil
+		}
+
+		payload := models.LoginRequest{Email: "login@example.com", Password: "secret"}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		handler.Login(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("login failure", func(t *testing.T) {
+		mockSvc.loginFn = func(req *models.LoginRequest) (*models.AuthResponse, error) {
+			return nil, errors.New("bad creds")
+		}
+
+		payload := models.LoginRequest{Email: "login@example.com", Password: "wrong"}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		handler.Login(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", w.Code)
+		}
+	})
 }
 
 func TestLogoutHandler(t *testing.T) {
-	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	testLogger, _ := zap.NewDevelopment()
-	workerPool := worker.NewPool(2, 10, testLogger)
-	workerPool.Start()
-	defer workerPool.Shutdown()
+	logger.Log = zap.NewNop()
+	mockSvc := &mockAuthService{}
+	handler := NewAuthHandler(mockSvc)
 
-	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
-	handler := NewAuthHandler(authService)
+	t.Run("logout success via header", func(t *testing.T) {
+		called := false
+		mockSvc.logoutFn = func(token string) error {
+			called = true
+			if token != "token" {
+				t.Fatalf("unexpected token %s", token)
+			}
+			return nil
+		}
 
-	// Регистрируем, верифицируем и логируемся
-	user, code, _ := authService.Register(&models.RegisterRequest{
-		Email:    "logout@example.com",
-		Phone:    "+79991234567",
-		Password: "password123",
-	})
-	authService.VerifyCode(user.Email, code)
-	response, _ := authService.Login(&models.LoginRequest{
-		Email:    user.Email,
-		Password: "password123",
-	})
-
-	t.Run("valid logout", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]interface{}{})
-		req := httptest.NewRequest("POST", "/api/auth/logout", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer "+response.AccessToken)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", bytes.NewReader([]byte(`{}`)))
+		req.Header.Set("Authorization", "Bearer token")
 		w := httptest.NewRecorder()
 
 		handler.Logout(w, req)
-
 		if w.Code != http.StatusOK {
-			t.Errorf("Logout() status = %v, want %v", w.Code, http.StatusOK)
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		if !called {
+			t.Fatalf("logout should be called")
+		}
+	})
+
+	t.Run("missing token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", bytes.NewReader([]byte(`{}`)))
+		w := httptest.NewRecorder()
+
+		handler.Logout(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("logout failure", func(t *testing.T) {
+		mockSvc.logoutFn = func(token string) error {
+			return errors.New("redis down")
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", bytes.NewReader([]byte(`{"token":"tk"}`)))
+		w := httptest.NewRecorder()
+
+		handler.Logout(w, req)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
 		}
 	})
 }
 
 func TestGetMeHandler(t *testing.T) {
-	cfg := &config.Config{JWTSecret: "test", JWTExpiration: 3600}
-	testLogger, _ := zap.NewDevelopment()
-	workerPool := worker.NewPool(2, 10, testLogger)
-	workerPool.Start()
-	defer workerPool.Shutdown()
+	logger.Log = zap.NewNop()
+	mockSvc := &mockAuthService{}
+	handler := NewAuthHandler(mockSvc)
 
-	authService := service.NewAuthService(cfg, nil, nil, nil, workerPool, testLogger)
-	handler := NewAuthHandler(authService)
+	t.Run("user found", func(t *testing.T) {
+		mockSvc.getUserFn = func(userID string) (*models.User, error) {
+			if userID != "user-1" {
+				t.Fatalf("unexpected userID %s", userID)
+			}
+			return &models.User{ID: userID, Email: "me@example.com"}, nil
+		}
 
-	// Регистрируем, верифицируем и логируемся
-	user, code, _ := authService.Register(&models.RegisterRequest{
-		Email:    "getme@example.com",
-		Phone:    "+79991234567",
-		Password: "password123",
-	})
-	authService.VerifyCode(user.Email, code)
-	authService.Login(&models.LoginRequest{
-		Email:    user.Email,
-		Password: "password123",
-	})
-
-	t.Run("valid get me", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/auth/me", nil)
-		req.Header.Set("X-User-ID", user.ID)
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		req.Header.Set("X-User-ID", "user-1")
 		w := httptest.NewRecorder()
 
 		handler.GetMe(w, req)
-
 		if w.Code != http.StatusOK {
-			t.Errorf("GetMe() status = %v, want %v", w.Code, http.StatusOK)
+			t.Fatalf("expected 200, got %d", w.Code)
 		}
 
-		var resp models.User
-		json.NewDecoder(w.Body).Decode(&resp)
-
-		if resp.Email != user.Email {
-			t.Errorf("GetMe() email mismatch: got %v, want %v", resp.Email, user.Email)
+		var user models.User
+		if err := json.NewDecoder(w.Body).Decode(&user); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if user.Email != "me@example.com" {
+			t.Fatalf("expected email me@example.com, got %s", user.Email)
 		}
 	})
 
-	t.Run("missing user id", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/auth/me", nil)
+	t.Run("missing header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
 		w := httptest.NewRecorder()
 
 		handler.GetMe(w, req)
-
 		if w.Code != http.StatusUnauthorized {
-			t.Errorf("GetMe() status = %v, want %v", w.Code, http.StatusUnauthorized)
+			t.Fatalf("expected 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("user lookup failure", func(t *testing.T) {
+		mockSvc.getUserFn = func(userID string) (*models.User, error) {
+			return nil, errors.New("not found")
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+		req.Header.Set("X-User-ID", "user-1")
+		w := httptest.NewRecorder()
+
+		handler.GetMe(w, req)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
 		}
 	})
 }
