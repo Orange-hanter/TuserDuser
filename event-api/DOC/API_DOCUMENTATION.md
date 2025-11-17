@@ -146,6 +146,7 @@ Body: {}
 ```
 
 Или в теле запроса:
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -153,6 +154,7 @@ Body: {}
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "message": "Успешно вышли из системы"
@@ -160,6 +162,7 @@ Body: {}
 ```
 
 **Примеры ошибок:**
+
 - `400 Bad Request`: Token не найден
 
 ---
@@ -169,12 +172,14 @@ Body: {}
 **Описание:** Возвращает информацию о текущем аутентифицированном пользователе
 
 **Request:**
+
 ```
 Headers:
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "id": "ad58c1e9e3c617185f36e336d956339f",
@@ -187,6 +192,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 **Примеры ошибок:**
+
 - `401 Unauthorized`: Токен отсутствует или недействителен
 - `404 Not Found`: Пользователь не найден
 
@@ -200,9 +206,152 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 Authorization: Bearer <token>
 ```
 
+---
+
+## Narrow Time-Slot Discovery Engine
+
+Эти эндпоинты помогают пользователю быстро просмотреть события в узком временном окне, фиксируя реакции и конфликты бронирований. Все запросы выполняются под заголовком `Authorization: Bearer <token>`.
+
+> Подробнее о внутреннем устройстве и сценариях использования см. в документе [`DOC/DISCOVERY_ENGINE.md`](DISCOVERY_ENGINE.md).
+
+### Быстрый старт
+
+1. Вызвать `GET /v1/api/discovery/next` и сохранить `eventId`.
+2. Решить действие (`like`, `dislike`, `neutral`) и вызвать `POST /v1/api/discovery/action`.
+3. При готовности забронировать — `POST /v1/api/discovery/book` с тем же `eventId`.
+4. Для отображения ленты событий пользователю можно повторно дёргать `/next`, пока очередь не опустеет.
+
+### Карта действий
+
+| Action    | Что делает                                                                             | Запись в истории                                                |
+| --------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `like`    | Удаляет событие из очереди и помечает как интересное.                                  | `history.action = "like"`                                       |
+| `dislike` | Удаляет событие навсегда.                                                              | `history.action = "dislike"`                                    |
+| `neutral` | Переносит событие в конец очереди (или конфликтную часть, если было помечено).         | `history.action = "neutral"`                                    |
+| `book`    | Бронирует событие и переносит пересекающиеся слоты в конец очереди с флагом конфликта. | `history.action = "book"`, `context.conflictedEventIds = [...]` |
+
+## 1. GET `/v1/api/discovery/next`
+
+**Описание:** Возвращает следующее событие в очереди. События, помеченные как конфликтующие после бронирования, отображаются только после исчерпания основной очереди.
+
+**Response (200 OK):**
+
+```json
+{
+  "event": {
+    "id": "evt_brunch",
+    "title": "Morning Brunch",
+    "description": "Morning Brunch @ Loft",
+    "slot": {
+      "start": "2025-11-16T10:00:00Z",
+      "end": "2025-11-16T11:30:00Z"
+    },
+    "metadata": {
+      "place": "Loft",
+      "type": "food",
+      "priceType": "free"
+    }
+  },
+  "conflict": false,
+  "remainingPrimary": 3,
+  "remainingConflicts": 1
+}
+```
+
+`404` возвращается, когда очередь исчерпана.
+
+## 2. POST `/v1/api/discovery/action`
+
+**Описание:** Реакция пользователя на текущее событие. Поддерживаются `like`, `dislike`, `neutral`.
+
+**Request:**
+
+```json
+{
+  "eventId": "evt_brunch",
+  "action": "neutral"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "userId": "f84c9b46",
+  "eventId": "evt_brunch",
+  "action": "neutral",
+  "timestamp": "2025-11-16T09:05:00Z"
+}
+```
+
+## 3. POST `/v1/api/discovery/book`
+
+**Описание:** Подтверждает участие в событии. Все пересекающиеся по времени события перемещаются в конец очереди с пометкой конфликта.
+
+**Request:**
+
+```json
+{
+  "eventId": "evt_brunch"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "bookedEvent": {
+    "id": "evt_brunch",
+    "slot": {
+      "start": "2025-11-16T10:00:00Z",
+      "end": "2025-11-16T11:30:00Z"
+    },
+    "metadata": {
+      "type": "food"
+    }
+  },
+  "conflictedEventIds": ["evt_meetup", "evt_run"]
+}
+```
+
+## 4. GET `/v1/api/discovery/history`
+
+**Описание:** Возвращает хронологию действий пользователя над событиями окна.
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "userId": "f84c9b46",
+    "eventId": "evt_brunch",
+    "action": "book",
+    "timestamp": "2025-11-16T09:10:00Z",
+    "context": {
+      "conflictedEventIds": ["evt_meetup"]
+    }
+  },
+  {
+    "userId": "f84c9b46",
+    "eventId": "evt_run",
+    "action": "dislike",
+    "timestamp": "2025-11-16T09:06:00Z"
+  }
+]
+```
+
+**Коды ошибок для всех discovery эндпоинтов:**
+
+- `400 Bad Request` — нарушена валидация входных данных.
+- `401 Unauthorized` — отсутствует или недействителен JWT токен.
+- `404 Not Found` — событие не найдено или очередь опустела.
+- `409 Conflict` — пользователь пытается выполнить действие не по порядку.
+- `500 Internal Server Error` — непредвиденная ошибка движка.
+
 Где `<token>` - это JWT токен, полученный при логине.
 
-### JWT Token Claims:
+### JWT Token Claims
+
 ```json
 {
   "user_id": "ad58c1e9e3c617185f36e336d956339f",
@@ -218,7 +367,7 @@ Authorization: Bearer <token>
 
 ## Примеры использования
 
-### Полный процесс аутентификации:
+### Полный процесс аутентификации
 
 ```bash
 # 1. Регистрация
@@ -262,15 +411,15 @@ curl -X POST http://localhost:8080/api/auth/logout \
 
 ## Статус коды
 
-| Код | Описание |
-|-----|---------|
-| 200 | OK - Успешный запрос |
-| 201 | Created - Ресурс создан |
-| 400 | Bad Request - Неверный формат запроса |
-| 401 | Unauthorized - Требуется аутентификация |
-| 404 | Not Found - Ресурс не найден |
+| Код | Описание                                                    |
+| --- | ----------------------------------------------------------- |
+| 200 | OK - Успешный запрос                                        |
+| 201 | Created - Ресурс создан                                     |
+| 400 | Bad Request - Неверный формат запроса                       |
+| 401 | Unauthorized - Требуется аутентификация                     |
+| 404 | Not Found - Ресурс не найден                                |
 | 409 | Conflict - Конфликт (например, пользователь уже существует) |
-| 500 | Internal Server Error - Ошибка сервера |
+| 500 | Internal Server Error - Ошибка сервера                      |
 
 ---
 

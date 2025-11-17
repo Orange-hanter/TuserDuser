@@ -2,7 +2,7 @@
 
 ## 🏗️ Архитектурная диаграмма
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   HTTP Client (Frontend)                     │
 └────────────────────────┬────────────────────────────────────┘
@@ -15,8 +15,8 @@
          │  + Security Headers           │
          └───────────────┬───────────────┘
                          │
-        ┌────────────────┴────────────────┬──────────────┐
-        │                                  │              │
+        ┌────────────────┴───────────────┬─────────────┐
+        │                                │             │
    ┌────▼─────┐    ┌──────────────────┬──▼─────┐  ┌────▼────┐
    │  Auth    │    │  Auth Routes     │        │  │ Health  │
    │Middleware│    │                  │        │  │ Endpoint│
@@ -26,8 +26,8 @@
         │          │ - /logout        │        │
         │          │ - /me (protected)│        │
         │          └─────────────────┬┘        │
-        │                           │         │
-        └─────────────────┬─────────┴─────────┘
+        │                            │         │
+        └─────────────────┬──────────┴─────────┘
                           │
             ┌─────────────▼────────────────┐
             │   Auth Handler               │
@@ -69,7 +69,7 @@
 
 ### Регистрация (Register Flow)
 
-```
+```text
 1. Client POST /api/auth/register
    ├── Email, Phone, Password
    │
@@ -89,7 +89,7 @@
 
 ### Верификация (Verify Flow)
 
-```
+```text
 1. Client POST /api/auth/verify
    ├── Email, Code
    │
@@ -108,7 +108,7 @@
 
 ### Логин (Login Flow)
 
-```
+```text
 1. Client POST /api/auth/login
    ├── Email, Password
    │
@@ -126,9 +126,9 @@
 
 ### Защищенный запрос (Protected Flow)
 
-```
+```text
 1. Client GET /api/auth/me
-   ├── Authorization: Bearer <token>
+   ├── Authorization: Bearer &lt;token&gt;
    │
 2. Middleware ←── Extract token
    ├── Validate JWT signature
@@ -147,9 +147,9 @@
 
 ### Выход (Logout Flow)
 
-```
+```text
 1. Client POST /api/auth/logout
-   ├── Authorization: Bearer <token>
+   ├── Authorization: Bearer &lt;token&gt;
    │
 2. Handler ←── Extract token
    │
@@ -166,12 +166,14 @@
 ## 📦 Компоненты и их ответственность
 
 ### 1. **Models** (`internal/models/auth.go`)
+
 - Определяет структуры данных
 - User, RegisterRequest, VerifyRequest, LoginRequest
 - AuthResponse, VerifyResponse, ErrorResponse
 - Claims для JWT
 
 ### 2. **Service** (`internal/service/auth.go`)
+
 - Бизнес-логика приложения
 - Управление пользователями
 - Генерация и валидация JWT
@@ -179,6 +181,7 @@
 - Управление кодами верификации
 
 ### 3. **Handlers** (`internal/handlers/auth.go`)
+
 - HTTP endpoint обработчики
 - Валидация input/output
 - Error handling
@@ -186,15 +189,18 @@
 - Преобразование между HTTP и service layer
 
 ### 4. **Middleware** (`internal/middleware/auth.go`)
+
 - JWT валидация
 - Extraction токенов
 - Передача данных в контекст
 
 ### 5. **Config** (`internal/config/config.go`)
+
 - Загрузка конфигурации из .env
 - Централизованное управление параметрами
 
 ### 6. **Logger** (`internal/logger/logger.go`)
+
 - Инициализация Zap логгера
 - Структурированное логирование
 
@@ -202,7 +208,7 @@
 
 ## 🔐 Слои безопасности
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │ 1. Transport Layer (HTTPS)                  │
 │    - SSL/TLS encryption                     │
@@ -235,7 +241,7 @@
 
 ## 🔌 Интеграция точек
 
-```
+```text
 main.go
   │
   ├── Config.Load() → конфигурация
@@ -256,11 +262,52 @@ main.go
       └── GET /health → Handler.HealthCheck()
 ```
 
+## 🎢 Discovery Engine Overview
+
+Наряду с auth-модулем сервис содержит двигатель «narrow time-slot discovery», позволяющий пользователю проходить через очередь событий и фиксировать реакции.
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│                       Authenticated Client                     │
+└───────────────┬───────────────────────────────────────────────┘
+      │  Authorization: Bearer &lt;token&gt;
+   ┌───────▼────────┐
+   │  Chi Router    │
+   └───────┬────────┘
+      │ /v1/api/discovery/*
+   ┌───────▼──────────────────────────┐
+   │ Discovery Handler                │
+   │ (internal/handlers/discovery.go) │
+   └───────┬──────────────────────────┘
+      │ service API (Next, Action, Book, History)
+   ┌───────▼──────────────────────────┐
+   │ Discovery Service                │
+   │ (internal/discovery/service.go)  │
+   └───────┬──────────────────────────┘
+      │ orchestrates
+   ┌───────▼──────────────────────────┐
+   │ Discovery Engine                 │
+   │ (internal/discovery/engine.go)   │
+   └───────┬──────────────────────────┘
+    ┌───────────▼───────────┐ ┌───────────▼──────────┐ ┌───────────▼──────────┐
+    │ Event Repository      │ │ Queue Repository      │ │ History Repository    │
+    │ (ReplaceAll/List/Get) │ │ (per-user QueueState) │ │ (append-only log)     │
+    └───────────────────────┘ └───────────────────────┘ └───────────────────────┘
+```
+
+**Основные принципы:**
+
+- **Детерминированность**: на каждого пользователя хранится `QueueState` (primary + conflict очереди). Только `NextEvent` назначает текущий элемент.
+- **Конфликт-менеджмент**: `BookEvent` помечает пересекающиеся `TimeSlot` события флагом `ConflictFlag` и переносит их в хвост.
+- **Idempotency**: история хранит последнее действие по паре (user, event), что позволяет безопасно повторять запросы.
+- **Concurrency safety**: движок удерживает per-user mutex, поэтому параллельные запросы одного пользователя не ломают порядок очереди.
+
 ---
 
 ## 📊 Структура данных
 
 ### User
+
 ```go
 type User struct {
     ID        string    // Уникальный идентификатор
@@ -274,6 +321,7 @@ type User struct {
 ```
 
 ### JWT Claims
+
 ```go
 type Claims struct {
     UserID   string `json:"user_id"`
@@ -318,7 +366,7 @@ type Claims struct {
 
 ## 📝 Зависимости между компонентами
 
-```
+```text
 main.go
   ↓
 Chi Router ← Config, Logger
@@ -336,14 +384,14 @@ Models
 
 ## 🔧 Технологии и их роли
 
-| Компонент | Назначение | Альтернативы |
-|-----------|-----------|-------------|
-| Chi v5 | HTTP роутер | Gin, Echo |
-| JWT-GO | JWT токены | jose |
-| Bcrypt | Хеширование | Argon2, scrypt |
-| Zap | Логирование | Logrus, slog |
-| CORS | Cross-origin | Middleware custom |
-| godotenv | .env загрузка | viper, envconfig |
+| Компонент | Назначение    | Альтернативы      |
+| --------- | ------------- | ----------------- |
+| Chi v5    | HTTP роутер   | Gin, Echo         |
+| JWT-GO    | JWT токены    | jose              |
+| Bcrypt    | Хеширование   | Argon2, scrypt    |
+| Zap       | Логирование   | Logrus, slog      |
+| CORS      | Cross-origin  | Middleware custom |
+| godotenv  | .env загрузка | viper, envconfig  |
 
 ---
 
@@ -358,7 +406,7 @@ Models
 
 ## 🎯 Future Architecture
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │ Load Balancer (nginx/HAProxy)           │
 └────────┬────────────────────────────┬───┘
@@ -386,6 +434,7 @@ Models
 ---
 
 Архитектура разработана с учетом:
+
 - ✅ Чистого кода (Clean Architecture)
 - ✅ Принципов SOLID
 - ✅ Масштабируемости

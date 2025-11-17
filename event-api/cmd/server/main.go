@@ -14,11 +14,13 @@ import (
 
 	"event-api/internal/config"
 	"event-api/internal/database"
+	"event-api/internal/discovery"
 	"event-api/internal/email"
 	"event-api/internal/handlers"
 	"event-api/internal/logger"
 	"event-api/internal/middleware"
 	"event-api/internal/migrations"
+	"event-api/internal/models"
 	redisClient "event-api/internal/redis"
 	"event-api/internal/service"
 	"event-api/internal/sms"
@@ -60,6 +62,7 @@ func run(versionInfo VersionInfo) error {
 	defer syncLogger()
 
 	logVersionInfo(versionInfo)
+	appCtx := context.Background()
 
 	cfg := config.Load()
 	logConfig(cfg)
@@ -116,11 +119,24 @@ func run(versionInfo VersionInfo) error {
 	authService := service.NewAuthService(cfg, db.DB, redis, smsService, emailService, workerPool, logger.Log)
 	eventService := service.NewEventService(db.DB, logger.Log)
 
+	discoveryEngine := discovery.NewEngine(
+		discovery.NewInMemoryEventRepository(nil),
+		discovery.NewInMemoryQueueRepository(),
+		discovery.NewInMemoryHistoryRepository(),
+		discovery.EngineConfig{},
+	)
+	discoveryService := discovery.NewService(discoveryEngine)
+
+	if err := bootstrapDiscovery(appCtx, eventService, discoveryService); err != nil {
+		logger.Log.Warn("failed to seed discovery engine", zap.Error(err))
+	}
+
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	eventHandler := handlers.NewEventHandler(eventService)
+	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService)
 
-	handler := buildHTTPHandler(cfg, authHandler, eventHandler, authService, versionInfo)
+	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, authService, versionInfo)
 
 	// Создаем HTTP сервер с явными настройками
 	srv := &http.Server{
@@ -340,7 +356,57 @@ func initEmailService(cfg *config.Config) (*email.Service, error) {
 	return service, nil
 }
 
-func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, authService *service.AuthService, versionInfo VersionInfo) http.Handler {
+const discoveryWindowRange = 6 * time.Hour
+
+func bootstrapDiscovery(ctx context.Context, eventService *service.EventService, discoveryService *discovery.Service) error {
+	events, err := eventService.GetApprovedEvents(ctx)
+	if err != nil {
+		return fmt.Errorf("load approved events: %w", err)
+	}
+	converted := toDiscoveryEvents(time.Now(), events)
+	if err := discoveryService.ReplaceEvents(ctx, converted); err != nil {
+		return fmt.Errorf("seed discovery events: %w", err)
+	}
+	return nil
+}
+
+func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
+	windowEnd := now.Add(discoveryWindowRange)
+	result := make([]discovery.Event, 0, len(src))
+	for _, evt := range src {
+		if evt == nil {
+			continue
+		}
+		if evt.EndTime.Before(now) {
+			continue
+		}
+		if evt.StartTime.After(windowEnd) {
+			continue
+		}
+		metadata := map[string]interface{}{
+			"type":             evt.Type,
+			"place":            evt.Place,
+			"priceType":        evt.PriceType,
+			"needRegistration": evt.NeedRegistration,
+		}
+		for k, v := range evt.Details {
+			metadata[k] = v
+		}
+		result = append(result, discovery.Event{
+			ID:          evt.ID,
+			Title:       evt.Type,
+			Description: fmt.Sprintf("%s @ %s", evt.Type, evt.Place),
+			Slot: discovery.TimeSlot{
+				Start: evt.StartTime,
+				End:   evt.EndTime,
+			},
+			Metadata: metadata,
+		})
+	}
+	return result
+}
+
+func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, authService *service.AuthService, versionInfo VersionInfo) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.SecurityHeaders)
 	r.Get("/health", handlers.HealthCheck)
@@ -361,6 +427,12 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 		// Authenticated user endpoints
 		authenticated := r.With(middleware.AuthMiddleware(authService))
 		authenticated.Get("/api/auth/me", authHandler.GetMe)
+		authenticated.Route("/api/discovery", func(r chi.Router) {
+			r.Get("/next", discoveryHandler.Next)
+			r.Post("/action", discoveryHandler.Action)
+			r.Post("/book", discoveryHandler.Book)
+			r.Get("/history", discoveryHandler.History)
+		})
 
 		// Creator/Admin: Create events (requires creator or admin role)
 		creatorOrAdmin := authenticated.With(middleware.RequireCreatorOrAdmin)
