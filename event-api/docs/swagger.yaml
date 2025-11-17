@@ -1,4 +1,84 @@
 definitions:
+  discovery.BookingResult:
+    properties:
+      bookedEvent:
+        $ref: '#/definitions/discovery.Event'
+      conflictedEventIds:
+        items:
+          type: string
+        type: array
+    type: object
+  discovery.ConflictFlag:
+    properties:
+      activatedAt:
+        type: string
+      active:
+        type: boolean
+      bookedEvent:
+        type: string
+      reason:
+        type: string
+    type: object
+  discovery.Event:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      slot:
+        $ref: '#/definitions/discovery.TimeSlot'
+      title:
+        type: string
+    type: object
+  discovery.HistoryEntry:
+    properties:
+      action:
+        $ref: '#/definitions/discovery.UserAction'
+      context:
+        additionalProperties: true
+        type: object
+      eventId:
+        type: string
+      timestamp:
+        type: string
+      userId:
+        type: string
+    type: object
+  discovery.NextEvent:
+    properties:
+      conflict:
+        type: boolean
+      conflictFlag:
+        $ref: '#/definitions/discovery.ConflictFlag'
+      event:
+        $ref: '#/definitions/discovery.Event'
+      remainingConflicts:
+        type: integer
+      remainingPrimary:
+        type: integer
+    type: object
+  discovery.TimeSlot:
+    properties:
+      end:
+        type: string
+      start:
+        type: string
+    type: object
+  discovery.UserAction:
+    enum:
+    - like
+    - dislike
+    - neutral
+    - book
+    type: string
+    x-enum-varnames:
+    - ActionLike
+    - ActionDislike
+    - ActionNeutral
+    - ActionBook
   models.AuthResponse:
     properties:
       access_token:
@@ -37,6 +117,25 @@ definitions:
     - priceType
     - start
     - type
+    type: object
+  models.DiscoveryActionRequest:
+    properties:
+      action:
+        description: Action accepts "like", "dislike" or "neutral" and must match
+          the current event.
+        example: like
+        type: string
+      eventId:
+        description: EventID is the identifier of the event returned by GET /next.
+        example: evt_123
+        type: string
+    type: object
+  models.DiscoveryBookRequest:
+    properties:
+      eventId:
+        description: EventID points to the event that should be booked.
+        example: evt_123
+        type: string
     type: object
   models.ErrorResponse:
     properties:
@@ -86,6 +185,36 @@ definitions:
       token:
         type: string
     type: object
+  models.PendingEvent:
+    properties:
+      details:
+        additionalProperties: true
+        type: object
+      duration:
+        type: integer
+      end:
+        type: string
+      id:
+        type: string
+      needReg:
+        type: boolean
+      place:
+        type: string
+      priceType:
+        type: string
+      reviewComment:
+        type: string
+      reviewedAt:
+        type: string
+      start:
+        type: string
+      status:
+        type: string
+      time:
+        type: string
+      type:
+        type: string
+    type: object
   models.RegisterRequest:
     properties:
       email:
@@ -103,6 +232,25 @@ definitions:
     - password
     - phone
     type: object
+  models.ReviewEventRequest:
+    properties:
+      action:
+        type: string
+      comment:
+        type: string
+    required:
+    - action
+    type: object
+  models.UpdateRoleRequest:
+    properties:
+      role:
+        type: string
+      user_id:
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
   models.User:
     properties:
       created_at:
@@ -112,6 +260,8 @@ definitions:
       id:
         type: string
       phone:
+        type: string
+      role:
         type: string
       updated_at:
         type: string
@@ -142,6 +292,67 @@ info:
   title: Event API
   version: "1.0"
 paths:
+  /api/admin/users:
+    get:
+      description: Возвращает список всех пользователей системы
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список пользователей
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "403":
+          description: Недостаточно прав
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить список всех пользователей
+      tags:
+      - admin
+  /api/admin/users/role:
+    put:
+      consumes:
+      - application/json
+      description: Позволяет администратору назначить роль creator или support пользователю
+      parameters:
+      - description: Данные для обновления роли
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Обновленный пользователь
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Неверный формат запроса
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Недостаточно прав
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Пользователь не найден
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Обновить роль пользователя
+      tags:
+      - admin
   /api/auth/login:
     post:
       consumes:
@@ -294,25 +505,154 @@ paths:
       summary: Проверка здоровья сервиса
       tags:
       - health
-  /v1/api/events:
-    get:
-      description: Возвращает список всех событий
+  /v1/api/discovery/action:
+    post:
+      consumes:
+      - application/json
+      description: Обрабатывает действия like/dislike/neutral для текущего события
+        в очереди
+      parameters:
+      - description: Действие пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DiscoveryActionRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Список событий
+          description: OK
           schema:
-            items:
-              $ref: '#/definitions/models.Event'
-            type: array
-        "500":
-          description: Внутренняя ошибка сервера
+            $ref: '#/definitions/discovery.HistoryEntry'
+        "400":
+          description: Некорректные данные
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-      summary: Получить все события
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Конфликт очереди
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Отправить реакцию на событие
       tags:
-      - events
+      - discovery
+  /v1/api/discovery/book:
+    post:
+      consumes:
+      - application/json
+      description: Подтверждает участие в текущем событии, откладывая конфликтующие
+        события в конец очереди
+      parameters:
+      - description: Запрос на бронирование
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DiscoveryBookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/discovery.BookingResult'
+        "400":
+          description: Некорректные данные
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Конфликт очереди
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Забронировать событие
+      tags:
+      - discovery
+  /v1/api/discovery/history:
+    get:
+      description: Возвращает детальную историю действий discovery-движка для пользователя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/discovery.HistoryEntry'
+            type: array
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: История действий пользователя
+      tags:
+      - discovery
+  /v1/api/discovery/next:
+    get:
+      description: Возвращает следующее событие в очереди с учетом бронирований и
+        конфликтов
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/discovery.NextEvent'
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Очередь пуста
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Конфликт действий
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить следующее событие окна
+      tags:
+      - discovery
+  /v1/api/events:
     post:
       consumes:
       - application/json
@@ -328,9 +668,9 @@ paths:
       - application/json
       responses:
         "201":
-          description: Созданное событие
+          description: Событие, отправленное на модерацию
           schema:
-            $ref: '#/definitions/models.Event'
+            $ref: '#/definitions/models.PendingEvent'
         "400":
           description: Неверный формат запроса
           schema:
@@ -395,6 +735,89 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       summary: Получить событие по ID
+      tags:
+      - events
+  /v1/api/events/{id}/review:
+    post:
+      consumes:
+      - application/json
+      description: Переводит событие из очереди модерации в основной список или архив
+      parameters:
+      - description: ID события
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Данные решения
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ReviewEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Одобрить или отклонить событие
+      tags:
+      - events
+  /v1/api/events/approved:
+    get:
+      description: Возвращает список всех событий, доступных публично
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список событий
+          schema:
+            items:
+              $ref: '#/definitions/models.Event'
+            type: array
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Получить одобренные события
+      tags:
+      - events
+  /v1/api/events/pending:
+    get:
+      description: Возвращает список событий в статусе pending (требуется авторизация)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.PendingEvent'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Получить события на модерации
       tags:
       - events
 schemes:

@@ -1,6 +1,9 @@
 // Package redis предоставляет функциональность для взаимодействия с Redis.
 package redis
 
+// TODO: сделать кэширование событий для более быстрого получения их (они все равно почти не меняются)
+// TODO: research chasing strategies
+
 import (
 	"context"
 	"fmt"
