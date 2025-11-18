@@ -26,7 +26,8 @@ definitions:
       id:
         type: string
       metadata:
-        additionalProperties: true
+        additionalProperties: {}
+        description: unstructured, user-defined. Prefer typed fields for core logic.
         type: object
       slot:
         $ref: '#/definitions/discovery.TimeSlot'
@@ -38,7 +39,7 @@ definitions:
       action:
         $ref: '#/definitions/discovery.UserAction'
       context:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       eventId:
         type: string
@@ -415,14 +416,17 @@ paths:
       - auth
   /api/auth/me:
     get:
-      description: Возвращает данные текущего авторизованного пользователя
+      description: Возвращает данные текущего авторизованного пользователя с информацией
+        о статусе регистрации в Telegram
       produces:
       - application/json
       responses:
         "200":
-          description: Информация о пользователе
+          description: 'Информация о пользователе с полями: user (models.User), telegram_registered
+            (bool), telegram_info (object, опционально)'
           schema:
-            $ref: '#/definitions/models.User'
+            additionalProperties: true
+            type: object
         "401":
           description: Не авторизован
           schema:

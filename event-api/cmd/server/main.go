@@ -137,7 +137,11 @@ func run(versionInfo VersionInfo) error {
 	}
 
 	// Инициализируем handlers
-	authHandler := handlers.NewAuthHandler(authService)
+	var telStore *telegram.Store
+	if cfg.TelegramEnabled {
+		telStore = telegram.NewStore(db.DB)
+	}
+	authHandler := handlers.NewAuthHandler(authService, telStore)
 	eventHandler := handlers.NewEventHandler(eventService)
 	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService)
 

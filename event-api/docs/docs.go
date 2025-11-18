@@ -222,7 +222,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Возвращает данные текущего авторизованного пользователя",
+                "description": "Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram",
                 "produces": [
                     "application/json"
                 ],
@@ -232,9 +232,10 @@ const docTemplate = `{
                 "summary": "Получить информацию о текущем пользователе",
                 "responses": {
                     "200": {
-                        "description": "Информация о пользователе",
+                        "description": "Информация о пользователе с полями: user (models.User), telegram_registered (bool), telegram_info (object, опционально)",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
@@ -878,8 +879,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metadata": {
+                    "description": "unstructured, user-defined. Prefer typed fields for core logic.",
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "slot": {
                     "$ref": "#/definitions/discovery.TimeSlot"
@@ -897,7 +899,7 @@ const docTemplate = `{
                 },
                 "context": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "eventId": {
                     "type": "string"

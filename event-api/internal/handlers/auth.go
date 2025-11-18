@@ -7,6 +7,7 @@ import (
 
 	"event-api/internal/logger"
 	"event-api/internal/models"
+	"event-api/internal/telegram"
 
 	"go.uber.org/zap"
 )
@@ -24,13 +25,15 @@ type AuthService interface {
 
 // AuthHandler управляет всеми auth endpoints.
 type AuthHandler struct {
-	authService AuthService
+	authService   AuthService
+	telegramStore *telegram.Store
 }
 
 // NewAuthHandler создает новый auth handler.
-func NewAuthHandler(authService AuthService) *AuthHandler {
+func NewAuthHandler(authService AuthService, telegramStore *telegram.Store) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
+		authService:   authService,
+		telegramStore: telegramStore,
 	}
 }
 
@@ -215,11 +218,11 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 // GetMe возвращает информацию о текущем пользователе
 // @Summary Получить информацию о текущем пользователе
-// @Description Возвращает данные текущего авторизованного пользователя
+// @Description Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram
 // @Tags auth
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} models.User "Информация о пользователе"
+// @Success 200 {object} map[string]interface{} "Информация о пользователе с полями: user (models.User), telegram_registered (bool), telegram_info (object, опционально)"
 // @Failure 401 {object} models.ErrorResponse "Не авторизован"
 // @Router /api/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +240,26 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, user)
+	// Check Telegram binding status
+	response := map[string]interface{}{
+		"user":                user,
+		"telegram_registered": false,
+	}
+
+	if h.telegramStore != nil {
+		binding, err := h.telegramStore.GetBindingByUserID(r.Context(), userID)
+		if err == nil && binding != nil && binding.Status == telegram.BindingStatusActive {
+			response["telegram_registered"] = true
+			response["telegram_info"] = map[string]interface{}{
+				"username":   binding.Username,
+				"chat_id":    binding.ChatID,
+				"status":     binding.Status,
+				"updated_at": binding.UpdatedAt,
+			}
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
 }
 
 // UpdateUserRole обновляет роль пользователя (только для администраторов)
