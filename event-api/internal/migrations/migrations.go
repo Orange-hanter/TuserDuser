@@ -65,6 +65,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   addRoleToUsers,
 			down: dropRoleFromUsers,
 		},
+		{
+			name: "006_create_telegram_notifications",
+			up:   createTelegramNotifications,
+			down: dropTelegramNotifications,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -346,6 +351,83 @@ UPDATE users SET role = 'user' WHERE role IS NULL OR role = '';
 const dropRoleFromUsers = `
 DROP INDEX IF EXISTS idx_users_role;
 ALTER TABLE users DROP COLUMN IF EXISTS role;
+`
+
+const createTelegramNotifications = `
+CREATE TABLE IF NOT EXISTS telegram_binding_tokens (
+	nonce_hash TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	expires_at TIMESTAMPTZ NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_binding_tokens_expires_at
+ON telegram_binding_tokens (expires_at);
+
+CREATE TABLE IF NOT EXISTS telegram_bindings (
+	user_id TEXT PRIMARY KEY,
+	chat_id BIGINT UNIQUE NOT NULL,
+	status TEXT NOT NULL CHECK (status IN ('active','blocked','pending','revoked')),
+	blocked_reason TEXT,
+	last_error_code INTEGER,
+	last_error_at TIMESTAMPTZ,
+	telegram_username TEXT,
+	telegram_first_name TEXT,
+	telegram_last_name TEXT,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_bindings_status ON telegram_bindings(status);
+CREATE INDEX IF NOT EXISTS idx_telegram_bindings_chat_id ON telegram_bindings(chat_id);
+
+CREATE TABLE IF NOT EXISTS telegram_delivery (
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	user_id TEXT NOT NULL,
+	chat_id BIGINT NOT NULL,
+	reminder_id TEXT NOT NULL,
+	payload JSONB NOT NULL,
+	status TEXT NOT NULL CHECK (status IN ('scheduled','sending','sent','failed','blocked','abandoned')),
+	attempt_count INTEGER NOT NULL DEFAULT 0,
+	last_error_code INTEGER,
+	last_error_msg TEXT,
+	next_attempt_at TIMESTAMPTZ,
+	message_id TEXT,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_delivery_status_next_attempt
+ON telegram_delivery (status, next_attempt_at);
+
+CREATE TABLE IF NOT EXISTS telegram_delivery_log (
+	id BIGSERIAL PRIMARY KEY,
+	delivery_id UUID NOT NULL REFERENCES telegram_delivery(id) ON DELETE CASCADE,
+	status TEXT NOT NULL,
+	error_code INTEGER,
+	error_msg TEXT,
+	attempt INTEGER NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_delivery_log_delivery_id
+ON telegram_delivery_log(delivery_id);
+
+CREATE TABLE IF NOT EXISTS telegram_webhook_events (
+	id BIGSERIAL PRIMARY KEY,
+	bot_alias TEXT NOT NULL,
+	update_id BIGINT,
+	payload JSONB NOT NULL,
+	received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`
+
+const dropTelegramNotifications = `
+DROP TABLE IF EXISTS telegram_webhook_events;
+DROP TABLE IF EXISTS telegram_delivery_log;
+DROP TABLE IF EXISTS telegram_delivery;
+DROP TABLE IF EXISTS telegram_bindings;
+DROP TABLE IF EXISTS telegram_binding_tokens;
 `
 
 // Rollback откатывает все миграции (только для разработки!)

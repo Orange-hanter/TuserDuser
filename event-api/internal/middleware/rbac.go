@@ -97,5 +97,8 @@ func respondWithError(w http.ResponseWriter, statusCode int, errorType, message 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	response := fmt.Sprintf(`{"error":"%s","message":"%s","code":%d}`, errorType, message, statusCode)
-	w.Write([]byte(response))
+	_, err := w.Write([]byte(response))
+	if err != nil {
+		logger.Log.Error("Failed to write error response", zap.Error(err))
+	}
 }

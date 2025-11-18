@@ -24,6 +24,7 @@ import (
 	redisClient "event-api/internal/redis"
 	"event-api/internal/service"
 	"event-api/internal/sms"
+	"event-api/internal/telegram"
 	"event-api/internal/worker"
 
 	"github.com/go-chi/chi/v5"
@@ -33,6 +34,10 @@ import (
 
 	_ "event-api/docs" // This is required for Swagger
 )
+
+// TODO: create cron (or smth like tasks manager) to manage events notification
+
+// TODO: configure NGINX to navigate telegramm webhooks
 
 // @title Event API
 // @version 1.0
@@ -136,7 +141,20 @@ func run(versionInfo VersionInfo) error {
 	eventHandler := handlers.NewEventHandler(eventService)
 	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService)
 
-	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, authService, versionInfo)
+	// Инициализируем Telegram
+	var telegramHandler *handlers.TelegramHandler
+	if cfg.TelegramEnabled {
+		teleSettings := telegram.NewSettingsFrom(cfg)
+		telStore := telegram.NewStore(db.DB)
+		telClient := telegram.NewHTTPClient(teleSettings.BotToken, teleSettings.APIBaseURL)
+		telService := telegram.NewService(telStore, teleSettings, logger.Log)
+		telegramHandler = handlers.NewTelegramHandler(telService, telStore, teleSettings, telClient, logger.Log)
+		logger.Log.Info("telegram handler enabled", zap.String("bot", teleSettings.BotUsername))
+	} else {
+		logger.Log.Info("telegram handler disabled")
+	}
+
+	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, authService, telegramHandler, versionInfo)
 
 	// Создаем HTTP сервер с явными настройками
 	srv := &http.Server{
@@ -258,6 +276,10 @@ func logConfig(cfg *config.Config) {
 		zap.String("email_from", cfg.EmailFrom),
 		zap.String("smtp_host", cfg.SMTPHost),
 		zap.Int("smtp_port", cfg.SMTPPort),
+		zap.Bool("telegram_enabled", cfg.TelegramEnabled),
+		zap.String("telegram_webhook_alias", cfg.TelegramWebhookAlias),
+		zap.Int("telegram_rate_limit_per_sec", cfg.TelegramRateLimitPerSec),
+		zap.Int("telegram_max_attempts", cfg.TelegramMaxAttempts),
 	)
 }
 
@@ -406,11 +428,17 @@ func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
 	return result
 }
 
-func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, authService *service.AuthService, versionInfo VersionInfo) http.Handler {
+func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, versionInfo VersionInfo) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.SecurityHeaders)
 	r.Get("/health", handlers.HealthCheck)
 	r.Get("/version", versionHandler(versionInfo))
+
+	if telegramHandler != nil {
+		r.Route("/webhooks/telegram", func(r chi.Router) {
+			r.Post("/{botAlias}", telegramHandler.Webhook)
+		})
+	}
 
 	r.Route("/v1", func(r chi.Router) {
 		// Public auth endpoints
@@ -427,6 +455,12 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 		// Authenticated user endpoints
 		authenticated := r.With(middleware.AuthMiddleware(authService))
 		authenticated.Get("/api/auth/me", authHandler.GetMe)
+		if telegramHandler != nil {
+			authenticated.Route("/api/notifications/telegram", func(r chi.Router) {
+				r.Post("/link", telegramHandler.IssueLink)
+				r.Get("/status", telegramHandler.BindingStatus)
+			})
+		}
 		authenticated.Route("/api/discovery", func(r chi.Router) {
 			r.Get("/next", discoveryHandler.Next)
 			r.Post("/action", discoveryHandler.Action)

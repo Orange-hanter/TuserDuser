@@ -56,6 +56,19 @@ type Config struct {
 	SMTPUsername  string
 	SMTPPassword  string
 	SMTPUseSSL    bool
+
+	// Telegram notification config
+	TelegramEnabled          bool
+	TelegramBotToken         string
+	TelegramWebhookSecret    string
+	TelegramBindingSecret    string
+	TelegramBindingTTL       int
+	TelegramRateLimitPerSec  int
+	TelegramMaxAttempts      int
+	TelegramRetryBaseSeconds int
+	TelegramWebhookAlias     string
+	TelegramBotUsername      string
+	TelegramAPIBaseURL       string
 }
 
 // Load загружает конфигурацию из переменных окружения.
@@ -109,6 +122,18 @@ func Load() *Config {
 		SMTPUsername:  getEnv("SMTP_USERNAME", ""),
 		SMTPPassword:  getEnv("SMTP_PASSWORD", ""),
 		SMTPUseSSL:    getEnvAsBool("SMTP_USE_SSL", false),
+
+		TelegramEnabled:          getEnvAsBool("TELEGRAM_ENABLED", false),
+		TelegramBotToken:         getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramWebhookSecret:    getEnv("TELEGRAM_WEBHOOK_SECRET", ""),
+		TelegramBindingSecret:    getEnv("TELEGRAM_BINDING_SECRET", "change-me"),
+		TelegramBindingTTL:       getEnvAsInt("TELEGRAM_BINDING_TTL_SECONDS", 600),
+		TelegramRateLimitPerSec:  getEnvAsInt("TELEGRAM_RATE_LIMIT_PER_SEC", 30),
+		TelegramMaxAttempts:      getEnvAsInt("TELEGRAM_MAX_ATTEMPTS", 5),
+		TelegramRetryBaseSeconds: getEnvAsInt("TELEGRAM_RETRY_BASE_SECONDS", 5),
+		TelegramWebhookAlias:     getEnv("TELEGRAM_WEBHOOK_ALIAS", "primary"),
+		TelegramBotUsername:      getEnv("TELEGRAM_BOT_USERNAME", ""),
+		TelegramAPIBaseURL:       getEnv("TELEGRAM_API_BASE_URL", "https://api.telegram.org"),
 	}
 }
 
