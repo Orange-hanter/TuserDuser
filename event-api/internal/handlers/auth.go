@@ -321,11 +321,11 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // GetMe возвращает информацию о текущем пользователе
 //
 // @Summary Получить информацию о текущем пользователе
-// @Description Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram
+// @Description Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram и ролью пользователя (role: user|creator|support|admin)
 // @Tags auth
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{} "Информация о пользователе с полями: user (models.User), telegram_registered (bool), telegram_info (object, опционально)"
+// @Success 200 {object} map[string]interface{} "Информация о пользователе с полями: user (models.User), role (string), telegram_registered (bool), telegram_info (object, опционально)"
 // @Failure 401 {object} models.ErrorResponse "Не авторизован"
 // @Router /api/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -349,6 +349,10 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		"telegram_registered": false,
 	}
 
+	// Добавляем явное поле роли пользователя для удобства клиентов.
+	// Ожидается, что модель `models.User` содержит поле `Role string`.
+	response["role"] = user.Role
+
 	if h.telegramStore != nil {
 		// Если telegramStore доступен, пробуем получить привязку. Ошибки при
 		// получении привязки не приводят к фейлу эндпоинта — они логируются
@@ -369,17 +373,30 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, response)
 }
 
-// UpdateUserRole обновляет роль пользователя (только для администраторов)
+// UpdateUserRole обновляет роль пользователя (только для администраторов).
+//
+// Описание:
+//   - Позволяет администратору назначать пользователю одну из предопределённых ролей.
+//   - Допустимые значения поля `role`: `user`, `creator`, `support`, `admin`.
+//   - При назначении роли `reject`/`block` не используется — используйте только
+//     указанные допустимые строки. Если передано недопустимое значение — возвращается 400.
+//
+// Пример запроса:
+//
+//	{
+//	  "user_id": "<user-id>",
+//	  "role": "creator"
+//	}
 //
 // @Summary Обновить роль пользователя
-// @Description Позволяет администратору назначить роль creator или support пользователю
+// @Description Назначает пользователю одну из ролей: `user`, `creator`, `support`, `admin`. Только для администраторов.
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body models.UpdateRoleRequest true "Данные для обновления роли"
+// @Param request body models.UpdateRoleRequest true "Данные для обновления роли (role: user|creator|support|admin)"
 // @Success 200 {object} models.User "Обновленный пользователь"
-// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса или недопустимая роль"
 // @Failure 403 {object} models.ErrorResponse "Недостаточно прав"
 // @Failure 404 {object} models.ErrorResponse "Пользователь не найден"
 // @Router /api/admin/users/role [put]
