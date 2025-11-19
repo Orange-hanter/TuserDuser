@@ -1,3 +1,10 @@
+// Package handlers содержит HTTP-обработчики, выполняющие роль тонкой
+// транспортной прослойки поверх сервисного слоя. Handlers принимают и парсят
+// HTTP-запросы, выполняют базовую валидацию, переводят доменные ошибки в
+// читабельные JSON-ответы и управляют HTTP-статусами.
+//
+// Этот файл реализует обработчики для работы с событиями (events):
+// публичные события, события на модерации, создание, ревью и удаление.
 package handlers
 
 import (
@@ -13,20 +20,32 @@ import (
 	"go.uber.org/zap"
 )
 
-// EventHandler управляет всеми event endpoints.
+// EventHandler управляет всеми endpoints, связанными с событиями (events).
+//
+// Responsibilities:
+// - Принимать HTTP-запросы, выполнять базовую валидацию/парсинг.
+// - Делегировать бизнес-логику в `service.EventService`.
+// - Обрабатывать ошибки сервисного слоя и возвращать понятные клиенту JSON-ответы.
 type EventHandler struct {
 	eventService *service.EventService
 }
 
-// NewEventHandler создает новый event handler.
+// NewEventHandler создает новый экземпляр `EventHandler`.
+//
+// Параметры:
+// - `eventService` — реализация бизнес-логики работы с событиями.
 func NewEventHandler(eventService *service.EventService) *EventHandler {
 	return &EventHandler{
 		eventService: eventService,
 	}
 }
 
-// GetApprovedEvents получает все одобренные события
-// GET /v1/api/events/approved
+// GetApprovedEvents возвращает все публично доступные одобренные события.
+//
+// Поведение:
+// - Запрашивает у сервисного слоя список всех событий со статусом "approved".
+// - В случае ошибки сервисного слоя возвращает 500 с общей информацией.
+//
 // @Summary Получить одобренные события
 // @Description Возвращает список всех событий, доступных публично
 // @Tags events
@@ -45,8 +64,13 @@ func (h *EventHandler) GetApprovedEvents(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusOK, events)
 }
 
-// GetPendingEvents получает события, ожидающие модерации
-// GET /v1/api/events/pending
+// GetPendingEvents возвращает события, ожидающие модерации.
+//
+// Поведение:
+// - Возвращает события в статусе `pending` — используется админами/модераторами.
+// - Предполагает, что caller авторизован (проверка через middleware).
+// - В случае проблем с сервисом возвращает 500.
+//
 // @Summary Получить события на модерации
 // @Description Возвращает список событий в статусе pending (требуется авторизация)
 // @Tags events
@@ -66,8 +90,13 @@ func (h *EventHandler) GetPendingEvents(w http.ResponseWriter, r *http.Request) 
 	respondWithJSON(w, http.StatusOK, events)
 }
 
-// GetEventByID получает событие по ID
-// GET /v1/api/events/{id}
+// GetEventByID возвращает событие по его идентификатору.
+//
+// Поведение и валидация:
+// - Читает `id` из path-параметра; если пустой — возвращает 400.
+// - Делегирует поиск событию в `eventService.GetEventByID`.
+// - Возвращает 200 и объект события или 404/500 в зависимости от ошибки.
+//
 // @Summary Получить событие по ID
 // @Description Возвращает событие с указанным ID
 // @Tags events
@@ -94,8 +123,12 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, event)
 }
 
-// CreateEvent создает новое событие
-// POST /v1/api/events
+// CreateEvent создаёт новое событие и отправляет его на модерацию.
+//
+// Ожидаемый JSON (models.CreateEventRequest) — см. модель:
+// - Поля `Type` и `PriceType` обязательны; при их отсутствии возвращается 400.
+// - При успешном создании событие возвращается в статусе pending с кодом 201.
+//
 // @Summary Создать событие
 // @Description Создает новое событие
 // @Tags events
@@ -131,8 +164,15 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusCreated, event)
 }
 
-// ReviewPendingEvent одобряет или отклоняет событие
-// POST /v1/api/events/{id}/review
+// ReviewPendingEvent переводит событие из очереди модерации в одобренные или
+// отклонённые.
+//
+// Поведение:
+// - Читает `id` из path; валидирует тело запроса (`action`, комментарий при reject).
+// - Допускаются action: `approve`, `reject`, `block`.
+// - При отклонении комментарий обязателен.
+// - Делегирует операцию в `eventService.ReviewPendingEvent`.
+//
 // @Summary Одобрить или отклонить событие
 // @Description Переводит событие из очереди модерации в основной список или архив
 // @Tags events
@@ -188,8 +228,12 @@ func (h *EventHandler) ReviewPendingEvent(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// DeleteEvent удаляет событие
-// DELETE /v1/api/events/{id}
+// DeleteEvent удаляет событие по указанному ID.
+//
+// Поведение:
+// - Читает `id` из path и вызывает `eventService.DeleteEvent`.
+// - В случае отсутствия события возвращает 404; при ошибках сервиса — 500.
+//
 // @Summary Удалить событие
 // @Description Удаляет событие по ID
 // @Tags events

@@ -1,3 +1,11 @@
+// Package handlers содержит HTTP-обработчики, которые выступают тонким
+// транспортным слоем поверх бизнес-логики. Handlers принимают HTTP-запросы,
+// выполняют базовую валидацию/парсинг, переводят ошибки бизнес-логики в
+// читабельные JSON-ответы и управляют HTTP статус-кодами.
+//
+// Этот файл содержит обработчики для discovery-движка — механизма, который
+// предоставляет пользователю последовательность событий (time-slot discovery),
+// позволяет отдавать реакции (like/dislike), а также бронировать события.
 package handlers
 
 import (
@@ -12,21 +20,34 @@ import (
 	"go.uber.org/zap"
 )
 
-// DiscoveryHandler exposes the narrow time-slot discovery engine over HTTP.
+// DiscoveryHandler предоставляет HTTP-обёртку для discovery.Service.
+//
+// Поведение:
+//   - Делегирует основную логику и валидацию в `discovery.Service`.
+//   - Преобразует ошибки домена в JSON-ответы с понятными кодами и типами ошибок.
+//   - Ожидает, что middleware аутентификации поставит `X-User-ID` в заголовок
+//     запроса (см. `extractUserID`).
 type DiscoveryHandler struct {
 	service *discovery.Service
 }
 
-// NewDiscoveryHandler instantiates the handler layer.
+// NewDiscoveryHandler создает инстанс `DiscoveryHandler`.
+//
+// Параметры:
+//   - `service` — реализация discovery-логики, отвечающая за получение событий,
+//     применение действий пользователя и бронирования.
 func NewDiscoveryHandler(service *discovery.Service) *DiscoveryHandler {
 	return &DiscoveryHandler{service: service}
 }
 
-// Next returns the next event in the queue.
+// Next возвращает следующее событие в очереди для текущего пользователя.
 //
-// Retrieves the next event for the authenticated user, taking into account
-// existing bookings and schedule conflicts. Events are processed in FIFO order,
-// but skipped if they conflict with prior reservations.
+// Описание поведения:
+//   - Проверяет наличие `X-User-ID` (middleware должен установить его).
+//   - Вызывает `service.NextEvent`, который применяет правила очереди,
+//     пропуская конфликтующие события и возвращая первое подходящее.
+//   - Возможные ответы: 200 с данными события, 404 если очередь пуста,
+//     409 при конфликте действий, 500 при внутренних ошибках.
 //
 // @Summary Получить следующее событие окна
 // @Description Возвращает следующее событие в очереди с учетом бронирований и конфликтов
@@ -52,7 +73,21 @@ func (h *DiscoveryHandler) Next(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, result)
 }
 
-// Action applies like/dislike/neutral feedback.
+// Action обрабатывает реакцию пользователя на текущее событие очереди.
+//
+// Ожидаемый JSON (models.DiscoveryActionRequest):
+//
+//	{
+//	  "eventId": "<id>",
+//	  "action": "like|dislike|neutral|book"
+//	}
+//
+// Поведение:
+//   - Валидирует вход (eventId обязателен, action — корректен).
+//   - Если action == "book" — клиент должен использовать отдельный эндпоинт
+//     `/book` (чтобы отделить семантику брони от простых реакций).
+//   - Делегирует выполнение `service.ApplyAction`, возвращает запись истории при успехе.
+//
 // @Summary Отправить реакцию на событие
 // @Description Обрабатывает действия like/dislike/neutral для текущего события в очереди
 // @Tags discovery
@@ -94,7 +129,17 @@ func (h *DiscoveryHandler) Action(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, entry)
 }
 
-// Book commits to an event and propagates conflicts.
+// Book подтверждает участие в событии (бронь) и переносит конфликтующие
+// события в конец очереди.
+//
+// Ожидаемый JSON (models.DiscoveryBookRequest): {"eventId":"<id>"}
+//
+// Поведение:
+//   - Валидирует наличие `eventId`.
+//   - Вызывает `service.BookEvent`, который выполняет операцию бронирования и
+//     разрешает конфликты в соответствии с бизнес-правилами.
+//   - Возвращает результат бронирования или соответствующую ошибку.
+//
 // @Summary Забронировать событие
 // @Description Подтверждает участие в текущем событии, откладывая конфликтующие события в конец очереди
 // @Tags discovery
@@ -131,7 +176,12 @@ func (h *DiscoveryHandler) Book(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, result)
 }
 
-// History returns chronological user actions.
+// History возвращает хронологическую историю действий пользователя в discovery.
+//
+// Поведение:
+// - Читает `X-User-ID` и запрашивает историю у сервиса.
+// - Возвращает массив записей истории или 500 при ошибке получения.
+//
 // @Summary История действий пользователя
 // @Description Возвращает детальную историю действий discovery-движка для пользователя
 // @Tags discovery

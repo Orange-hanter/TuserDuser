@@ -1,4 +1,29 @@
 // Package handlers содержит HTTP обработчики для аутентификации и управления пользователями.
+//
+// Этот пакет реализует HTTP-ориентированный слой (handlers) поверх бизнес-логики
+// (AuthService) и вспомогательных хранилищ (например, Telegram bindings storage).
+//
+// Документирование ожиданий и поведения:
+//   - Каждый метод-обработчик ожидает JSON в теле запроса (если иное не указано) и
+//     возвращает JSON-ответы с соответствующими HTTP-кодами.
+//   - Валидация входных данных выполняется на уровне handler'ов с явными сообщениями
+//     об ошибке и кодами ошибок в структуре `models.ErrorResponse`.
+//   - Логирование делится на уровни: Info для успешных операций, Warn для
+//     ожидаемых проблем (например, неверные креды), Error для непредвиденных ошибок.
+//   - Некоторые эндпоинты требуют аутентификации (см. комментарии `@Security BearerAuth`).
+//
+// Примеры использования (curl):
+//  1. Регистрация:
+//     curl -X POST -H "Content-Type: application/json" -d '{"email":"a@b.ru","password":"12345678","phone":"+79001234567"}' http://.../api/auth/register
+//  2. Вход:
+//     curl -X POST -H "Content-Type: application/json" -d '{"email":"a@b.ru","password":"12345678"}' http://.../api/auth/login
+//
+// Замечания по безопасности:
+//   - Handlers не хранят и не валидируют токены напрямую — это задача сервисного слоя.
+//   - Для операций, связанных с ролью/администрированием, предполагается наличие
+//     middleware, проверяющего права пользователя (RBAC).
+//   - В development режиме некоторые данные (verify_code) могут возвращаться в ответе
+//     для удобства тестирования; в production это следует отключать.
 package handlers
 
 import (
@@ -13,6 +38,22 @@ import (
 )
 
 // AuthService описывает необходимые методы для обслуживания auth endpoints.
+//
+// Описание контрактов:
+//   - Register: принимает `models.RegisterRequest`, создает запись пользователя в БД,
+//     генерирует код верификации (или отправляет его в сторонние сервисы) и
+//     возвращает созданного пользователя и код (код может возвращаться в ответе
+//     только в development/testing средах).
+//   - VerifyAndIssueToken: проверяет код верификации для указанного email и, при успехе,
+//     возвращает структуру `models.AuthResponse`, содержащую access и refresh токены.
+//   - Login: валидирует учетные данные, возвращает `models.AuthResponse` при успехе.
+//   - Logout: инвалидирует refresh токен (или помечает сессию как неактивную).
+//   - GetUserByID/GetAllUsers/UpdateUserRole: CRUD-операции для пользователей,
+//     используемые административными эндпоинтами. UpdateUserRole должен проверять
+//     корректность роли на уровне сервисного слоя.
+//
+// Все методы должны возвращать понятные ошибки, которые handlers переводят в
+// корректные HTTP-коды и JSON-ошибки.
 type AuthService interface {
 	Register(*models.RegisterRequest) (*models.User, string, error)
 	VerifyAndIssueToken(email, code string) (*models.AuthResponse, error)
@@ -24,12 +65,25 @@ type AuthService interface {
 }
 
 // AuthHandler управляет всеми auth endpoints.
+//
+// Полезная информация о поле `telegramStore`:
+//   - `telegramStore` используется для проверки привязки Telegram к пользователю
+//     (например, в `GetMe`). Может быть nil — handlers должны корректно
+//     обрабатывать этот случай и не приводить к панике.
+//   - `authService` содержит бизнес-логику и абстрагирует работу с БД и токенами.
 type AuthHandler struct {
 	authService   AuthService
 	telegramStore *telegram.Store
 }
 
 // NewAuthHandler создает новый auth handler.
+//
+// Параметры:
+// - `authService` — реализация интерфейса `AuthService`, отвечающая за бизнес-логику.
+// - `telegramStore` — (опционально) хранилище привязок Telegram; может быть nil.
+//
+// Возвращает готовую структуру `AuthHandler`, которую можно использовать при
+// регистрации маршрутов HTTP сервера.
 func NewAuthHandler(authService AuthService, telegramStore *telegram.Store) *AuthHandler {
 	return &AuthHandler{
 		authService:   authService,
@@ -37,7 +91,15 @@ func NewAuthHandler(authService AuthService, telegramStore *telegram.Store) *Aut
 	}
 }
 
-// respondWithError отправляет JSON ответ с ошибкой
+// respondWithError отправляет JSON ответ с ошибкой.
+//
+// Формат ответа соответствует `models.ErrorResponse` и содержит поля:
+// - error: краткий тип ошибки (например, "bad_request", "unauthorized")
+// - message: подробное сообщение об ошибке, пригодное для отображения клиенту
+// - code: HTTP статус код
+//
+// Функция логирует внутренние ошибки кодирования JSON, но не раскрывает
+// внутренние детали клиенту.
 func respondWithError(w http.ResponseWriter, statusCode int, errorType, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -52,7 +114,10 @@ func respondWithError(w http.ResponseWriter, statusCode int, errorType, message 
 	}
 }
 
-// respondWithJSON отправляет JSON ответ с данными
+// respondWithJSON отправляет JSON ответ с данными.
+//
+// Преобразует `data` в JSON и отправляет с указанным `statusCode`.
+// Логирует ошибку кодирования, но не изменяет уже отправленный статус код.
 func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -61,7 +126,28 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	}
 }
 
-// Register обрабатывает регистрацию нового пользователя
+// Register обрабатывает регистрацию нового пользователя.
+//
+// Ожидаемый JSON в теле запроса (models.RegisterRequest):
+//
+//	{
+//	  "email": "user@example.com",
+//	  "password": "securepassword",
+//	  "phone": "+79001234567",
+//	  "verification_type": "email|sms|both" (опционально)
+//	}
+//
+// Поведение:
+//   - Выполняет базовую валидацию (наличие email/password/phone, длина пароля).
+//   - Делегирует создание пользователя в `authService.Register`.
+//   - В случае успеха возвращает HTTP 201 и объект с полем `user` и (в dev)
+//     `verify_code` для тестирования.
+//   - В случае конфликта (пользователь уже существует) возвращает 409.
+//
+// Безопасность:
+// - Никогда не логировать пароли в явном виде.
+// - В production не возвращать `verify_code` в ответе.
+//
 // @Summary Регистрация нового пользователя
 // @Description Создает нового пользователя и отправляет код верификации через email и/или SMS (в зависимости от verification_type: "email", "sms", "both")
 // @Tags auth
@@ -110,6 +196,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Verify проверяет код верификации
+//
 // @Summary Верификация email
 // @Description Проверяет код верификации для подтверждения email и возвращает JWT токен
 // @Tags auth
@@ -120,6 +207,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} models.ErrorResponse "Неверный код или формат запроса"
 // @Router /api/auth/verify [post]
 func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	// Ожидаемый JSON в теле запроса (models.VerifyRequest): {"email":"...","code":"1234"}
 	var req models.VerifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге VerifyRequest", zap.Error(err))
@@ -127,8 +215,11 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Делегируем проверку и выдачу токена в сервисный слой.
 	authResponse, err := h.authService.VerifyAndIssueToken(req.Email, req.Code)
 	if err != nil {
+		// Валидационные/пользовательские ошибки (не найден/неверный код) обычно
+		// трактуются как Bad Request и логируются как Warn — это ожидаемое поведение.
 		logger.Log.Warn("Ошибка при верификации", zap.String("email", req.Email), zap.Error(err))
 		respondWithError(w, http.StatusBadRequest, "verification_failed", err.Error())
 		return
@@ -139,6 +230,7 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login аутентифицирует пользователя и выдает JWT
+//
 // @Summary Вход в систему
 // @Description Аутентифицирует пользователя и возвращает JWT токены
 // @Tags auth
@@ -150,6 +242,10 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} models.ErrorResponse "Неверные учетные данные"
 // @Router /api/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	// Ожидаемый JSON (models.LoginRequest): {"email":"...","password":"..."}
+	// Поведение:
+	// - Делегирует проверку учетных данных в `authService.Login`.
+	// - При неуспехе возвращает 401 Unauthorized с объясняющим сообщением.
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге LoginRequest", zap.Error(err))
@@ -159,6 +255,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	authResponse, err := h.authService.Login(&req)
 	if err != nil {
+		// Ошибки аутентификации считаются ожидаемыми — логируем как Warn.
 		logger.Log.Warn("Ошибка при входе", zap.String("email", req.Email))
 		respondWithError(w, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
@@ -169,6 +266,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout выходит из системы (инвалидирует токены)
+//
 // @Summary Выход из системы
 // @Description Инвалидирует refresh токен пользователя
 // @Tags auth
@@ -203,8 +301,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Попытка залогアウトить токен — сервисный слой может пометить сессию
+	// как неактивную или удалить refresh токен из хранилища.
 	err := h.authService.Logout(token)
 	if err != nil {
+		// Ошибки при выходе считаются серверными проблемами, логируются и
+		// приводят к 500 для клиента с общим сообщением.
 		logger.Log.Error("Ошибка при выходе", zap.Error(err))
 		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при выходе")
 		return
@@ -217,6 +319,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMe возвращает информацию о текущем пользователе
+//
 // @Summary Получить информацию о текущем пользователе
 // @Description Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram
 // @Tags auth
@@ -240,13 +343,16 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check Telegram binding status
+	// Build response with Telegram binding status (if telegramStore provided).
 	response := map[string]interface{}{
 		"user":                user,
 		"telegram_registered": false,
 	}
 
 	if h.telegramStore != nil {
+		// Если telegramStore доступен, пробуем получить привязку. Ошибки при
+		// получении привязки не приводят к фейлу эндпоинта — они логируются
+		// внутри telegramStore или сервисного слоя; здесь мы ведем себя терпимо.
 		binding, err := h.telegramStore.GetBindingByUserID(r.Context(), userID)
 		if err == nil && binding != nil && binding.Status == telegram.BindingStatusActive {
 			response["telegram_registered"] = true
@@ -259,10 +365,12 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Возвращаем информацию о пользователе и (опционально) данные Telegram.
 	respondWithJSON(w, http.StatusOK, response)
 }
 
 // UpdateUserRole обновляет роль пользователя (только для администраторов)
+//
 // @Summary Обновить роль пользователя
 // @Description Позволяет администратору назначить роль creator или support пользователю
 // @Tags admin
@@ -318,6 +426,7 @@ func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllUsers возвращает список всех пользователей (только для администраторов)
+//
 // @Summary Получить список всех пользователей
 // @Description Возвращает список всех пользователей системы
 // @Tags admin
@@ -330,6 +439,8 @@ func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.authService.GetAllUsers()
 	if err != nil {
+		// В большинстве случаев ошибки получения списка пользователей — это
+		// проблемы с БД или репозиторием. Логируем и возвращаем 500.
 		logger.Log.Error("Ошибка при получении списка пользователей", zap.Error(err))
 		respondWithError(w, http.StatusInternalServerError, "internal_error", "Ошибка при получении пользователей")
 		return
