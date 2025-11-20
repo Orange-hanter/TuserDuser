@@ -322,9 +322,10 @@ paths:
     put:
       consumes:
       - application/json
-      description: Позволяет администратору назначить роль creator или support пользователю
+      description: 'Назначает пользователю одну из ролей: `user`, `creator`, `support`,
+        `admin`. Только для администраторов.'
       parameters:
-      - description: Данные для обновления роли
+      - description: 'Данные для обновления роли (role: user|creator|support|admin)'
         in: body
         name: request
         required: true
@@ -338,7 +339,7 @@ paths:
           schema:
             $ref: '#/definitions/models.User'
         "400":
-          description: Неверный формат запроса
+          description: Неверный формат запроса или недопустимая роль
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "403":
@@ -416,14 +417,14 @@ paths:
       - auth
   /api/auth/me:
     get:
-      description: Возвращает данные текущего авторизованного пользователя с информацией
-        о статусе регистрации в Telegram
+      description: 'Возвращает данные текущего авторизованного пользователя с информацией
+        о статусе регистрации в Telegram и ролью пользователя (role: user|creator|support|admin)'
       produces:
       - application/json
       responses:
         "200":
-          description: 'Информация о пользователе с полями: user (models.User), telegram_registered
-            (bool), telegram_info (object, опционально)'
+          description: 'Информация о пользователе с полями: user (models.User), role
+            (string), telegram_registered (bool), telegram_info (object, опционально)'
           schema:
             additionalProperties: true
             type: object

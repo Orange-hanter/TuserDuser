@@ -3,18 +3,21 @@
 ## 🎯 Что вы получили
 
 ### ✨ 4 красивые функции форматирования
+
 - `FormatError()` — красные ошибки с ❌
-- `FormatSuccess()` — зелёные успехи с ✅  
+- `FormatSuccess()` — зелёные успехи с ✅
 - `FormatWarning()` — жёлтые предупреждения с ⚠️
 - `FormatInfo()` — синяя информация с ℹ️
 
 ### 🎨 Визуальные преимущества
+
 - Цветной вывод в консоль
 - Unicode символы для акцента
 - Красивые рамки и разделители
 - Структурированный формат информации
 
 ### 🚀 Полная интеграция
+
 - Работает в `cmd/server/main.go`
 - Используется для ошибок БД, миграций, запуска
 - Поддержка development и production режимов
@@ -24,23 +27,25 @@
 
 ## 📖 Документация
 
-| Файл | Назначение | Когда использовать |
-|------|-----------|-------------------|
-| **LOGGING.md** | Полное руководство | Когда нужна полная информация |
-| **ERROR_FORMATTING_GUIDE.md** | Практический гайд | Для быстрого старта |
-| **VISUAL_GUIDE.md** | Визуальные примеры | Для выбора нужного формата |
-| **IMPROVEMENTS_SUMMARY.md** | Итоговый отчёт | Обзор всех изменений |
+| Файл                          | Назначение         | Когда использовать            |
+| ----------------------------- | ------------------ | ----------------------------- |
+| **LOGGING.md**                | Полное руководство | Когда нужна полная информация |
+| **ERROR_FORMATTING_GUIDE.md** | Практический гайд  | Для быстрого старта           |
+| **VISUAL_GUIDE.md**           | Визуальные примеры | Для выбора нужного формата    |
+| **IMPROVEMENTS_SUMMARY.md**   | Итоговый отчёт     | Обзор всех изменений          |
 
 ---
 
 ## 🎮 Быстрый старт
 
 ### Шаг 1: Посмотрите демонстрацию
+
 ```bash
 make logger-demo
 ```
 
 ### Шаг 2: Используйте в коде
+
 ```go
 import "event-api/internal/logger"
 
@@ -52,6 +57,7 @@ fmt.Println(logger.FormatSuccess("Completed", "Details..."))
 ```
 
 ### Шаг 3: Запустите сервер
+
 ```bash
 make run
 ```
@@ -61,6 +67,7 @@ make run
 ## 🔍 Примеры по типам операций
 
 ### 🔐 Аутентификация
+
 ```go
 // Ошибка входа
 logger.Log.Error(logger.FormatError(
@@ -79,6 +86,7 @@ logger.Log.Info(logger.FormatSuccess(
 ```
 
 ### 💾 База данных
+
 ```go
 // Ошибка подключения
 fmt.Println(logger.FormatError(
@@ -97,6 +105,7 @@ fmt.Println(logger.FormatSuccess(
 ```
 
 ### 💳 Платежи
+
 ```go
 // Ошибка платежа
 logger.Log.Error(logger.FormatError(
@@ -130,6 +139,7 @@ logger.Log.Info(logger.FormatSuccess(
 ## 🛠️ Интеграция в разные части приложения
 
 ### В handlers
+
 ```go
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
     if err != nil {
@@ -141,6 +151,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 ```
 
 ### В services
+
 ```go
 func (s *Service) ProcessOrder(order *Order) error {
     if !validateOrder(order) {
@@ -152,6 +163,7 @@ func (s *Service) ProcessOrder(order *Order) error {
 ```
 
 ### В migrations
+
 ```go
 func (m *Migrator) RunMigrations() error {
     if err := m.applyMigrations(); err != nil {
@@ -168,6 +180,7 @@ func (m *Migrator) RunMigrations() error {
 ## 🎓 Когда использовать каждый тип
 
 ### ❌ FormatError()
+
 - Ошибки подключения к БД
 - Ошибки валидации данных
 - Ошибки аутентификации
@@ -175,6 +188,7 @@ func (m *Migrator) RunMigrations() error {
 - Любые критичные ошибки
 
 ### ✅ FormatSuccess()
+
 - Пользователь успешно зарегистрирован
 - Платёж обработан успешно
 - Данные синхронизированы
@@ -182,6 +196,7 @@ func (m *Migrator) RunMigrations() error {
 - Любые успешные операции
 
 ### ⚠️ FormatWarning()
+
 - .env файл не найден
 - Deprecated API используется
 - Высокое использование памяти
@@ -189,6 +204,7 @@ func (m *Migrator) RunMigrations() error {
 - Любые потенциальные проблемы
 
 ### ℹ️ FormatInfo()
+
 - Конфигурация загружена
 - Миграции выполнены
 - Сервер готов к работе
@@ -227,12 +243,14 @@ make docker-run         # Запускает контейнер
 ## 🌍 Совместимость
 
 ✅ **Поддерживаемые системы:**
+
 - macOS (Terminal, iTerm2)
 - Linux (любые терминалы)
 - Windows 10+ (Windows Terminal, PowerShell)
 - VS Code Integrated Terminal
 
 ⚠️ **Production режим:**
+
 - Использует JSON для логирования
 - Совместим с ELK stack, Splunk и другими
 - Без ANSI цветов для чистоты логов
@@ -291,6 +309,7 @@ event-api/
 Спасибо за использование улучшенного логирования Event API!
 
 Если у вас есть вопросы или предложения по улучшению, смотрите документацию:
+
 - `LOGGING.md` — полное руководство
 - `ERROR_FORMATTING_GUIDE.md` — практические примеры
 - `VISUAL_GUIDE.md` — визуальная демонстрация

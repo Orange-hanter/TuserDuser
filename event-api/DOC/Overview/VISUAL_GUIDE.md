@@ -33,6 +33,7 @@
 ```
 
 **Код:**
+
 ```go
 fmt.Println(logger.FormatError(
     "Database Connection Failed",
@@ -74,6 +75,7 @@ fmt.Println(logger.FormatError(
 ```
 
 **Код:**
+
 ```go
 fmt.Println(logger.FormatSuccess(
     "Server Started Successfully",
@@ -113,6 +115,7 @@ fmt.Println(logger.FormatSuccess(
 ```
 
 **Код:**
+
 ```go
 fmt.Println(logger.FormatWarning(
     ".env file not found",
@@ -154,6 +157,7 @@ fmt.Println(logger.FormatWarning(
 ```
 
 **Код:**
+
 ```go
 fmt.Println(logger.FormatInfo(
     "Application Configuration",
@@ -169,30 +173,30 @@ fmt.Println(logger.FormatInfo(
 
 ### Аутентификация
 
-| Операция | Функция | Пример |
-|----------|---------|---------|
-| Успешный вход | ✅ Success | "User Logged In" |
-| Ошибка входа | ❌ Error | "Login Failed: Invalid password" |
-| Токен истёк | ⚠️ Warning | "JWT token expired" |
-| Новая попытка | ℹ️ Info | "Token refresh initiated" |
+| Операция      | Функция    | Пример                           |
+| ------------- | ---------- | -------------------------------- |
+| Успешный вход | ✅ Success | "User Logged In"                 |
+| Ошибка входа  | ❌ Error   | "Login Failed: Invalid password" |
+| Токен истёк   | ⚠️ Warning | "JWT token expired"              |
+| Новая попытка | ℹ️ Info    | "Token refresh initiated"        |
 
 ### База данных
 
-| Операция | Функция | Пример |
-|----------|---------|---------|
+| Операция             | Функция    | Пример               |
+| -------------------- | ---------- | -------------------- |
 | Успешное подключение | ✅ Success | "Database Connected" |
-| Ошибка подключения | ❌ Error | "Connection refused" |
-| Медленный запрос | ⚠️ Warning | "Query took 5s" |
-| Миграция | ℹ️ Info | "Migrations applied" |
+| Ошибка подключения   | ❌ Error   | "Connection refused" |
+| Медленный запрос     | ⚠️ Warning | "Query took 5s"      |
+| Миграция             | ℹ️ Info    | "Migrations applied" |
 
 ### Платежи
 
-| Операция | Функция | Пример |
-|----------|---------|---------|
-| Платёж обработан | ✅ Success | "Payment Processed" |
-| Ошибка платежа | ❌ Error | "Payment failed: Insufficient funds" |
-| Подозрительная активность | ⚠️ Warning | "High transaction frequency" |
-| Платёж инициирован | ℹ️ Info | "Processing payment..." |
+| Операция                  | Функция    | Пример                               |
+| ------------------------- | ---------- | ------------------------------------ |
+| Платёж обработан          | ✅ Success | "Payment Processed"                  |
+| Ошибка платежа            | ❌ Error   | "Payment failed: Insufficient funds" |
+| Подозрительная активность | ⚠️ Warning | "High transaction frequency"         |
+| Платёж инициирован        | ℹ️ Info    | "Processing payment..."              |
 
 ---
 
@@ -264,6 +268,7 @@ fmt.Println(logger.FormatInfo(
 ## 📱 Совместимость
 
 ✅ **Поддерживаемые терминалы:**
+
 - macOS Terminal
 - macOS iTerm2
 - Linux Terminal
@@ -272,6 +277,7 @@ fmt.Println(logger.FormatInfo(
 - PowerShell (Windows 10+)
 
 ⚠️ **Ограничения:**
+
 - Старые версии Windows cmd.exe не поддерживают ANSI цвета
 - Production режим использует JSON (без цветов)
 
@@ -299,6 +305,7 @@ const (
 ## 📞 Поддержка
 
 **Вопросы о форматировании?**
+
 - Смотрите `LOGGING.md` для полного руководства
 - Смотрите `ERROR_FORMATTING_GUIDE.md` для практических примеров
 - Запустите `make logger-demo` для демонстрации

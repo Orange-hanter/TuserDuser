@@ -10,12 +10,14 @@ Redis интегрирован в проект для хранения врем�
 ## Преимущества использования Redis
 
 ### По сравнению с in-memory хранением:
+
 - ✅ Персистентность при перезапуске приложения
 - ✅ Масштабируемость - несколько инстансов могут работать с одним Redis
 - ✅ Автоматическое удаление истекших ключей (TTL)
 - ✅ Высокая производительность
 
 ### По сравнению с PostgreSQL:
+
 - ✅ Быстрее для временных данных
 - ✅ Встроенная поддержка TTL
 - ✅ Меньше нагрузка на основную БД
@@ -24,6 +26,7 @@ Redis интегрирован в проект для хранения врем�
 ## Архитектура хранения
 
 ### Коды верификации
+
 ```
 Key: verify:{email}
 Value: {6-значный код}
@@ -31,11 +34,13 @@ TTL: 10 минут
 ```
 
 Пример:
+
 ```
 verify:user@example.com = "123456"
 ```
 
 ### Token Blacklist
+
 ```
 Key: blacklist:{jwt_token}
 Value: "1"
@@ -43,6 +48,7 @@ TTL: время жизни токена (по умолчанию 1 час)
 ```
 
 Пример:
+
 ```
 blacklist:eyJhbGc... = "1"
 ```
@@ -67,6 +73,7 @@ docker-compose up -d redis
 ```
 
 Параметры:
+
 - Image: `redis:7-alpine`
 - Persistence: AOF (Append Only File)
 - Password защита
@@ -94,12 +101,14 @@ defer redis.Close()
 ### Основные операции
 
 #### Set с TTL
+
 ```go
 ctx := context.Background()
 err := redis.Set(ctx, "key", "value", 10*time.Minute)
 ```
 
 #### Get
+
 ```go
 value, err := redis.Get(ctx, "key")
 if err != nil {
@@ -108,11 +117,13 @@ if err != nil {
 ```
 
 #### Delete
+
 ```go
 err := redis.Del(ctx, "key")
 ```
 
 #### Exists
+
 ```go
 exists, err := redis.Exists(ctx, "key")
 ```
@@ -120,10 +131,13 @@ exists, err := redis.Exists(ctx, "key")
 ## API методы с Redis
 
 ### 1. POST /v1/api/auth/register
+
 **Использует Redis для:**
+
 - Сохранения кода верификации
 
 **Поток:**
+
 ```
 1. Создание пользователя в PostgreSQL
 2. Генерация кода верификации
@@ -132,10 +146,13 @@ exists, err := redis.Exists(ctx, "key")
 ```
 
 ### 2. POST /v1/api/auth/verify
+
 **Использует Redis для:**
+
 - Проверки кода верификации
 
 **Поток:**
+
 ```
 1. Получение кода из Redis: verify:{email}
 2. Проверка соответствия кодов
@@ -145,20 +162,26 @@ exists, err := redis.Exists(ctx, "key")
 ```
 
 ### 3. POST /v1/api/auth/logout
+
 **Использует Redis для:**
+
 - Добавления токена в blacklist
 
 **Поток:**
+
 ```
 1. Извлечение токена из Authorization header
 2. Добавление в blacklist: blacklist:{token} = "1" (TTL: время жизни токена)
 ```
 
 ### 4. GET /v1/api/auth/me (и другие protected endpoints)
+
 **Использует Redis для:**
+
 - Проверки токена в blacklist
 
 **Поток:**
+
 ```
 1. Проверка токена в blacklist: EXISTS blacklist:{token}
 2. Если найден - отклонить запрос
@@ -212,14 +235,17 @@ INFO stats
 ## Производительность
 
 ### Текущие настройки
+
 - Workers: 5
 - Максимальное количество подключений: По умолчанию (определяется go-redis)
 - Timeout: 5 секунд для проверки подключения
 
 ### Оптимизация
+
 Для production рекомендуется:
 
 1. **Connection Pool**
+
 ```go
 redis.NewClient(&redis.Options{
     PoolSize:     100,
@@ -228,6 +254,7 @@ redis.NewClient(&redis.Options{
 ```
 
 2. **Timeouts**
+
 ```go
 redis.NewClient(&redis.Options{
     DialTimeout:  5 * time.Second,
@@ -240,16 +267,18 @@ redis.NewClient(&redis.Options{
 
 ## Миграция с базы данных
 
-До Redis коды верификации хранились в PostgreSQL таблице `verification_codes`. 
+До Redis коды верификации хранились в PostgreSQL таблице `verification_codes`.
 
 ### Что изменилось:
 
 **Было (PostgreSQL):**
+
 - Таблица `verification_codes` с полями: id, email, code, expires_at, created_at
 - Ручная проверка expires_at при каждом запросе
 - Необходимость периодической очистки истекших кодов
 
 **Стало (Redis):**
+
 - Key-value storage: `verify:{email}` = `{code}`
 - Автоматическое удаление по TTL
 - Быстрее в 10-100 раз для read/write операций
@@ -260,6 +289,7 @@ redis.NewClient(&redis.Options{
 Таблица `verification_codes` все еще существует в схеме БД. Для отката:
 
 1. В `internal/service/auth.go` вернуть использование PostgreSQL:
+
 ```go
 // Вместо Redis
 s.redis.Set(ctx, verifyKey, code, 10*time.Minute)
@@ -273,11 +303,13 @@ s.db.Exec("INSERT INTO verification_codes ...")
 ## Безопасность
 
 ### Текущие меры:
+
 1. ✅ Password защита Redis
 2. ✅ Токены в blacklist автоматически удаляются после истечения
 3. ✅ Коды верификации истекают через 10 минут
 
 ### Рекомендации для production:
+
 1. Использовать TLS для Redis соединения
 2. Настроить firewall правила (только app → redis)
 3. Использовать Redis ACL для ограничения команд
@@ -286,12 +318,14 @@ s.db.Exec("INSERT INTO verification_codes ...")
 ## Troubleshooting
 
 ### Redis не запускается
+
 ```bash
 docker logs event_api_redis
 docker-compose restart redis
 ```
 
 ### Ошибка подключения
+
 ```bash
 # Проверить что Redis запущен
 docker ps | grep redis
@@ -304,9 +338,11 @@ cat .env | grep REDIS_PASSWORD
 ```
 
 ### Предупреждение "maint_notifications disabled"
+
 Это не критично - просто информация о совместимости версий клиента и сервера Redis.
 
 ### Коды верификации не работают
+
 ```bash
 # Подключиться к Redis CLI
 docker exec -it event_api_redis redis-cli -a devpass

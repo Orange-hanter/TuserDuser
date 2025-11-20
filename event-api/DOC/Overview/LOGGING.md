@@ -19,6 +19,7 @@ fmt.Println(logger.FormatError(
 ```
 
 **Вывод:**
+
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║ ❌ Database Connection Failed
@@ -42,6 +43,7 @@ fmt.Println(logger.FormatSuccess(
 ```
 
 **Вывод:**
+
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║ ✅ User Registered Successfully
@@ -63,6 +65,7 @@ fmt.Println(logger.FormatWarning(
 ```
 
 **Вывод:**
+
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║ ⚠️  .env file not found
@@ -84,6 +87,7 @@ fmt.Println(logger.FormatInfo(
 ```
 
 **Вывод:**
+
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║ ℹ️  Server Configuration
@@ -125,7 +129,7 @@ func main() {
 ```go
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
     // ... код ...
-    
+
     if err != nil {
         logger.Log.Error(logger.FormatError(
             "User Registration Failed",
@@ -135,7 +139,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
         ))
         return
     }
-    
+
     logger.Log.Info(logger.FormatSuccess(
         "User Registered",
         "Email: " + user.Email,
@@ -158,19 +162,19 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
         ))
         return nil, err
     }
-    
+
     return &models.AuthResponse{...}, nil
 }
 ```
 
 ## 🎯 Когда использовать
 
-| Тип | Когда использовать | Пример |
-|-----|-------------------|--------|
-| **Error** | Ошибки приложения | БД не найдена, валидация не прошла |
-| **Success** | Успешные операции | Пользователь зарегистрирован |
-| **Warning** | Предупреждения | .env не найден, deprecated API |
-| **Info** | Информационные сообщения | Server started, config loaded |
+| Тип         | Когда использовать       | Пример                             |
+| ----------- | ------------------------ | ---------------------------------- |
+| **Error**   | Ошибки приложения        | БД не найдена, валидация не прошла |
+| **Success** | Успешные операции        | Пользователь зарегистрирован       |
+| **Warning** | Предупреждения           | .env не найден, deprecated API     |
+| **Info**    | Информационные сообщения | Server started, config loaded      |
 
 ## 🎨 Цветовая схема
 

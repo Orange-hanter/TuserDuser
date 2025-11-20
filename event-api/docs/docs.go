@@ -71,7 +71,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Позволяет администратору назначить роль creator или support пользователю",
+                "description": "Назначает пользователю одну из ролей: ` + "`" + `user` + "`" + `, ` + "`" + `creator` + "`" + `, ` + "`" + `support` + "`" + `, ` + "`" + `admin` + "`" + `. Только для администраторов.",
                 "consumes": [
                     "application/json"
                 ],
@@ -84,7 +84,7 @@ const docTemplate = `{
                 "summary": "Обновить роль пользователя",
                 "parameters": [
                     {
-                        "description": "Данные для обновления роли",
+                        "description": "Данные для обновления роли (role: user|creator|support|admin)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -101,7 +101,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Неверный формат запроса",
+                        "description": "Неверный формат запроса или недопустимая роль",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -222,7 +222,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram",
+                "description": "Возвращает данные текущего авторизованного пользователя с информацией о статусе регистрации в Telegram и ролью пользователя (role: user|creator|support|admin)",
                 "produces": [
                     "application/json"
                 ],
@@ -232,7 +232,7 @@ const docTemplate = `{
                 "summary": "Получить информацию о текущем пользователе",
                 "responses": {
                     "200": {
-                        "description": "Информация о пользователе с полями: user (models.User), telegram_registered (bool), telegram_info (object, опционально)",
+                        "description": "Информация о пользователе с полями: user (models.User), role (string), telegram_registered (bool), telegram_info (object, опционально)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
