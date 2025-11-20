@@ -15,35 +15,42 @@ func AuthMiddleware(authService *service.AuthService) func(next http.Handler) ht
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-					Error:   "unauthorized",
-					Message: "Missing authorization header",
-					Code:    http.StatusUnauthorized,
-				}); err != nil {
-					http.Error(w, "failed to write response", http.StatusInternalServerError)
-				}
-				return
-			}
+			var tokenString string
 
-			// Парсим Bearer токен
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				if err := json.NewEncoder(w).Encode(models.ErrorResponse{
-					Error:   "unauthorized",
-					Message: "Invalid authorization header format",
-					Code:    http.StatusUnauthorized,
-				}); err != nil {
-					http.Error(w, "failed to write response", http.StatusInternalServerError)
+			if authHeader != "" {
+				// Парсим Bearer токен
+				parts := strings.Split(authHeader, " ")
+				if len(parts) != 2 || parts[0] != "Bearer" {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					if err := json.NewEncoder(w).Encode(models.ErrorResponse{
+						Error:   "unauthorized",
+						Message: "Invalid authorization header format",
+						Code:    http.StatusUnauthorized,
+					}); err != nil {
+						http.Error(w, "failed to write response", http.StatusInternalServerError)
+					}
+					return
 				}
-				return
+				tokenString = parts[1]
+			} else {
+				// Пробуем получить токен из cookie
+				cookie, err := r.Cookie("access_token")
+				if err == nil {
+					tokenString = cookie.Value
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					if err := json.NewEncoder(w).Encode(models.ErrorResponse{
+						Error:   "unauthorized",
+						Message: "Missing authorization header or cookie",
+						Code:    http.StatusUnauthorized,
+					}); err != nil {
+						http.Error(w, "failed to write response", http.StatusInternalServerError)
+					}
+					return
+				}
 			}
-
-			tokenString := parts[1]
 
 			// Валидируем токен
 			claims, err := authService.ValidateJWT(tokenString)

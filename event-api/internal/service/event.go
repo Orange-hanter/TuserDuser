@@ -157,6 +157,7 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 	var event models.PendingEvent
 	var returnedDetailsJSON []byte
 	var reviewedAt sql.NullTime
+	var reviewComment sql.NullString
 
 	err = s.db.QueryRowContext(ctx, query,
 		req.Type,
@@ -178,7 +179,7 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 		&event.NeedRegistration,
 		&returnedDetailsJSON,
 		&event.Status,
-		&event.ReviewComment,
+		&reviewComment,
 		&event.CreatedAt,
 		&event.UpdatedAt,
 		&reviewedAt,
@@ -188,6 +189,8 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 		s.logger.Error("Failed to create event", zap.Error(err))
 		return nil, fmt.Errorf("ошибка при создании события: %w", err)
 	}
+
+	event.ReviewComment = reviewComment.String
 
 	// Парсим JSONB поле details
 	if len(returnedDetailsJSON) > 0 {
@@ -256,6 +259,8 @@ func (s *EventService) GetPendingEvents(ctx context.Context) ([]*models.PendingE
 		event := &models.PendingEvent{}
 		var detailsJSON []byte
 		var reviewedAt sql.NullTime
+		var reviewComment sql.NullString
+
 		if err := rows.Scan(
 			&event.ID,
 			&event.Type,
@@ -267,7 +272,7 @@ func (s *EventService) GetPendingEvents(ctx context.Context) ([]*models.PendingE
 			&event.NeedRegistration,
 			&detailsJSON,
 			&event.Status,
-			&event.ReviewComment,
+			&reviewComment,
 			&event.CreatedAt,
 			&event.UpdatedAt,
 			&reviewedAt,
@@ -275,6 +280,8 @@ func (s *EventService) GetPendingEvents(ctx context.Context) ([]*models.PendingE
 			s.logger.Error("Failed to scan pending event", zap.Error(err))
 			continue
 		}
+
+		event.ReviewComment = reviewComment.String
 
 		if len(detailsJSON) > 0 {
 			if reviewedAt.Valid {

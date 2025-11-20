@@ -29,6 +29,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"event-api/internal/logger"
 	"event-api/internal/models"
@@ -261,6 +262,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Устанавливаем cookie для удобства работы фронтенда
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    authResponse.AccessToken,
+		Expires:  authResponse.ExpiresAt,
+		HttpOnly: true,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+		// Secure: true, // TODO: включить в продакшене
+	})
+
 	logger.Log.Info("Пользователь успешно вошел", zap.String("email", req.Email))
 	respondWithJSON(w, http.StatusOK, authResponse)
 }
@@ -295,6 +307,23 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 			token = req.Token
 		}
 	}
+
+	// Если все еще нет, пробуем из cookie
+	if token == "" {
+		if cookie, err := r.Cookie("access_token"); err == nil {
+			token = cookie.Value
+		}
+	}
+
+	// Очищаем cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	if token == "" {
 		respondWithError(w, http.StatusBadRequest, "bad_request", "Token не найден")
