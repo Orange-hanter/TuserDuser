@@ -158,7 +158,7 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 // @Success 201 {object} map[string]interface{} "user:models.User, verify_code:string"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 409 {object} models.ErrorResponse "Пользователь уже существует"
-// @Router /api/auth/register [post]
+// @Router /v1/api/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -206,7 +206,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Param request body models.VerifyRequest true "Код верификации"
 // @Success 200 {object} models.AuthResponse "Email верифицирован, токен выдан"
 // @Failure 400 {object} models.ErrorResponse "Неверный код или формат запроса"
-// @Router /api/auth/verify [post]
+// @Router /v1/api/auth/verify [post]
 func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	// Ожидаемый JSON в теле запроса (models.VerifyRequest): {"email":"...","code":"1234"}
 	var req models.VerifyRequest
@@ -241,7 +241,7 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} models.AuthResponse "Успешная аутентификация"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
 // @Failure 401 {object} models.ErrorResponse "Неверные учетные данные"
-// @Router /api/auth/login [post]
+// @Router /v1/api/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Ожидаемый JSON (models.LoginRequest): {"email":"...","password":"..."}
 	// Поведение:
@@ -288,7 +288,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Param request body models.LogoutRequest true "Refresh токен для инвалидации"
 // @Success 200 {object} map[string]string "Успешный выход"
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
-// @Router /api/auth/logout [post]
+// @Router /v1/api/auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 
@@ -356,7 +356,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Success 200 {object} map[string]interface{} "Информация о пользователе с полями: user (models.User), role (string), telegram_registered (bool), telegram_info (object, опционально)"
 // @Failure 401 {object} models.ErrorResponse "Не авторизован"
-// @Router /api/auth/me [get]
+// @Router /v1/api/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	// UserID поставляется middleware AuthMiddleware
 	userID := r.Header.Get("X-User-ID")
@@ -428,7 +428,7 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} models.ErrorResponse "Неверный формат запроса или недопустимая роль"
 // @Failure 403 {object} models.ErrorResponse "Недостаточно прав"
 // @Failure 404 {object} models.ErrorResponse "Пользователь не найден"
-// @Router /api/admin/users/role [put]
+// @Router /v1/api/admin/users/role [put]
 func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	var req models.UpdateRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -481,7 +481,7 @@ func (h *AuthHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {array} models.User "Список пользователей"
 // @Failure 403 {object} models.ErrorResponse "Недостаточно прав"
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
-// @Router /api/admin/users [get]
+// @Router /v1/api/admin/users [get]
 func (h *AuthHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.authService.GetAllUsers()
 	if err != nil {

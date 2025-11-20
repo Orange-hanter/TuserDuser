@@ -24,7 +24,27 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/admin/users": {
+        "/health": {
+            "get": {
+                "description": "Возвращает статус OK если сервис работает",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Проверка здоровья сервиса",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/api/admin/users": {
             "get": {
                 "security": [
                     {
@@ -64,7 +84,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/admin/users/role": {
+        "/v1/api/admin/users/role": {
             "put": {
                 "security": [
                     {
@@ -121,7 +141,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/login": {
+        "/v1/api/auth/login": {
             "post": {
                 "description": "Аутентифицирует пользователя и возвращает JWT токены",
                 "consumes": [
@@ -167,7 +187,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/logout": {
+        "/v1/api/auth/logout": {
             "post": {
                 "security": [
                     {
@@ -215,7 +235,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/me": {
+        "/v1/api/auth/me": {
             "get": {
                 "security": [
                     {
@@ -247,7 +267,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/register": {
+        "/v1/api/auth/register": {
             "post": {
                 "description": "Создает нового пользователя и отправляет код верификации через email и/или SMS (в зависимости от verification_type: \"email\", \"sms\", \"both\")",
                 "consumes": [
@@ -294,7 +314,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/auth/verify": {
+        "/v1/api/auth/verify": {
             "post": {
                 "description": "Проверяет код верификации для подтверждения email и возвращает JWT токен",
                 "consumes": [
@@ -329,26 +349,6 @@ const docTemplate = `{
                         "description": "Неверный код или формат запроса",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/health": {
-            "get": {
-                "description": "Возвращает статус OK если сервис работает",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Проверка здоровья сервиса",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
                         }
                     }
                 }

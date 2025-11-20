@@ -293,7 +293,20 @@ info:
   title: Event API
   version: "1.0"
 paths:
-  /api/admin/users:
+  /health:
+    get:
+      description: Возвращает статус OK если сервис работает
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Проверка здоровья сервиса
+      tags:
+      - health
+  /v1/api/admin/users:
     get:
       description: Возвращает список всех пользователей системы
       produces:
@@ -318,7 +331,7 @@ paths:
       summary: Получить список всех пользователей
       tags:
       - admin
-  /api/admin/users/role:
+  /v1/api/admin/users/role:
     put:
       consumes:
       - application/json
@@ -355,7 +368,7 @@ paths:
       summary: Обновить роль пользователя
       tags:
       - admin
-  /api/auth/login:
+  /v1/api/auth/login:
     post:
       consumes:
       - application/json
@@ -385,7 +398,7 @@ paths:
       summary: Вход в систему
       tags:
       - auth
-  /api/auth/logout:
+  /v1/api/auth/logout:
     post:
       consumes:
       - application/json
@@ -415,7 +428,7 @@ paths:
       summary: Выход из системы
       tags:
       - auth
-  /api/auth/me:
+  /v1/api/auth/me:
     get:
       description: 'Возвращает данные текущего авторизованного пользователя с информацией
         о статусе регистрации в Telegram и ролью пользователя (role: user|creator|support|admin)'
@@ -437,7 +450,7 @@ paths:
       summary: Получить информацию о текущем пользователе
       tags:
       - auth
-  /api/auth/register:
+  /v1/api/auth/register:
     post:
       consumes:
       - application/json
@@ -470,7 +483,7 @@ paths:
       summary: Регистрация нового пользователя
       tags:
       - auth
-  /api/auth/verify:
+  /v1/api/auth/verify:
     post:
       consumes:
       - application/json
@@ -497,19 +510,6 @@ paths:
       summary: Верификация email
       tags:
       - auth
-  /health:
-    get:
-      description: Возвращает статус OK если сервис работает
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Проверка здоровья сервиса
-      tags:
-      - health
   /v1/api/discovery/action:
     post:
       consumes:
