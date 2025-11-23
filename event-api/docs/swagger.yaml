@@ -171,6 +171,58 @@ definitions:
       type:
         type: string
     type: object
+  models.EventSubscription:
+    properties:
+      event_id:
+        example: evt_xyz
+        type: string
+      expires_at:
+        description: Nullable
+        example: "2025-11-21T15:30:00Z"
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/models.SubscriptionStatus'
+        example: confirmed
+      subscribed_at:
+        example: "2025-11-20T15:30:00Z"
+        type: string
+    type: object
+  models.EventWithSubscription:
+    properties:
+      attendance_status:
+        description: '"attended", "no_show", "cancelled"'
+        example: attended
+        type: string
+      details:
+        additionalProperties: true
+        type: object
+      duration:
+        type: integer
+      end:
+        type: string
+      id:
+        type: string
+      needReg:
+        type: boolean
+      place:
+        type: string
+      priceType:
+        type: string
+      start:
+        type: string
+      subscribed_at:
+        example: "2025-11-20T15:30:00Z"
+        type: string
+      subscription_status:
+        allOf:
+        - $ref: '#/definitions/models.SubscriptionStatus'
+        example: confirmed
+      time:
+        type: string
+      type:
+        type: string
+    type: object
   models.LoginRequest:
     properties:
       email:
@@ -242,6 +294,37 @@ definitions:
     required:
     - action
     type: object
+  models.SubscribeRequest:
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        example:
+          dietary_preferences: vegan
+        type: object
+    type: object
+  models.SubscriptionStatus:
+    enum:
+    - confirmed
+    - waitlisted
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - SubscriptionStatusConfirmed
+    - SubscriptionStatusWaitlisted
+    - SubscriptionStatusCancelled
+  models.TelegramInfo:
+    properties:
+      chat_id:
+        example: 123456789
+        type: integer
+      status:
+        example: active
+        type: string
+      username:
+        example: ivan_tg
+        type: string
+    type: object
   models.UpdateRoleRequest:
     properties:
       role:
@@ -269,6 +352,26 @@ definitions:
       verified:
         type: boolean
     type: object
+  models.UserProfile:
+    properties:
+      created_at:
+        example: "2025-01-10T08:30:00Z"
+        type: string
+      email:
+        example: user@example.com
+        type: string
+      id:
+        example: usr_abc
+        type: string
+      name:
+        example: Иван Петров
+        type: string
+      telegram_info:
+        $ref: '#/definitions/models.TelegramInfo'
+      telegram_registered:
+        example: true
+        type: boolean
+    type: object
   models.VerifyRequest:
     properties:
       code:
@@ -293,6 +396,152 @@ info:
   title: Event API
   version: "1.0"
 paths:
+  /api/users/me:
+    get:
+      consumes:
+      - application/json
+      description: Returns full user profile and status flags.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.UserProfile'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user profile
+      tags:
+      - users
+  /api/users/me/events/{event_id}/subscribe:
+    post:
+      consumes:
+      - application/json
+      description: Idempotent subscription endpoint. Checks capacity and handles waitlisting.
+      parameters:
+      - description: Event ID
+        in: path
+        name: event_id
+        required: true
+        type: string
+      - description: Subscription metadata
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/models.SubscribeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Already subscribed
+          schema:
+            $ref: '#/definitions/models.EventSubscription'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.EventSubscription'
+        "202":
+          description: Waitlisted
+          schema:
+            $ref: '#/definitions/models.EventSubscription'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Event full
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Subscribe to an event
+      tags:
+      - users
+  /api/users/me/events/history:
+    get:
+      consumes:
+      - application/json
+      description: Returns attended or missed past events.
+      parameters:
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.EventWithSubscription'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get event history
+      tags:
+      - users
+  /api/users/me/events/upcoming:
+    get:
+      consumes:
+      - application/json
+      description: Returns events the user is currently subscribed to (confirmed participation).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.EventWithSubscription'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get upcoming events
+      tags:
+      - users
   /health:
     get:
       description: Возвращает статус OK если сервис работает

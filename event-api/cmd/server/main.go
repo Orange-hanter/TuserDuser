@@ -131,6 +131,7 @@ func run(versionInfo VersionInfo) error {
 		discovery.EngineConfig{},
 	)
 	discoveryService := discovery.NewService(discoveryEngine)
+	userService := service.NewUserService(db.DB, logger.Log, discoveryService)
 
 	if err := bootstrapDiscovery(appCtx, eventService, discoveryService); err != nil {
 		logger.Log.Warn("failed to seed discovery engine", zap.Error(err))
@@ -144,6 +145,7 @@ func run(versionInfo VersionInfo) error {
 	authHandler := handlers.NewAuthHandler(authService, telStore)
 	eventHandler := handlers.NewEventHandler(eventService)
 	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService)
+	userHandler := handlers.NewUserHandler(userService)
 
 	// Инициализируем Telegram
 	var telegramHandler *handlers.TelegramHandler
@@ -158,7 +160,7 @@ func run(versionInfo VersionInfo) error {
 		logger.Log.Info("telegram handler disabled")
 	}
 
-	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, authService, telegramHandler, versionInfo)
+	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, userHandler, authService, telegramHandler, versionInfo)
 
 	// Создаем HTTP сервер с явными настройками
 	srv := &http.Server{
@@ -432,7 +434,7 @@ func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
 	return result
 }
 
-func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, versionInfo VersionInfo) http.Handler {
+func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, userHandler *handlers.UserHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, versionInfo VersionInfo) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.SecurityHeaders)
 	r.Get("/health", handlers.HealthCheck)
@@ -459,6 +461,13 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 		// Authenticated user endpoints
 		authenticated := r.With(middleware.AuthMiddleware(authService))
 		authenticated.Get("/api/auth/me", authHandler.GetMe)
+
+		// User profile and events
+		authenticated.Get("/api/users/me", userHandler.GetMe)
+		authenticated.Get("/api/users/me/events/upcoming", userHandler.GetUpcomingEvents)
+		authenticated.Get("/api/users/me/events/history", userHandler.GetEventHistory)
+		authenticated.Post("/api/users/me/events/{event_id}/subscribe", userHandler.Subscribe)
+
 		if telegramHandler != nil {
 			authenticated.Route("/api/notifications/telegram", func(r chi.Router) {
 				r.Post("/link", telegramHandler.IssueLink)

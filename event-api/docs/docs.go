@@ -24,6 +24,235 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/users/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns full user profile and status flags.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get current user profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.UserProfile"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/me/events/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns attended or missed past events.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get event history",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.EventWithSubscription"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/me/events/upcoming": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns events the user is currently subscribed to (confirmed participation).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get upcoming events",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.EventWithSubscription"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/me/events/{event_id}/subscribe": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Idempotent subscription endpoint. Checks capacity and handles waitlisting.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Subscribe to an event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "event_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Subscription metadata",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/models.SubscribeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Already subscribed",
+                        "schema": {
+                            "$ref": "#/definitions/models.EventSubscription"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.EventSubscription"
+                        }
+                    },
+                    "202": {
+                        "description": "Waitlisted",
+                        "schema": {
+                            "$ref": "#/definitions/models.EventSubscription"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Event full",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Возвращает статус OK если сервис работает",
@@ -1090,6 +1319,85 @@ const docTemplate = `{
                 }
             }
         },
+        "models.EventSubscription": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "string",
+                    "example": "evt_xyz"
+                },
+                "expires_at": {
+                    "description": "Nullable",
+                    "type": "string",
+                    "example": "2025-11-21T15:30:00Z"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.SubscriptionStatus"
+                        }
+                    ],
+                    "example": "confirmed"
+                },
+                "subscribed_at": {
+                    "type": "string",
+                    "example": "2025-11-20T15:30:00Z"
+                }
+            }
+        },
+        "models.EventWithSubscription": {
+            "type": "object",
+            "properties": {
+                "attendance_status": {
+                    "description": "\"attended\", \"no_show\", \"cancelled\"",
+                    "type": "string",
+                    "example": "attended"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "end": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "needReg": {
+                    "type": "boolean"
+                },
+                "place": {
+                    "type": "string"
+                },
+                "priceType": {
+                    "type": "string"
+                },
+                "start": {
+                    "type": "string"
+                },
+                "subscribed_at": {
+                    "type": "string",
+                    "example": "2025-11-20T15:30:00Z"
+                },
+                "subscription_status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.SubscriptionStatus"
+                        }
+                    ],
+                    "example": "confirmed"
+                },
+                "time": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
         "models.LoginRequest": {
             "type": "object",
             "required": [
@@ -1196,6 +1504,50 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SubscribeRequest": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "example": {
+                        "dietary_preferences": "vegan"
+                    }
+                }
+            }
+        },
+        "models.SubscriptionStatus": {
+            "type": "string",
+            "enum": [
+                "confirmed",
+                "waitlisted",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "SubscriptionStatusConfirmed",
+                "SubscriptionStatusWaitlisted",
+                "SubscriptionStatusCancelled"
+            ]
+        },
+        "models.TelegramInfo": {
+            "type": "object",
+            "properties": {
+                "chat_id": {
+                    "type": "integer",
+                    "example": 123456789
+                },
+                "status": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "ivan_tg"
+                }
+            }
+        },
         "models.UpdateRoleRequest": {
             "type": "object",
             "required": [
@@ -1234,6 +1586,34 @@ const docTemplate = `{
                 },
                 "verified": {
                     "type": "boolean"
+                }
+            }
+        },
+        "models.UserProfile": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2025-01-10T08:30:00Z"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "usr_abc"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Иван Петров"
+                },
+                "telegram_info": {
+                    "$ref": "#/definitions/models.TelegramInfo"
+                },
+                "telegram_registered": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },

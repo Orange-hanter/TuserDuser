@@ -27,6 +27,11 @@ func (s *Service) BookEvent(ctx context.Context, userID, eventID string) (Bookin
 	return s.engine.BookEvent(ctx, userID, eventID)
 }
 
+// RegisterBooking proxies external booking handling.
+func (s *Service) RegisterBooking(ctx context.Context, userID, eventID string) (BookingResult, error) {
+	return s.engine.RegisterBooking(ctx, userID, eventID)
+}
+
 // History returns chronological user actions.
 func (s *Service) History(ctx context.Context, userID string) ([]HistoryEntry, error) {
 	return s.engine.History(ctx, userID)

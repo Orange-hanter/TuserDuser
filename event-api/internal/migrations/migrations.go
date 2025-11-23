@@ -70,6 +70,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createTelegramNotifications,
 			down: dropTelegramNotifications,
 		},
+		{
+			name: "007_create_event_subscriptions",
+			up:   createEventSubscriptions,
+			down: dropEventSubscriptions,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -428,6 +433,30 @@ DROP TABLE IF EXISTS telegram_delivery_log;
 DROP TABLE IF EXISTS telegram_delivery;
 DROP TABLE IF EXISTS telegram_bindings;
 DROP TABLE IF EXISTS telegram_binding_tokens;
+`
+
+// createEventSubscriptions - SQL для создания таблицы подписок на события.
+const createEventSubscriptions = `
+CREATE TABLE IF NOT EXISTS event_subscriptions (
+    user_id UUID NOT NULL,
+    event_id UUID NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    subscribed_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, event_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (event_id) REFERENCES events(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_subscriptions_user_id ON event_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_subscriptions_event_id ON event_subscriptions(event_id);
+`
+
+// dropEventSubscriptions - SQL для удаления таблицы подписок на события.
+const dropEventSubscriptions = `
+DROP TABLE IF EXISTS event_subscriptions;
 `
 
 // Rollback откатывает все миграции (только для разработки!)

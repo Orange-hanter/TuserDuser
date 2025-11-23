@@ -182,6 +182,64 @@ func (e *Engine) BookEvent(ctx context.Context, userID, eventID string) (Booking
 	return BookingResult{BookedEvent: event, ConflictedEventIDs: conflictedIDs}, nil
 }
 
+// RegisterBooking records a booking from an external source (e.g. direct subscription)
+// and updates conflicts in the discovery queue.
+func (e *Engine) RegisterBooking(ctx context.Context, userID, eventID string) (BookingResult, error) {
+	unlock := e.lock(userID)
+	defer unlock()
+
+	event, err := e.events.Get(ctx, eventID)
+	if err != nil {
+		return BookingResult{}, err
+	}
+
+	// Check if already booked
+	if last, ok, _ := e.history.LastAction(ctx, userID, eventID); ok && last.Action == ActionBook {
+		result := BookingResult{BookedEvent: event}
+		if ids, ok := last.Context["conflictedEventIds"].([]string); ok {
+			result.ConflictedEventIDs = append([]string(nil), ids...)
+		}
+		return result, nil
+	}
+
+	state, err := e.ensureState(ctx, userID)
+	if err != nil {
+		return BookingResult{}, err
+	}
+
+	// If the booked event was the current one, drop it.
+	if state.CurrentEventID == eventID {
+		state.DropCurrent()
+	} else {
+		// If it was in the queue (primary or conflicts), remove it.
+		state.Primary, _ = removeByID(state.Primary, eventID)
+		state.Conflicts, _ = removeByID(state.Conflicts, eventID)
+		delete(state.ConflictRegistry, eventID)
+	}
+
+	conflictedIDs, err := e.markConflicts(ctx, &state, event)
+	if err != nil {
+		return BookingResult{}, err
+	}
+
+	entry := HistoryEntry{
+		UserID:    userID,
+		EventID:   eventID,
+		Action:    ActionBook,
+		Timestamp: e.cfg.Now(),
+		Context: map[string]interface{}{
+			"conflictedEventIds": conflictedIDs,
+			"source":             "external_subscription",
+		},
+	}
+
+	if err := e.persist(ctx, userID, state, entry); err != nil {
+		return BookingResult{}, err
+	}
+
+	return BookingResult{BookedEvent: event, ConflictedEventIDs: conflictedIDs}, nil
+}
+
 // History returns chronological entries for the user.
 func (e *Engine) History(ctx context.Context, userID string) ([]HistoryEntry, error) {
 	return e.history.List(ctx, userID)
