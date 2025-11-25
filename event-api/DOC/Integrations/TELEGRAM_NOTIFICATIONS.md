@@ -34,7 +34,7 @@
 
 ### Binding Data Structures (MVP in SQLite)
 
-```sql
+````sql
 CREATE TABLE telegram_binding_tokens (
     nonce_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -52,8 +52,7 @@ CREATE TABLE telegram_bindings (
     updated_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL
 );
-```
-
+```bash
 - SQLite ensures low-cost MVP. For production, migrate to PostgreSQL (same schema) with indexes on `status`, `chat_id`.
 
 ## 📤 Outbound Delivery Pipeline
@@ -79,7 +78,7 @@ CREATE TABLE telegram_delivery (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
-```
+````
 
 1. Delivery worker dequeues `status='scheduled'` rows ordered by `next_attempt_at` and `chat_id` to respect Telegram 30 msg/sec per bot limit (configurable).
 1. **Send Attempt**:
@@ -105,7 +104,7 @@ CREATE TABLE telegram_delivery (
 
 ## ♻️ Lifecycle Summary (Event Like/Dislike Reminder)
 
-```text
+````text
 ReminderWorker trigger
     ↓ Enqueue telegramSink job
 telegram_delivery row (status=scheduled)
@@ -113,8 +112,7 @@ telegram_delivery row (status=scheduled)
 telegram_delivery_log append (status=sent or failed)
     ↓ Binding status update (if error)
 History available for replay via admin CLI
-```
-
+```bash
 - Data persists until retention job archives old rows (e.g., 90 days) to cold storage. Deletion uses batched `DELETE ... WHERE created_at < cutoff` plus optional export to object storage.
 
 ## 🛡️ Security & Reliability Controls
@@ -159,7 +157,7 @@ type NotificationSink interface {
 // ReminderWorker already loops over ReminderJob(s) → call sink.
 telegramSink := telegram.NewSink(store, limiter, telegramClient)
 worker.RegisterSink("telegram", telegramSink)
-```
+````
 
 - All Telegram-specific logic is encapsulated; the worker just observes `ErrTransportUnavailable` or `ErrBlocked` to fallback gracefully.
 - Non-Telegram users never touch this pathway because `ReminderWorker` selects sinks based on user preferences.
@@ -172,4 +170,7 @@ worker.RegisterSink("telegram", telegramSink)
 - **Blocked users**: Binding status enforced before enqueue + on send; no retries once blocked.
 - **Testability**: All external calls abstracted behind interfaces; local mocks cover webhook and API.
 
-With this integration, the system gains a security-hardened Telegram channel that scales from laptop MVP to production load while keeping ReminderWorker untouched and ensuring every notification attempt is traceable, replayable, and safe.
+With this integration, the system gains a security-hardened Telegram channel
+that scales from laptop MVP to production load while keeping ReminderWorker
+untouched and ensuring every notification attempt is traceable, replayable, and
+safe.

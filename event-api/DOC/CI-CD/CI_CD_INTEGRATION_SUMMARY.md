@@ -157,7 +157,7 @@
 
 ## Архитектура CI/CD
 
-```text
+````text
 ┌─────────────────────────────────────────────────────────┐
 │                    GitHub Actions                        │
 └─────────────────────────────────────────────────────────┘
@@ -182,8 +182,7 @@
 │  Production  │  │   Staging    │  │   GitHub     │
 │   Server     │  │   Server     │  │   Releases   │
 └──────────────┘  └──────────────┘  └──────────────┘
-```
-
+```bash
 ## Workflow Triggers
 
 | Workflow    | Trigger      | Branch                | Action                                         |
@@ -271,24 +270,28 @@
 ## Quick Start Commands
 
 ```bash
-# Локальная разработка
+## Локальная разработка
+## Локальная разработка
 make dev                    # Запуск с Docker БД
 make test                   # Запуск тестов
 make lint                   # Проверка кода
 
-# CI локально
+## CI локально
+## CI локально
 make ci-test                # Тесты как в CI
 make check                  # Все проверки
 
-# Production
+## Production
+## Production
 make deploy                 # Деплой на production
 make backup                 # Бэкап БД
 make prod-logs              # Просмотр логов
 
-# Release
+## Release
+## Release
 git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0      # Автоматический релиз
-```
+````
 
 ## Next Steps
 
@@ -308,11 +311,8 @@ git push origin v1.0.0      # Автоматический релиз
 
 ## Summary
 
-✅ **Полностью настроенный CI/CD pipeline**
-✅ **Автоматическое тестирование и деплой**
-✅ **Production-ready конфигурация**
-✅ **Comprehensive документация**
-✅ **Security scanning**
-✅ **Automated releases**
+✅ **Полностью настроенный CI/CD pipeline** ✅ **Автоматическое тестирование и
+деплой** ✅ **Production-ready конфигурация** ✅ **Comprehensive документация** ✅
+**Security scanning** ✅ **Automated releases**
 
 Проект готов к production deployment! 🎉

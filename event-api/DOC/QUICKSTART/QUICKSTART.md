@@ -4,11 +4,10 @@
 
 ### 1️⃣ Запуск сервера
 
-```bash
+````bash
 cd /Users/dakh/Git/TuserDuser/event-api
 make run
-```
-
+```bash
 Сервер запустится на `http://localhost:8080`
 
 ### 2️⃣ Регистрация пользователя
@@ -21,10 +20,11 @@ curl -X POST http://localhost:8080/api/auth/register \
     "phone": "+79991234567",
     "password": "SecurePassword123"
   }'
-```
+````
 
 **Ответ:**
-```json
+
+````json
 {
   "user": {
     "id": "abc123...",
@@ -35,8 +35,7 @@ curl -X POST http://localhost:8080/api/auth/register \
   },
   "verify_code": "123456"
 }
-```
-
+```bash
 ### 3️⃣ Верификация email
 
 Используйте `verify_code` из предыдущего ответа:
@@ -48,20 +47,20 @@ curl -X POST http://localhost:8080/api/auth/verify \
     "email": "john@example.com",
     "code": "123456"
   }'
-```
+````
 
 ### 4️⃣ Логин (получение JWT)
 
-```bash
+````bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
     "password": "SecurePassword123"
   }'
-```
-
+```json
 **Ответ:**
+
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -74,18 +73,18 @@ curl -X POST http://localhost:8080/api/auth/login \
   "expires_in": 3600,
   "expires_at": "2025-10-26T00:54:28Z"
 }
-```
+````
 
 ### 5️⃣ Использование protected endpoint
 
 Скопируйте `access_token` и используйте его:
 
-```bash
+````bash
 curl -X GET http://localhost:8080/api/auth/me \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-```
-
+```json
 **Ответ:**
+
 ```json
 {
   "id": "abc123...",
@@ -95,52 +94,56 @@ curl -X GET http://localhost:8080/api/auth/me \
   "created_at": "2025-10-25T23:54:06Z",
   "updated_at": "2025-10-25T23:54:16Z"
 }
-```
+````
 
 ### 6️⃣ Выход из системы
 
-```bash
+````bash
 curl -X POST http://localhost:8080/api/auth/logout \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -d '{}'
-```
-
+```bash
 ---
 
 ## 🔧 Команды
 
 ```bash
-# Компиляция
+## Компиляция
+## Компиляция
 make build
 
-# Запуск
+## Запуск
+## Запуск
 make run
 
-# Тесты
+## Тесты
+## Тесты
 make test
 
-# Docker сборка
+## Docker сборка
+## Docker сборка
 make docker-build
 
-# Docker запуск
+## Docker запуск
+## Docker запуск
 make docker-run
 
-# Clean
+## Clean
+## Clean
 make clean
-```
+````
 
 ---
 
 ## ⚙️ Переменные окружения (.env)
 
-```env
+````env
 PORT=8080
 ENV=development
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 JWT_SECRET=super-secret-key-change-in-production-please
-```
-
+```bash
 ---
 
 ## 📝 Требования
@@ -157,13 +160,15 @@ JWT_SECRET=super-secret-key-change-in-production-please
 ### Порт 8080 занят
 
 Измените PORT в .env файле:
+
 ```env
 PORT=8081
-```
+````
 
 ### Ошибка "JWT token is invalid"
 
 Убедитесь, что:
+
 1. Токен скопирован полностью
 2. Используется Header: `Authorization: Bearer <token>`
 3. Токен не истёк (default 1 час)
@@ -185,7 +190,7 @@ PORT=8081
 - [API Документация](./API_DOCUMENTATION.md)
 - [Архитектура](./ARCHITECTURE.md)
 - [Отчёт реализации](./IMPLEMENTATION_REPORT.md)
-- [README](./README.md)
+- [Return to documentation menu](../README.md)
 
 ---
 

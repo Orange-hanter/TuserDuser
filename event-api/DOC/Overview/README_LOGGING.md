@@ -1,4 +1,4 @@
-# 📚 Спасибо за использование улучшенного логирования Event API!
+# 📚 Спасибо за использование улучшенного логирования Event API
 
 ## 🎯 Что вы получили
 
@@ -40,10 +40,9 @@
 
 ### Шаг 1: Посмотрите демонстрацию
 
-```bash
+````bash
 make logger-demo
-```
-
+```go
 ### Шаг 2: Используйте в коде
 
 ```go
@@ -54,14 +53,13 @@ fmt.Println(logger.FormatError("Failed", err, "Details..."))
 
 // Успех
 fmt.Println(logger.FormatSuccess("Completed", "Details..."))
-```
+````
 
 ### Шаг 3: Запустите сервер
 
-```bash
+````bash
 make run
-```
-
+```json
 ---
 
 ## 🔍 Примеры по типам операций
@@ -83,11 +81,11 @@ logger.Log.Info(logger.FormatSuccess(
     "Email: " + user.Email,
     "Session: " + sessionID,
 ))
-```
+````
 
 ### 💾 База данных
 
-```go
+````go
 // Ошибка подключения
 fmt.Println(logger.FormatError(
     "DB Connection Failed",
@@ -102,8 +100,7 @@ fmt.Println(logger.FormatSuccess(
     "Host: localhost",
     "Pool: 10/25",
 ))
-```
-
+```json
 ### 💳 Платежи
 
 ```go
@@ -121,13 +118,13 @@ logger.Log.Info(logger.FormatSuccess(
     "Amount: $99.99",
     "Order ID: " + orderID,
 ))
-```
+````
 
 ---
 
 ## 📊 Цветовая кодировка
 
-```
+```bash
 🔴 Красный  → ❌ Ошибки (критичные)
 🟡 Жёлтый   → ⚠️  Предупреждения (важные)
 🔵 Синий    → ℹ️  Информация (общие)
@@ -140,7 +137,7 @@ logger.Log.Info(logger.FormatSuccess(
 
 ### В handlers
 
-```go
+````go
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
     if err != nil {
         logger.Log.Error(logger.FormatError("Register Failed", err, "Details..."))
@@ -148,8 +145,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
     }
     logger.Log.Info(logger.FormatSuccess("User Registered", "Details..."))
 }
-```
-
+```go
 ### В services
 
 ```go
@@ -160,11 +156,11 @@ func (s *Service) ProcessOrder(order *Order) error {
     logger.Log.Info(logger.FormatSuccess("Order Processed", "Details..."))
     return nil
 }
-```
+````
 
 ### В migrations
 
-```go
+````go
 func (m *Migrator) RunMigrations() error {
     if err := m.applyMigrations(); err != nil {
         logger.Log.Error(logger.FormatError("Migration Failed", err))
@@ -173,8 +169,7 @@ func (m *Migrator) RunMigrations() error {
     logger.Log.Info(logger.FormatSuccess("Migrations Applied", "Details..."))
     return nil
 }
-```
-
+```bash
 ---
 
 ## 🎓 Когда использовать каждый тип
@@ -225,13 +220,13 @@ make test-coverage-report  # Текстовой отчёт покрытия
 make logger-demo        # Демонстрация логирования
 make docker-build       # Собирает Docker образ
 make docker-run         # Запускает контейнер
-```
+````
 
 ---
 
 ## 📈 Статистика проекта
 
-```
+```bash
 Языки:           Go 1.25.0
 Тестовое покрытие: 91.6% (service) | 100% (config) | 60.2% (handlers)
 Количество тестов: 11+ test functions
@@ -259,16 +254,16 @@ make docker-run         # Запускает контейнер
 
 ## 📞 Часто задаваемые вопросы
 
-**Q: Где смотреть примеры?**  
+**Q: Где смотреть примеры?**
 A: Запустите `make logger-demo` или смотрите `VISUAL_GUIDE.md`
 
-**Q: Как использовать в production?**  
+**Q: Как использовать в production?**
 A: Установите `ENV=production` — будет JSON формат
 
-**Q: Могу ли я изменить цвета?**  
+**Q: Могу ли я изменить цвета?**
 A: Да, смотрите константы в `internal/logger/logger.go`
 
-**Q: Работает ли на Windows?**  
+**Q: Работает ли на Windows?**
 A: Да, в Windows Terminal и PowerShell
 
 ---
@@ -285,7 +280,7 @@ A: Да, в Windows Terminal и PowerShell
 
 ## 📝 Файловая структура
 
-```
+```bash
 event-api/
 ├── cmd/
 │   ├── server/
@@ -316,8 +311,8 @@ event-api/
 
 ---
 
-**Версия:** 1.0  
-**Дата:** 27 Октября 2025  
-**Статус:** ✅ Production Ready 🚀  
-**Тестирование:** ✅ Все тесты проходят  
+**Версия:** 1.0
+**Дата:** 27 Октября 2025
+**Статус:** ✅ Production Ready 🚀
+**Тестирование:** ✅ Все тесты проходят
 **Качество кода:** 🏆 Enterprise-grade

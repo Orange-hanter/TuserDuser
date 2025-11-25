@@ -112,11 +112,10 @@
 
 **Создайте структуру на сервере:**
 
-```bash
+````bash
 mkdir -p /opt/event-api
 cd /opt/event-api
-```
-
+```bash
 - [ ] Директория создана: `/opt/event-api` (или ваш путь)
 - [ ] Скопирован файл `.env.production` → `.env`
 - [ ] Все переменные в `.env` настроены
@@ -135,14 +134,16 @@ cd /opt/event-api
 #### Local Testing
 
 ```bash
-# Запустите проверки локально
+## Запустите проверки локально
+## Запустите проверки локально
 make ci-test
 make check
 make build
 
-# Если есть Docker
+## Если есть Docker
+## Если есть Docker
 make docker-build
-```
+````
 
 - [ ] `make ci-test` проходит
 - [ ] `make check` проходит (если установлен golangci-lint)
@@ -151,12 +152,11 @@ make docker-build
 
 #### GitHub Actions Test
 
-```bash
+````bash
 git add .
 git commit -m "feat: добавлен CI/CD"
 git push origin master
-```
-
+```bash
 - [ ] Push выполнен успешно
 - [ ] GitHub Actions workflow запустился
 - [ ] Lint job прошел успешно
@@ -184,12 +184,14 @@ git push origin master
 #### Logs Check
 
 ```bash
-# На сервере
+## На сервере
+## На сервере
 docker-compose -f docker-compose.prod.yml logs -f app
 
-# Или через Makefile
+## Или через Makefile
+## Или через Makefile
 make prod-logs
-```
+````
 
 - [ ] Логи показывают успешный запуск
 - [ ] Нет критичных ошибок
@@ -198,10 +200,9 @@ make prod-logs
 
 #### Services Status
 
-```bash
+````bash
 docker-compose -f docker-compose.prod.yml ps
-```
-
+```bash
 - [ ] PostgreSQL container running и healthy
 - [ ] Redis container running и healthy
 - [ ] Application container running и healthy
@@ -215,7 +216,7 @@ docker-compose -f docker-compose.prod.yml ps
 git checkout develop
 git merge master
 git push origin develop
-```
+````
 
 - [ ] Staging workflow запустился
 - [ ] Staging deploy выполнен
@@ -226,12 +227,11 @@ git push origin develop
 
 Протестируйте release workflow:
 
-```bash
+````bash
 git checkout master
 git tag -a v0.1.0 -m "Initial release with CI/CD"
 git push origin v0.1.0
-```
-
+```bash
 - [ ] Release workflow запустился
 - [ ] Binaries созданы для всех платформ
 - [ ] Checksums сгенерированы
@@ -246,7 +246,7 @@ git push origin v0.1.0
 
 ```bash
 make backup
-```
+````
 
 - [ ] Backup создан в `./backups/`
 - [ ] Backup сжат (gzip)
@@ -255,7 +255,8 @@ make backup
 #### Restore Test (на staging!)
 
 ```bash
-# НЕ НА PRODUCTION!
+## НЕ НА PRODUCTION!
+## НЕ НА PRODUCTION!
 make restore FILE=backups/your_backup.sql.gz
 ```
 

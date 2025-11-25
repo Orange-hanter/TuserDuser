@@ -17,18 +17,17 @@
 
 #### DOCKER_USERNAME
 
-```text
+````text
 Value: ваш_username_на_dockerhub
 Example: johndoe
-```
-
+```bash
 #### DOCKER_PASSWORD
 
 ```text
 Value: ваш_пароль_или_access_token
 Рекомендация: Используйте Access Token вместо пароля
 Как получить: Docker Hub → Account Settings → Security → New Access Token
-```
+````
 
 ### Для SSH деплоя
 
@@ -36,21 +35,20 @@ Value: ваш_пароль_или_access_token
 
 #### SSH_HOST
 
-```text
+````text
 Value: IP_адрес_или_домен_вашего_сервера
 Example: 123.45.67.89 или server.example.com
-```
-
+```bash
 #### SSH_USERNAME
 
 ```text
 Value: имя_пользователя_на_сервере
 Example: deploy или ubuntu
-```
+````
 
 #### SSH_PRIVATE_KEY
 
-```text
+````text
 Value: приватный SSH ключ (весь текст)
 Example:
 -----BEGIN OPENSSH PRIVATE KEY-----
@@ -69,14 +67,13 @@ b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAG...
    cat ~/.ssh/deploy_key
 
 4. Вставьте весь текст (включая BEGIN и END строки) в Secret
-```
-
+```bash
 **SSH_PORT** (опционально)
 
 ```text
 Value: порт SSH (по умолчанию 22)
 Example: 22 или 2222
-```
+````
 
 ## Опциональные Secrets
 
@@ -84,40 +81,37 @@ Example: 22 или 2222
 
 #### CODECOV_TOKEN
 
-```text
+````text
 Value: токен из codecov.io
 Как получить:
 1. Зарегистрируйтесь на https://codecov.io
 2. Подключите ваш GitHub репозиторий
 3. Скопируйте Upload Token
-```
-
+```bash
 ### Для Staging окружения
 
 #### STAGING_SSH_HOST
 
 ```text
 Value: IP_или_домен_staging_сервера
-```
+````
 
 #### STAGING_SSH_USERNAME
 
-```text
+````text
 Value: имя_пользователя
-```
-
+```bash
 #### STAGING_SSH_PRIVATE_KEY
 
 ```text
 Value: приватный SSH ключ для staging
-```
+````
 
 #### STAGING_SSH_PORT
 
-```text
+````text
 Value: порт SSH (по умолчанию 22)
-```
-
+```bash
 ### Для уведомлений в Slack/Discord (опционально)
 
 #### SLACK_WEBHOOK_URL
@@ -125,15 +119,14 @@ Value: порт SSH (по умолчанию 22)
 ```text
 Value: webhook URL из Slack
 Как получить: Slack → Apps → Incoming Webhooks
-```
+````
 
 #### DISCORD_WEBHOOK_URL
 
-```text
+````text
 Value: webhook URL из Discord
 Как получить: Discord → Server Settings → Integrations → Webhooks
-```
-
+```bash
 ## Настройка Environments
 
 ### Production Environment
@@ -163,11 +156,11 @@ Value: webhook URL из Discord
 git add .
 git commit -m "test: проверка CI/CD"
 git push origin master
-```
+````
 
-2. Перейдите во вкладку **Actions** в GitHub
-3. Проверьте что workflow запустился
-4. Если есть ошибки, проверьте логи
+1. Перейдите во вкладку **Actions** в GitHub
+2. Проверьте что workflow запустился
+3. Если есть ошибки, проверьте логи
 
 ## Безопасность
 

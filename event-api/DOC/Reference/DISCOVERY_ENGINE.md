@@ -1,10 +1,14 @@
 # Narrow Time-Slot Discovery Engine
 
-This document describes the domain model, queue lifecycle, and integration points for the discovery engine that powers `/v1/api/discovery/*`.
+This document describes the domain model, queue lifecycle, and integration
+points for the discovery engine that powers `/v1/api/discovery/*`.
 
 ## Concept Overview
 
-Users explore a curated list of events that all fit inside a short time window (currently six hours). The engine guarantees deterministic ordering, conflict-aware booking, and full action history per user. Reactions never mutate the source catalog; state lives only inside queue snapshots and history logs.
+Users explore a curated list of events that all fit inside a short time window
+(currently six hours). The engine guarantees deterministic ordering, conflict-
+aware booking, and full action history per user. Reactions never mutate the
+source catalog; state lives only inside queue snapshots and history logs.
 
 Key properties:
 
@@ -32,7 +36,8 @@ Key properties:
 | `POST /action` with `neutral` | Moves the event to the tail of the primary queue unless it already carries a conflict flag.              |
 | `POST /book`                  | Removes the event, marks all overlapping events as `conflict`, and pushes them behind the primary queue. |
 
-Neutral on a conflict event does **not** upgrade it back into the primary queue; it stays within the conflict tail to respect booking commitments.
+Neutral on a conflict event does **not** upgrade it back into the primary queue;
+it stays within the conflict tail to respect booking commitments.
 
 ## Booking Flow
 
@@ -44,7 +49,7 @@ Neutral on a conflict event does **not** upgrade it back into the primary queue;
 
 ## Queue Lifecycle
 
-```
+```bash
 Primary Queue   --->   [current]   --->   actions   --->   history
                                           |  |  |
              conflict tagging  <---  booking  neutral  dislike
@@ -63,7 +68,8 @@ Primary Queue   --->   [current]   --->   actions   --->   history
 | `POST` | `/v1/api/discovery/book`    | Confirm an event and propagate conflicts.                         |
 | `GET`  | `/v1/api/discovery/history` | Retrieve chronological action logs.                               |
 
-All endpoints require Bearer JWT authentication. The handlers infer `userId` from the `X-User-ID` header injected by `AuthMiddleware`.
+All endpoints require Bearer JWT authentication. The handlers infer `userId`
+from the `X-User-ID` header injected by `AuthMiddleware`.
 
 ## Storage and Concurrency
 

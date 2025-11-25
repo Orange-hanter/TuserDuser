@@ -4,16 +4,19 @@
 
 ### 1. Run Database Migrations
 
-The migration `005_add_role_to_users` will automatically run on server start, adding the `role` column to existing users with a default value of `'user'`.
+The migration `005_add_role_to_users` will automatically run on server start,
+adding the `role` column to existing users with a default value of `'user'`.
 
-```bash
-# Start the server - migrations run automatically
+````bash
+## Start the server - migrations run automatically
+## Start the server - migrations run automatically
 ./server
-```
-
+```bash
 ### 2. Default Admin Seeding (Automatic & Idempotent)
 
-The application automatically ensures there is at least one admin user after migrations. If no admin exists, it will create a default admin user. This process is idempotent: if an admin already exists, nothing is changed.
+The application automatically ensures there is at least one admin user after
+migrations. If no admin exists, it will create a default admin user. This
+process is idempotent: if an admin already exists, nothing is changed.
 
 - Defaults (can be overridden using env vars):
   - `ADMIN_EMAIL` → default `admin@example.com`
@@ -27,18 +30,19 @@ export ADMIN_EMAIL="admin@yourdomain.com"
 export ADMIN_PHONE="+10000000000"
 export ADMIN_PASSWORD="Strong_Admin_Passw0rd!"
 ./server
-```
+````
 
-If you prefer manual promotion instead of auto-seeding, you can still do it via SQL:
+If you prefer manual promotion instead of auto-seeding, you can still do it via
+SQL:
 
-```sql
+````sql
 UPDATE users SET role = 'admin' WHERE email = 'your-admin@example.com';
-```
-
+```bash
 ### 3. Verify Admin Access
 
 ```bash
-# Login as admin
+## Login as admin
+## Login as admin
 curl -X POST http://localhost:8080/v1/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -46,8 +50,9 @@ curl -X POST http://localhost:8080/v1/api/auth/login \
     "password": "your-password"
   }'
 
-# You should receive a JWT token with "role": "admin" in the response
-```
+## You should receive a JWT token with "role": "admin" in the response
+## You should receive a JWT token with "role": "admin" in the response
+````
 
 ## Managing User Roles
 
@@ -55,7 +60,7 @@ curl -X POST http://localhost:8080/v1/api/auth/login \
 
 Only admins can grant creator or support roles:
 
-```bash
+````bash
 curl -X PUT http://localhost:8080/v1/api/admin/users/role \
   -H "Authorization: Bearer <admin_jwt_token>" \
   -H "Content-Type: application/json" \
@@ -63,34 +68,35 @@ curl -X PUT http://localhost:8080/v1/api/admin/users/role \
     "user_id": "uuid-of-user",
     "role": "creator"
   }'
-```
-
+```bash
 ### List All Users
 
 ```bash
 curl -X GET http://localhost:8080/v1/api/admin/users \
   -H "Authorization: Bearer <admin_jwt_token>"
-```
+````
 
 ## Testing Role Permissions
 
 ### As Regular User (Default)
 
-```bash
-# Can view events
+````bash
+## Can view events
+## Can view events
 curl http://localhost:8080/v1/api/events
 
-# Cannot create events (403 Forbidden)
+## Cannot create events (403 Forbidden)
+## Cannot create events (403 Forbidden)
 curl -X POST http://localhost:8080/v1/api/events \
   -H "Authorization: Bearer <user_jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{"type": "test"}'
-```
-
+```bash
 ### As Creator
 
 ```bash
-# Can create events (goes to pending for admin review)
+## Can create events (goes to pending for admin review)
+## Can create events (goes to pending for admin review)
 curl -X POST http://localhost:8080/v1/api/events \
   -H "Authorization: Bearer <creator_jwt_token>" \
   -H "Content-Type: application/json" \
@@ -104,19 +110,22 @@ curl -X POST http://localhost:8080/v1/api/events \
     "needReg": false
   }'
 
-# Cannot review events (403 Forbidden)
+## Cannot review events (403 Forbidden)
+## Cannot review events (403 Forbidden)
 curl -X GET http://localhost:8080/v1/api/events/pending \
   -H "Authorization: Bearer <creator_jwt_token>"
-```
+````
 
 ### As Admin
 
-```bash
-# View pending events
+````bash
+## View pending events
+## View pending events
 curl -X GET http://localhost:8080/v1/api/events/pending \
   -H "Authorization: Bearer <admin_jwt_token>"
 
-# Approve event
+## Approve event
+## Approve event
 curl -X POST http://localhost:8080/v1/api/events/{event-id}/review \
   -H "Authorization: Bearer <admin_jwt_token>" \
   -H "Content-Type: application/json" \
@@ -124,7 +133,8 @@ curl -X POST http://localhost:8080/v1/api/events/{event-id}/review \
     "action": "approve"
   }'
 
-# Reject event (requires comment)
+## Reject event (requires comment)
+## Reject event (requires comment)
 curl -X POST http://localhost:8080/v1/api/events/{event-id}/review \
   -H "Authorization: Bearer <admin_jwt_token>" \
   -H "Content-Type: application/json" \
@@ -132,8 +142,7 @@ curl -X POST http://localhost:8080/v1/api/events/{event-id}/review \
     "action": "reject",
     "comment": "Does not meet quality standards"
   }'
-```
-
+```bash
 ## Role Hierarchy
 
 ```text
@@ -144,7 +153,7 @@ creator        → Can create events + user permissions
 user (default) → Read-only access to approved events
   ↓
 support        → Reserved for future features
-```
+````
 
 ## Common Scenarios
 

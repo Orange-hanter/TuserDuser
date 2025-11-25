@@ -2,7 +2,8 @@
 
 ## Overview
 
-Cross-Origin Resource Sharing (CORS) is configured to allow API calls from specified frontend domains.
+Cross-Origin Resource Sharing (CORS) is configured to allow API calls from
+specified frontend domains.
 
 ## Current Configuration
 
@@ -10,14 +11,13 @@ Cross-Origin Resource Sharing (CORS) is configured to allow API calls from speci
 
 The following origins are allowed to make requests to the API:
 
-```text
+````text
 - https://api.tuserduser.online     (API domain itself)
 - https://tuserduser.online          (Production frontend)
 - https://www.tuserduser.online      (WWW variant)
 - http://localhost:3000              (Local development - React/Vue/Next.js)
 - http://localhost:8080              (Local development - alternative port)
-```
-
+```bash
 ## HTTP Headers
 
 ### Request Headers Accepted
@@ -28,15 +28,14 @@ The following origins are allowed to make requests to the API:
 - Content-Type
 - X-CSRF-Token
 - X-Requested-With
-```
+````
 
 ### Response Headers Exposed
 
-```text
+````text
 - Content-Length
 - X-Json-Response
-```
-
+```bash
 ## CORS Methods
 
 Allowed HTTP methods for CORS requests:
@@ -48,7 +47,7 @@ Allowed HTTP methods for CORS requests:
 - DELETE    (Remove data)
 - PATCH     (Partial update)
 - OPTIONS   (Preflight requests)
-```
+````
 
 ## Configuration Files
 
@@ -56,10 +55,9 @@ Allowed HTTP methods for CORS requests:
 
 Location: `/opt/event-api/.env`
 
-```bash
+````bash
 CORS_ALLOWED_ORIGINS=https://api.tuserduser.online,https://tuserduser.online,https://www.tuserduser.online,http://localhost:3000,http://localhost:8080
-```
-
+```bash
 ### Application Code
 
 Location: `cmd/server/main.go`
@@ -73,18 +71,17 @@ c := cors.New(cors.Options{
     AllowCredentials: true,
     MaxAge:           3600, // 1 hour
 })
-```
+````
 
 ## How to Test CORS
 
 ### 1. Preflight Request (OPTIONS)
 
-```bash
+````bash
 curl -i -X OPTIONS https://api.tuserduser.online/v1/api/health \
   -H "Origin: http://localhost:3000" \
   -H "Access-Control-Request-Method: GET"
-```
-
+```bash
 Expected response headers:
 
 ```text
@@ -92,15 +89,14 @@ Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS
 Access-Control-Allow-Credentials: true
 Access-Control-Max-Age: 3600
-```
+````
 
 ### 2. Actual Request (GET)
 
-```bash
+````bash
 curl -i https://api.tuserduser.online/health \
   -H "Origin: http://localhost:3000"
-```
-
+```bash
 ### 3. Actual Request (POST)
 
 ```bash
@@ -108,16 +104,15 @@ curl -i -X POST https://api.tuserduser.online/v1/api/auth/register \
   -H "Origin: http://localhost:3000" \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","phone":"+79991234567","password":"password123"}'
-```
+````
 
 Expected response headers:
 
-```text
+````text
 Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Credentials: true
 Access-Control-Expose-Headers: Content-Length, X-Json-Response
-```
-
+```json
 ## Frontend Usage
 
 ### JavaScript/TypeScript
@@ -139,11 +134,11 @@ fetch("https://api.tuserduser.online/v1/api/auth/register", {
   .then((response) => response.json())
   .then((data) => console.log(data))
   .catch((error) => console.error("Error:", error));
-```
+````
 
 ### Axios
 
-```javascript
+````javascript
 import axios from "axios";
 
 const apiClient = axios.create({
@@ -162,8 +157,7 @@ apiClient
   })
   .then((response) => console.log(response.data))
   .catch((error) => console.error(error));
-```
-
+```json
 ### React
 
 ```jsx
@@ -175,29 +169,33 @@ useEffect(() => {
     .then((data) => setHealth(data))
     .catch((err) => console.error(err));
 }, []);
-```
+````
 
 ## Adding New Origins
 
 To add a new allowed origin, update the `.env` file on the server:
 
-```bash
+````bash
 ssh tuser
 
-# Edit the .env file
+## Edit the .env file
+## Edit the .env file
 sudo nano /opt/event-api/.env
 
-# Find and update CORS_ALLOWED_ORIGINS
-# Example - add https://myapp.com
+## Find and update CORS_ALLOWED_ORIGINS
+## Find and update CORS_ALLOWED_ORIGINS
+## Example - add https://myapp.com
+## Example - add https://myapp.com
 CORS_ALLOWED_ORIGINS=https://api.tuserduser.online,https://tuserduser.online,https://www.tuserduser.online,https://myapp.com,http://localhost:3000,http://localhost:8080
 
-# Save and restart the service
+## Save and restart the service
+## Save and restart the service
 sudo systemctl restart event-api
 
-# Verify
+## Verify
+## Verify
 curl -i https://api.tuserduser.online/health -H "Origin: https://myapp.com" | grep -i "access-control"
-```
-
+```json
 ## Common CORS Issues & Solutions
 
 ### Issue: "No 'Access-Control-Allow-Origin' header"
@@ -248,30 +246,33 @@ curl -i https://api.tuserduser.online/health -H "Origin: https://myapp.com" | gr
 Check CORS errors in logs:
 
 ```bash
-# View recent logs
+## View recent logs
+## View recent logs
 ssh tuser "sudo tail -f /opt/event-api/logs/event-api.log" | grep -i cors
 
-# Or check HTTP access logs
+## Or check HTTP access logs
+## Or check HTTP access logs
 ssh tuser "sudo tail -f /var/log/nginx/event-api-access.log"
-```
+````
 
 ## Troubleshooting
 
 ### Test specific origin
 
-```bash
-# Test if origin is allowed
+````bash
+## Test if origin is allowed
+## Test if origin is allowed
 curl -i https://api.tuserduser.online/health \
   -H "Origin: YOUR_ORIGIN_HERE" | grep -i "access-control-allow-origin"
 
-# Should see: Access-Control-Allow-Origin: YOUR_ORIGIN_HERE
-```
-
+## Should see: Access-Control-Allow-Origin: YOUR_ORIGIN_HERE
+## Should see: Access-Control-Allow-Origin: YOUR_ORIGIN_HERE
+```bash
 ### View current CORS config on server
 
 ```bash
 ssh tuser "grep CORS_ALLOWED /opt/event-api/.env"
-```
+````
 
 ### Verify service has new config
 

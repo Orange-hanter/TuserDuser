@@ -4,7 +4,7 @@
 
 ### ❌ ОШИБКИ
 
-```
+```bash
 ╔════════════════════════════════════════════════════════════╗
 ║ ❌ Database Connection Failed
 ╠════════════════════════════════════════════════════════════╣
@@ -34,7 +34,7 @@
 
 **Код:**
 
-```go
+````go
 fmt.Println(logger.FormatError(
     "Database Connection Failed",
     err,
@@ -42,13 +42,13 @@ fmt.Println(logger.FormatError(
     "Port: 5432",
     "Database: event_api",
 ))
-```
-
+```bash
 ---
 
 ### ✅ УСПЕХ
 
-```
+````
+
 ╔════════════════════════════════════════════════════════════╗
 ║ ✅ Server Started Successfully
 ╠════════════════════════════════════════════════════════════╣
@@ -60,7 +60,7 @@ fmt.Println(logger.FormatError(
 ╔════════════════════════════════════════════════════════════╗
 ║ ✅ User Registered
 ╠════════════════════════════════════════════════════════════╣
-║ → Email: user@example.com
+║ → Email: <user@example.com>
 ║ → User ID: 123e4567-e89b-12d3-a456-426614174000
 ║ → Verification Code Sent
 ╚════════════════════════════════════════════════════════════╝
@@ -72,8 +72,8 @@ fmt.Println(logger.FormatError(
 ║ → Database: event_api
 ║ → Pool: 10/25 connections
 ╚════════════════════════════════════════════════════════════╝
-```
 
+````bash
 **Код:**
 
 ```go
@@ -83,13 +83,13 @@ fmt.Println(logger.FormatSuccess(
     "Environment: development",
     "CORS Origins: 2",
 ))
-```
+````
 
 ---
 
 ### ⚠️ ПРЕДУПРЕЖДЕНИЯ
 
-```
+```bash
 ╔════════════════════════════════════════════════════════════╗
 ║ ⚠️  .env file not found
 ╠════════════════════════════════════════════════════════════╣
@@ -116,30 +116,30 @@ fmt.Println(logger.FormatSuccess(
 
 **Код:**
 
-```go
+````go
 fmt.Println(logger.FormatWarning(
     ".env file not found",
     "Using system environment variables",
     "Some values may use defaults",
 ))
-```
-
+```bash
 ---
 
 ### ℹ️ ИНФОРМАЦИЯ
 
-```
+````
+
 ╔════════════════════════════════════════════════════════════╗
-║ ℹ️  Application Configuration
+║ ℹ️ Application Configuration
 ╠════════════════════════════════════════════════════════════╣
 ║ → Port: 8080
 ║ → Environment: development
 ║ → JWT Expiration: 3600 seconds
-║ → CORS Origins: http://localhost:3000
+║ → CORS Origins: <http://localhost:3000>
 ╚════════════════════════════════════════════════════════════╝
 
 ╔════════════════════════════════════════════════════════════╗
-║ ℹ️  Migration Status
+║ ℹ️ Migration Status
 ╠════════════════════════════════════════════════════════════╣
 ║ → Total migrations: 5
 ║ → Applied: 5
@@ -148,14 +148,14 @@ fmt.Println(logger.FormatWarning(
 ╚════════════════════════════════════════════════════════════╝
 
 ╔════════════════════════════════════════════════════════════╗
-║ ℹ️  Performance Metrics
+║ ℹ️ Performance Metrics
 ╠════════════════════════════════════════════════════════════╣
 ║ → Request/sec: 1,234
 ║ → Avg latency: 45ms
 ║ → Error rate: 0.01%
 ╚════════════════════════════════════════════════════════════╝
-```
 
+````bash
 **Код:**
 
 ```go
@@ -165,7 +165,7 @@ fmt.Println(logger.FormatInfo(
     "Environment: development",
     "JWT Expiration: 3600 seconds",
 ))
-```
+````
 
 ---
 
@@ -204,7 +204,7 @@ fmt.Println(logger.FormatInfo(
 
 ### Ejemplo 1: Ошибка валидации
 
-```go
+````go
 if !isValidEmail(req.Email) {
     fmt.Println(logger.FormatError(
         "Email Validation Failed",
@@ -214,8 +214,7 @@ if !isValidEmail(req.Email) {
     ))
     return
 }
-```
-
+```json
 ### Пример 2: Успешная операция
 
 ```go
@@ -226,11 +225,11 @@ fmt.Println(logger.FormatSuccess(
     "ID: " + user.ID,
     "Verification code sent to email",
 ))
-```
+````
 
 ### Пример 3: Предупреждение о производительности
 
-```go
+````go
 if queryTime > 5*time.Second {
     fmt.Println(logger.FormatWarning(
         "Slow Database Query",
@@ -239,8 +238,7 @@ if queryTime > 5*time.Second {
         "Consider adding index",
     ))
 }
-```
-
+```bash
 ### Пример 4: Информационное сообщение о статусе
 
 ```go
@@ -250,13 +248,13 @@ fmt.Println(logger.FormatInfo(
     "Cache: ✓ Available",
     "Disk space: 45% used",
 ))
-```
+````
 
 ---
 
 ## 🌈 Визуальная иерархия приоритета
 
-```
+```bash
 🔴 ERROR     ← Критичные, требуют немедленного внимания
 🟡 WARNING   ← Важные, требуют проверки
 🔵 INFO      ← Информационные, для отслеживания
@@ -312,6 +310,6 @@ const (
 
 ---
 
-**Версия:** 1.0  
-**Дата:** 27 Октября 2025  
+**Версия:** 1.0
+**Дата:** 27 Октября 2025
 **Статус:** ✅ Production Ready 🚀

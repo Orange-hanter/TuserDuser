@@ -2,13 +2,15 @@
 
 ## ✨ Новые возможности
 
-Логгер теперь поддерживает красивое форматирование ошибок, успехов, предупреждений и информационных сообщений с использованием ANSI цветов и Unicode символов.
+Логгер теперь поддерживает красивое форматирование ошибок, успехов,
+предупреждений и информационных сообщений с использованием ANSI цветов и Unicode
+символов.
 
 ## 🎨 Виды сообщений
 
 ### 1️⃣ Ошибки (Errors)
 
-```go
+````go
 fmt.Println(logger.FormatError(
     "Database Connection Failed",
     err,
@@ -16,11 +18,11 @@ fmt.Println(logger.FormatError(
     "Port: 5432",
     "Database: event_api",
 ))
-```
-
+```bash
 **Вывод:**
 
-```
+````
+
 ╔════════════════════════════════════════════════════════════╗
 ║ ❌ Database Connection Failed
 ╠════════════════════════════════════════════════════════════╣
@@ -29,8 +31,8 @@ fmt.Println(logger.FormatError(
 ║ → Port: 5432
 ║ → Database: event_api
 ╚════════════════════════════════════════════════════════════╝
-```
 
+````bash
 ### 2️⃣ Успех (Success)
 
 ```go
@@ -40,11 +42,11 @@ fmt.Println(logger.FormatSuccess(
     "User ID: 123e4567-e89b-12d3-a456-426614174000",
     "Verification Code Sent",
 ))
-```
+````
 
 **Вывод:**
 
-```
+```bash
 ╔════════════════════════════════════════════════════════════╗
 ║ ✅ User Registered Successfully
 ╠════════════════════════════════════════════════════════════╣
@@ -56,25 +58,25 @@ fmt.Println(logger.FormatSuccess(
 
 ### 3️⃣ Предупреждения (Warnings)
 
-```go
+````go
 fmt.Println(logger.FormatWarning(
     ".env file not found",
     "Using system environment variables",
     "Some values may use defaults",
 ))
-```
-
+```bash
 **Вывод:**
 
-```
+````
+
 ╔════════════════════════════════════════════════════════════╗
-║ ⚠️  .env file not found
+║ ⚠️ .env file not found
 ╠════════════════════════════════════════════════════════════╣
 ║ → Using system environment variables
 ║ → Some values may use defaults
 ╚════════════════════════════════════════════════════════════╝
-```
 
+````bash
 ### 4️⃣ Информация (Info)
 
 ```go
@@ -84,11 +86,11 @@ fmt.Println(logger.FormatInfo(
     "Environment: development",
     "CORS Origins: 2",
 ))
-```
+````
 
 **Вывод:**
 
-```
+```bash
 ╔════════════════════════════════════════════════════════════╗
 ║ ℹ️  Server Configuration
 ╠════════════════════════════════════════════════════════════╣
@@ -102,7 +104,7 @@ fmt.Println(logger.FormatInfo(
 
 ### В main.go
 
-```go
+````go
 package main
 
 import (
@@ -122,8 +124,7 @@ func main() {
         "Pool Size: 10/25",
     ))
 }
-```
-
+```go
 ### В handlers
 
 ```go
@@ -146,11 +147,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
         "ID: " + user.ID,
     ))
 }
-```
+````
 
 ### В services
 
-```go
+````go
 func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
     user, err := s.GetUserByEmail(req.Email)
     if err != nil {
@@ -165,8 +166,7 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 
     return &models.AuthResponse{...}, nil
 }
-```
-
+```bash
 ## 🎯 Когда использовать
 
 | Тип         | Когда использовать       | Пример                             |
@@ -194,7 +194,7 @@ logger.Log.Error("Critical Error", zap.Error(err))
 
 // Для обычных сообщений:
 logger.Log.Info(logger.FormatSuccess("Operation Completed"))
-```
+````
 
 ## 🚀 Автоматическое определение окружения
 
@@ -204,9 +204,11 @@ logger.Log.Info(logger.FormatSuccess("Operation Completed"))
 - **production** — стандартный JSON формат Zap
 
 ```bash
-# Development (красивый вывод)
+## Development (красивый вывод)
+## Development (красивый вывод)
 ENV=development go run ./cmd/server
 
-# Production (JSON)
+## Production (JSON)
+## Production (JSON)
 ENV=production go run ./cmd/server
 ```

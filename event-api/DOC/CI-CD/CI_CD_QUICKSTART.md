@@ -19,11 +19,10 @@
 
 #### Минимальные (для Docker Hub)
 
-```text
+````text
 DOCKER_USERNAME = your_dockerhub_username
 DOCKER_PASSWORD = your_dockerhub_password_or_token
-```
-
+```bash
 #### Для SSH деплоя
 
 ```text
@@ -31,25 +30,28 @@ SSH_HOST = your.server.com
 SSH_USERNAME = deploy
 SSH_PRIVATE_KEY = -----BEGIN OPENSSH PRIVATE KEY-----...
 SSH_PORT = 22
-```
+````
 
 ### 3. Раскомментируйте деплой
 
 В файле `.github/workflows/ci.yml` в job `deploy`:
 
-```yaml
-# Было (закомментировано):
-# - name: Login to Docker Hub
-#   uses: docker/login-action@v3
+````yaml
+## Было (закомментировано):
+## Было (закомментировано):
+## - name: Login to Docker Hub
+## - name: Login to Docker Hub
+##   uses: docker/login-action@v3
+##   uses: docker/login-action@v3
 
-# Стало (раскомментируйте):
+## Стало (раскомментируйте):
+## Стало (раскомментируйте):
 - name: Login to Docker Hub
   uses: docker/login-action@v3
   with:
     username: ${{ secrets.DOCKER_USERNAME }}
     password: ${{ secrets.DOCKER_PASSWORD }}
-```
-
+```bash
 То же самое для других шагов деплоя.
 
 ### 4. Локальное тестирование
@@ -57,26 +59,29 @@ SSH_PORT = 22
 Проверьте, что всё работает локально:
 
 ```bash
-# Запустить проверки как в CI
+## Запустить проверки как в CI
+## Запустить проверки как в CI
 make ci-test
 
-# Или по отдельности
+## Или по отдельности
+## Или по отдельности
 make lint
 make test
 make build
-```
+````
 
 ### 5. Первый деплой
 
-```bash
-# Commit и push
+````bash
+## Commit и push
+## Commit и push
 git add .
 git commit -m "feat: настроен CI/CD"
 git push origin master
 
-# Смотрите прогресс в GitHub Actions tab
-```
-
+## Смотрите прогресс в GitHub Actions tab
+## Смотрите прогресс в GitHub Actions tab
+```bash
 ## 📋 Что включено
 
 ### Workflows
@@ -117,45 +122,51 @@ git push origin master
 
 ```bash
 git checkout -b feature/new-feature
-# ... делаете изменения ...
+## ... делаете изменения ...
+## ... делаете изменения ...
 git commit -m "feat: добавлена новая фича"
 git push origin feature/new-feature
-# Создайте PR → CI проверит автоматически
-```
+## Создайте PR → CI проверит автоматически
+## Создайте PR → CI проверит автоматически
+````
 
 ### Hotfix для production
 
-```bash
+````bash
 git checkout -b hotfix/critical-bug
-# ... исправляете ...
+## ... исправляете ...
+## ... исправляете ...
 git commit -m "fix: критическая ошибка исправлена"
 git push origin hotfix/critical-bug
-# PR → мерж в master → автодеплой
-```
-
+## PR → мерж в master → автодеплой
+## PR → мерж в master → автодеплой
+```bash
 ### Релиз
 
 ```bash
-# Убедитесь что всё в master
+## Убедитесь что всё в master
+## Убедитесь что всё в master
 git checkout master
 git pull
 
-# Создайте тег
+## Создайте тег
+## Создайте тег
 git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
 
-# Release создастся автоматически
-```
+## Release создастся автоматически
+## Release создастся автоматически
+````
 
 ### Staging тест
 
-```bash
+````bash
 git checkout develop
 git merge feature/my-feature
 git push origin develop
-# Автоматически задеплоится на staging
-```
-
+## Автоматически задеплоится на staging
+## Автоматически задеплоится на staging
+```json
 ## 🔧 Кастомизация
 
 ### Изменить версию Go
@@ -165,19 +176,18 @@ git push origin develop
 ```yaml
 env:
   GO_VERSION: "1.25.0" # ← измените здесь
-```
+````
 
 ### Добавить новый шаг в CI
 
 В `.github/workflows/ci.yml` добавьте новый step:
 
-```yaml
+````yaml
 - name: My custom step
   run: |
     echo "Doing something"
     make my-custom-command
-```
-
+```bash
 ### Изменить метод деплоя
 
 Замените SSH деплой на свой метод в job `deploy`:
@@ -191,14 +201,19 @@ env:
 ### CI падает на тестах
 
 ```bash
-# Запустите локально
+## Запустите локально
+## Запустите локально
 make ci-test
 
-# Если локально проходит, проверьте:
-# - Версия Go в CI
-# - PostgreSQL/Redis версии
-# - Переменные окружения
-```
+## Если локально проходит, проверьте:
+## Если локально проходит, проверьте:
+## - Версия Go в CI
+## - Версия Go в CI
+## - PostgreSQL/Redis версии
+## - PostgreSQL/Redis версии
+## - Переменные окружения
+## - Переменные окружения
+````
 
 ### Деплой не запускается
 
@@ -212,12 +227,16 @@ make ci-test
 ### Docker build fails
 
 ```bash
-# Проверьте локально
+## Проверьте локально
+## Проверьте локально
 docker build -t event-api:test .
 
-# Если локально работает:
-# - Проверьте .dockerignore
-# - Убедитесь что go.mod/go.sum committed
+## Если локально работает:
+## Если локально работает:
+## - Проверьте .dockerignore
+## - Проверьте .dockerignore
+## - Убедитесь что go.mod/go.sum committed
+## - Убедитесь что go.mod/go.sum committed
 ```
 
 ## 📚 Дополнительные ресурсы

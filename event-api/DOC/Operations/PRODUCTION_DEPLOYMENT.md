@@ -55,7 +55,7 @@ Once DNS is configured for `api.tuserduser.online`:
 
 ### 📁 Directory Structure
 
-```text
+````text
 /opt/event-api/
 ├── bin/
 │   └── event-api           # Go binary (24MB)
@@ -66,8 +66,7 @@ Once DNS is configured for `api.tuserduser.online`:
 ├── backups/                # Database backups
 ├── .env                    # Environment configuration
 └── backup.sh               # Backup script
-```
-
+```bash
 ### 🔐 Credentials
 
 All credentials are stored in `/opt/event-api/.env`:
@@ -83,42 +82,49 @@ All credentials are stored in `/opt/event-api/.env`:
 #### Service Management
 
 ```bash
-# Status
+## Status
+## Status
 sudo systemctl status event-api
 
-# Start/Stop/Restart
+## Start/Stop/Restart
+## Start/Stop/Restart
 sudo systemctl start event-api
 sudo systemctl stop event-api
 sudo systemctl restart event-api
 
-# View logs (live)
+## View logs (live)
+## View logs (live)
 sudo tail -f /opt/event-api/logs/event-api.log
-```
+````
 
 #### Database Management
 
-```bash
-# Backup
+````bash
+## Backup
+## Backup
 sudo -u eventapi /opt/event-api/backup.sh
 
-# Connect to database
+## Connect to database
+## Connect to database
 sudo -u postgres psql -d event_api
 
-# Check backups
+## Check backups
+## Check backups
 ls -lh /opt/event-api/backups/
-```
-
+```bash
 #### Deployment (from local machine)
 
 ```bash
-# Build and deploy
+## Build and deploy
+## Build and deploy
 ./scripts/deploy-binary.sh
 
-# Or manually:
+## Or manually:
+## Or manually:
 GOOS=linux GOARCH=amd64 go build -o bin/event-api-linux ./cmd/server
 scp bin/event-api-linux tuser:/tmp/event-api
 ssh tuser "sudo systemctl stop event-api && sudo mv /tmp/event-api /opt/event-api/bin/event-api && sudo chown eventapi:eventapi /opt/event-api/bin/event-api && sudo chmod +x /opt/event-api/bin/event-api && sudo systemctl start event-api"
-```
+````
 
 ### 📊 Resource Usage
 
@@ -238,75 +244,80 @@ Daily database backups are scheduled via cron:
 
 Manual backup:
 
-```bash
+````bash
 ssh tuser sudo -u eventapi /opt/event-api/backup.sh
-```
-
+```bash
 ### 📈 Monitoring
 
 **Check service status:**
 
 ```bash
 ssh tuser "sudo systemctl is-active event-api && echo 'API is running' || echo 'API is DOWN'"
-```
+````
 
 **Check health endpoint:**
 
-```bash
+````bash
 ssh tuser "curl -f http://localhost:8081/health && echo 'Healthy' || echo 'Unhealthy'"
-```
-
+```bash
 **Resource usage:**
 
 ```bash
 ssh tuser "free -h && df -h / && ps aux | grep event-api"
-```
+````
 
 ### 🐛 Troubleshooting
 
 **Service not starting:**
 
-```bash
-# Check logs
+````bash
+## Check logs
+## Check logs
 sudo journalctl -u event-api -n 50
 
-# Check application logs
+## Check application logs
+## Check application logs
 sudo tail -50 /opt/event-api/logs/event-api-error.log
 
-# Check configuration
+## Check configuration
+## Check configuration
 sudo -u eventapi /opt/event-api/bin/event-api --help
-```
-
+```bash
 **Database connection issues:**
 
 ```bash
-# Test connection
+## Test connection
+## Test connection
 sudo -u postgres psql -d event_api -c "SELECT version();"
 
-# Check PostgreSQL status
+## Check PostgreSQL status
+## Check PostgreSQL status
 sudo systemctl status postgresql
-```
+````
 
 **Redis connection issues:**
 
-```bash
-# Test Redis
+````bash
+## Test Redis
+## Test Redis
 redis-cli -a $(sudo grep REDIS_PASSWORD /opt/event-api/.env | cut -d= -f2) ping
 
-# Check Redis status
+## Check Redis status
+## Check Redis status
 sudo systemctl status redis-server
-```
-
+```bash
 **Port conflicts:**
 
 ```bash
-# Check what's using port 8081
+## Check what's using port 8081
+## Check what's using port 8081
 sudo lsof -i :8081
 
-# Change port in .env if needed
+## Change port in .env if needed
+## Change port in .env if needed
 sudo nano /opt/event-api/.env  # Update PORT=
 sudo systemctl restart event-api
-```
+````
 
 ### 📚 Documentation
 

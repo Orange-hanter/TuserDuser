@@ -4,69 +4,99 @@
 
 ### 1. Start Services
 
-```bash
-# Start PostgreSQL and Redis
+```tex
+
+## Start PostgreSQL and Redis
+
+## Start PostgreSQL and Redis
 docker-compose up -d
 
-# Start application
+## Start application
+
+## Start application
 make run
 ```
 
 ### 2. Test Registration (Redis Verification Code)
 
-```bash
-curl -X POST http://localhost:8080/v1/api/auth/register \
-  -H "Content-Type: application/json" \
+```tex
+curl -X POST http://localhost:8080/v1/api/auth/registe
+  -H "Content-Type: application/json"
   -d '{"email":"test@example.com","phone":"+79991234567","password":"test123"}'
 
-# Response:
-# {"user":{...},"verify_code":"123456"}
+## Response:
+
+## Response:
+
+## {"user":{...},"verify_code":"123456"}
+
+## {"user":{...},"verify_code":"123456"}
 ```
 
 **Verify in Redis:**
 
-```bash
+```tex
 docker exec -it event_api_redis redis-cli -a devpass GET verify:test@example.com
-# Returns: "123456"
+
+## Returns: "123456"
+
+## Returns: "123456"
 
 docker exec -it event_api_redis redis-cli -a devpass TTL verify:test@example.com
-# Returns: ~600 (10 minutes in seconds)
+
+## Returns: ~600 (10 minutes in seconds)
+
+## Returns: ~600 (10 minutes in seconds)
 ```
 
 ### 3. Test Verification
 
-```bash
-curl -X POST http://localhost:8080/v1/api/auth/verify \
-  -H "Content-Type: application/json" \
+```tex
+curl -X POST http://localhost:8080/v1/api/auth/verify
+  -H "Content-Type: application/json"
   -d '{"email":"test@example.com","code":"123456"}'
 
-# Response:
-# {"access_token":"eyJ...","user":{...verified:true...}}
+## Response:
+
+## Response:
+
+## {"access_token":"eyJ...","user":{...verified:true...}}
+
+## {"access_token":"eyJ...","user":{...verified:true...}}
 ```
 
 **Verify code deleted from Redis:**
 
-```bash
+```tex
 docker exec -it event_api_redis redis-cli -a devpass EXISTS verify:test@example.com
-# Returns: 0 (key deleted)
+
+## Returns: 0 (key deleted)
+
+## Returns: 0 (key deleted)
 ```
 
 ### 4. Test Login
 
-```bash
-curl -X POST http://localhost:8080/v1/api/auth/login \
-  -H "Content-Type: application/json" \
+```tex
+curl -X POST http://localhost:8080/v1/api/auth/login
+  -H "Content-Type: application/json"
   -d '{"email":"test@example.com","password":"test123"}'
 
-# Response:
-# {"access_token":"eyJ...","user":{...}}
+## Response:
+
+## Response:
+
+## {"access_token":"eyJ...","user":{...}}
+
+## {"access_token":"eyJ...","user":{...}}
 ```
 
 ### 5. SMTP Email Integration Test (real email)
 
-Requires a reachable SMTP server and credentials. Set the following env vars, then run the focused test:
+Requires a reachable SMTP server and credentials. Set the following env vars,
+then run the focused test:
 
-```bash
+```tex
 export SMTP_HOST="smtp.example.com"
 export SMTP_PORT="587"        # or 465 for SSL
 export SMTP_USERNAME="user@example.com"
@@ -75,9 +105,14 @@ export EMAIL_FROM="from@example.com"
 export EMAIL_FROM_NAME="Event API"
 export EMAIL_TO="recipient@example.com"
 
-# Run only the SMTP email test
+## Run only the SMTP email tes
+
+## Run only the SMTP email tes
 make test-email-smtp
-# or directly
+
+## or directly
+
+## or directly
 go test -v ./internal/email -run TestSMTPIntegrationSendEmail
 ```
 
@@ -87,68 +122,89 @@ Notes:
 - Some providers require app passwords (e.g., Gmail) or SMTP enabled in account settings.
 - The test is skipped if required env vars are not set.
 
-### 5. Test Protected Endpoint
+### 5. Test Protected Endpoin
 
-```bash
+```tex
 TOKEN="eyJ..."  # Your JWT token
 
-curl -X GET http://localhost:8080/v1/api/auth/me \
+curl -X GET http://localhost:8080/v1/api/auth/me
   -H "Authorization: Bearer $TOKEN"
 
-# Response:
-# {"user":{...}}
+## Response:
+
+## Response:
+
+## {"user":{...}}
+
+## {"user":{...}}
 ```
 
 ### 6. Test Logout (Redis Token Blacklist)
 
-```bash
-curl -X POST http://localhost:8080/v1/api/auth/logout \
+```tex
+curl -X POST http://localhost:8080/v1/api/auth/logou
   -H "Authorization: Bearer $TOKEN"
 
-# Response:
-# {"message":"Успешно вышли из системы"}
+## Response:
+
+## Response:
+
+## {"message":"Успешно вышли из системы"}
+
+## {"message":"Успешно вышли из системы"}
 ```
 
 **Verify token in blacklist:**
 
-```bash
+```tex
 docker exec -it event_api_redis redis-cli -a devpass EXISTS "blacklist:$TOKEN"
-# Returns: 1 (token blacklisted)
+
+## Returns: 1 (token blacklisted)
+
+## Returns: 1 (token blacklisted)
 
 docker exec -it event_api_redis redis-cli -a devpass TTL "blacklist:$TOKEN"
-# Returns: ~3600 (1 hour - token expiration time)
+
+## Returns: ~3600 (1 hour - token expiration time)
+
+## Returns: ~3600 (1 hour - token expiration time)
 ```
 
 **Try to use blacklisted token:**
 
-```bash
-curl -X GET http://localhost:8080/v1/api/auth/me \
+```tex
+curl -X GET http://localhost:8080/v1/api/auth/me
   -H "Authorization: Bearer $TOKEN"
 
-# Response:
-# {"error":"unauthorized","message":"токен был отозван","code":401}
+## Response:
+
+## Response:
+
+## {"error":"unauthorized","message":"токен был отозван","code":401}
+
+## {"error":"unauthorized","message":"токен был отозван","code":401}
 ```
 
 ### 7. Test Events CRUD
 
 **Get all events:**
 
-```bash
+```tex
 curl -X GET http://localhost:8080/v1/api/events
 ```
 
 **Get specific event:**
 
-```bash
+```tex
 curl -X GET http://localhost:8080/v1/api/events/{id}
 ```
 
 **Create event (protected):**
 
-```bash
-curl -X POST http://localhost:8080/v1/api/events \
-  -H "Authorization: Bearer $NEW_TOKEN" \
-  -H "Content-Type: application/json" \
+```tex
+curl -X POST http://localhost:8080/v1/api/events
+  -H "Authorization: Bearer $NEW_TOKEN"
+  -H "Content-Type: application/json"
   -d '{
     "type":"Митап",
     "start":"2025-12-01T19:00:00Z",
@@ -163,8 +219,8 @@ curl -X POST http://localhost:8080/v1/api/events \
 
 **Delete event (protected):**
 
-```bash
-curl -X DELETE http://localhost:8080/v1/api/events/{id} \
+```tex
+curl -X DELETE http://localhost:8080/v1/api/events/{id}
   -H "Authorization: Bearer $NEW_TOKEN"
 ```
 
@@ -172,63 +228,88 @@ curl -X DELETE http://localhost:8080/v1/api/events/{id} \
 
 ### Verification Codes
 
-```
+```tex
+
 Key Pattern: verify:{email}
 Example: verify:user@example.com
 Value: "123456"
 TTL: 600 seconds (10 minutes)
-```
-
-### Token Blacklist
 
 ```
+
+### Token Blacklis
+
+```tex
+
 Key Pattern: blacklist:{jwt_token}
 Example: blacklist:eyJhbGc...
 Value: "1"
 TTL: 3600 seconds (1 hour - same as token expiration)
+
 ```
 
 ## Monitoring Redis
 
 ### Connect to Redis CLI
 
-```bash
+```tex
 docker exec -it event_api_redis redis-cli -a devpass
 ```
 
 ### Useful Commands
 
-```bash
-# List all keys
+```tex
+
+## List all keys
+
+## List all keys
 KEYS *
 
-# Get all verification codes
+## Get all verification codes
+
+## Get all verification codes
 KEYS verify:*
 
-# Get all blacklisted tokens
+## Get all blacklisted tokens
+
+## Get all blacklisted tokens
 KEYS blacklist:*
 
-# Monitor all commands in real-time
+## Monitor all commands in real-time
+
+## Monitor all commands in real-time
 MONITOR
 
-# Get database size
+## Get database size
+
+## Get database size
 DBSIZE
 
-# Get database info
+## Get database info
+
+## Get database info
 INFO
 
-# Get memory usage
+## Get memory usage
+
+## Get memory usage
 INFO memory
 
-# Get specific key info
+## Get specific key info
+
+## Get specific key info
 TYPE verify:user@example.com
 TTL verify:user@example.com
 GET verify:user@example.com
 
-# Delete specific key
+## Delete specific key
+
+## Delete specific key
 DEL verify:user@example.com
 
-# Flush all keys (CAUTION!)
+## Flush all keys (CAUTION!)
+
+## Flush all keys (CAUTION!)
 FLUSHDB
 ```
 
@@ -236,7 +317,7 @@ FLUSHDB
 
 ### After Registration
 
-```bash
+```tex
 127.0.0.1:6379> KEYS *
 1) "verify:user@example.com"
 
@@ -249,14 +330,14 @@ FLUSHDB
 
 ### After Verification
 
-```bash
+```tex
 127.0.0.1:6379> KEYS verify:*
 (empty array)
 ```
 
-### After Logout
+### After Logou
 
-```bash
+```tex
 127.0.0.1:6379> KEYS *
 1) "blacklist:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
@@ -271,22 +352,32 @@ FLUSHDB
 
 ### Concurrent Registrations
 
-```bash
-# Install Apache Bench
+```tex
+
+## Install Apache Bench
+
+## Install Apache Bench
 brew install httpd  # macOS
 
-# Test 100 concurrent requests
-ab -n 100 -c 10 -p register.json -T application/json \
-  http://localhost:8080/v1/api/auth/register
+## Test 100 concurrent requests
+
+## Test 100 concurrent requests
+ab -n 100 -c 10 -p register.json -T application/json
+  http://localhost:8080/v1/api/auth/registe
 ```
 
 ### Redis Performance
 
-```bash
-# Connect to Redis
+```tex
+
+## Connect to Redis
+
+## Connect to Redis
 docker exec -it event_api_redis redis-cli -a devpass
 
-# Run benchmark
+## Run benchmark
+
+## Run benchmark
 redis-benchmark -a devpass -q -n 10000
 ```
 
@@ -294,20 +385,24 @@ redis-benchmark -a devpass -q -n 10000
 
 ### Clear Redis Data
 
-```bash
+```tex
 docker exec -it event_api_redis redis-cli -a devpass FLUSHDB
 ```
 
 ### Clear Database
 
-```bash
+<!-- markdownlint-disable MD013 -->
+
+```tex
 docker exec -it event_api_postgres psql -U devuser -d event_api -c "TRUNCATE users, events, verification_codes CASCADE;"
 ```
 
+<!-- markdownlint-enable MD013 -->
+
 ### Restart Services
 
-```bash
-docker-compose restart
+```tex
+docker-compose resta
 make run
 ```
 
@@ -315,48 +410,70 @@ make run
 
 ### Redis Connection Failed
 
-```bash
-# Check Redis is running
+```tex
+
+## Check Redis is running
+
+## Check Redis is running
 docker ps | grep redis
 
-# Check Redis logs
+## Check Redis logs
+
+## Check Redis logs
 docker logs event_api_redis
 
-# Test connection
+## Test connection
+
+## Test connection
 docker exec -it event_api_redis redis-cli -a devpass ping
-# Expected: PONG
+
+## Expected: PONG
+
+## Expected: PONG
 ```
 
 ### Verification Code Not Found
 
-```bash
-# Check if code exists
+```tex
+
+## Check if code exists
+
+## Check if code exists
 docker exec -it event_api_redis redis-cli -a devpass GET verify:user@example.com
 
-# Check TTL
+## Check TTL
+
+## Check TTL
 docker exec -it event_api_redis redis-cli -a devpass TTL verify:user@example.com
-# If returns -2: key expired or doesn't exist
+
+## If returns -2: key expired or doesn't exis
+
+## If returns -2: key expired or doesn't exis
 ```
 
 ### Token Always Rejected
 
-```bash
-# Check if token is blacklisted
+```tex
+
+## Check if token is blacklisted
+
+## Check if token is blacklisted
 docker exec -it event_api_redis redis-cli -a devpass KEYS blacklist:*
 
-# Get token from blacklist
+## Get token from blacklis
+
+## Get token from blacklis
 docker exec -it event_api_redis redis-cli -a devpass GET "blacklist:YOUR_TOKEN"
 ```
 
 ## Success Indicators
 
-✅ **Registration works** - Verification code stored in Redis with TTL
-✅ **Verification works** - Code removed from Redis after verification
-✅ **Logout works** - Token added to blacklist in Redis
-✅ **Blacklist works** - Blacklisted token rejected
-✅ **TTL works** - Keys automatically deleted after expiration
-✅ **PostgreSQL works** - Users and events persisted in database
-✅ **Swagger works** - API documentation accessible at /swagger/index.html
+✅ **Registration works** - Verification code stored in Redis with TTL ✅
+**Verification works** - Code removed from Redis after verification ✅ **Logou
+works** - Token added to blacklist in Redis ✅ **Blacklist works** - Blacklisted
+token rejected ✅ **TTL works** - Keys automatically deleted after expiration ✅
+**PostgreSQL works** - Users and events persisted in database ✅ **Swagge
+works** - API documentation accessible at /swagger/index.html
 
 ## Next Steps
 

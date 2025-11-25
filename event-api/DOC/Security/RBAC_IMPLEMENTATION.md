@@ -2,7 +2,8 @@
 
 ## Overview
 
-Successfully implemented a comprehensive role-based access control system with four user roles: `admin`, `creator`, `user`, and `support`.
+Successfully implemented a comprehensive role-based access control system with
+four user roles: `admin`, `creator`, `user`, and `support`.
 
 ## Roles and Permissions
 
@@ -60,14 +61,13 @@ Successfully implemented a comprehensive role-based access control system with f
 
 **Migration: `005_add_role_to_users`**
 
-```sql
+````sql
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'
 CHECK (role IN ('user', 'creator', 'support', 'admin'));
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
-```
-
+```bash
 ### 2. User Model Updates
 
 **File:** `internal/models/auth.go`
@@ -134,7 +134,7 @@ adminOnly.Get("/api/events/pending", eventHandler.GetPendingEvents)
 adminOnly.Post("/api/events/{id}/review", eventHandler.ReviewPendingEvent)
 adminOnly.Get("/api/admin/users", authHandler.GetAllUsers)
 adminOnly.Put("/api/admin/users/role", authHandler.UpdateUserRole)
-```
+````
 
 ## API Endpoints by Role
 
@@ -160,17 +160,15 @@ adminOnly.Put("/api/admin/users/role", authHandler.UpdateUserRole)
 
 ### Test Coverage
 
-✅ Role-based access control enforcement  
-✅ Permission checking for each role  
-✅ JWT token includes role claim  
-✅ Middleware properly extracts and validates roles  
+✅ Role-based access control enforcement ✅ Permission checking for each role ✅
+JWT token includes role claim ✅ Middleware properly extracts and validates roles
 ✅ Handler tests updated with role management methods
 
 ## Usage Examples
 
 ### 1. Register New User (Default: user role)
 
-```bash
+````bash
 curl -X POST http://localhost:8080/v1/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
@@ -178,8 +176,7 @@ curl -X POST http://localhost:8080/v1/api/auth/register \
     "phone": "+1234567890",
     "password": "securepass123"
   }'
-```
-
+```bash
 ### 2. Admin Grants Creator Role
 
 ```bash
@@ -190,11 +187,11 @@ curl -X PUT http://localhost:8080/v1/api/admin/users/role \
     "user_id": "user-uuid",
     "role": "creator"
   }'
-```
+````
 
 ### 3. Creator Creates Event
 
-```bash
+````bash
 curl -X POST http://localhost:8080/v1/api/events \
   -H "Authorization: Bearer <creator_jwt_token>" \
   -H "Content-Type: application/json" \
@@ -207,8 +204,7 @@ curl -X POST http://localhost:8080/v1/api/events \
     "priceType": "free",
     "needReg": true
   }'
-```
-
+```bash
 ### 4. Admin Reviews Pending Event
 
 ```bash
@@ -219,7 +215,7 @@ curl -X POST http://localhost:8080/v1/api/events/{event-id}/review \
     "action": "approve",
     "comment": "Looks good!"
   }'
-```
+````
 
 ## Security Features
 
@@ -237,9 +233,11 @@ To update an existing system:
 1. Run database migrations: `005_add_role_to_users`
 2. Existing users automatically get `user` role
 3. Manually promote first admin via direct database update:
+
    ```sql
    UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
    ```
+
 4. Admin can then promote other users through API
 
 ## Future Enhancements

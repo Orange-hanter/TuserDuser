@@ -2,7 +2,8 @@
 
 ## Обзор
 
-Проект использует GitHub Actions для автоматизации процессов тестирования, сборки и деплоя.
+Проект использует GitHub Actions для автоматизации процессов тестирования,
+сборки и деплоя.
 
 ## Workflows
 
@@ -75,19 +76,20 @@
 
 ### Шаг 1: Базовая настройка
 
-CI/CD уже настроен и будет работать автоматически после push в GitHub. Базовый функционал (lint, test, build) работает без дополнительных настроек.
+CI/CD уже настроен и будет работать автоматически после push в GitHub. Базовый
+функционал (lint, test, build) работает без дополнительных настроек.
 
 ### Шаг 2: Настройка Secrets
 
-Перейдите в **Settings → Secrets and variables → Actions** вашего GitHub репозитория и добавьте:
+Перейдите в **Settings → Secrets and variables → Actions** вашего GitHub
+репозитория и добавьте:
 
 #### Для Docker Hub (опционально)
 
-```text
+````text
 DOCKER_USERNAME - ваш Docker Hub username
 DOCKER_PASSWORD - ваш Docker Hub password или access token
-```
-
+```bash
 #### Для SSH деплоя (опционально)
 
 ```text
@@ -95,17 +97,16 @@ SSH_HOST - IP или домен вашего сервера
 SSH_USERNAME - username для SSH
 SSH_PRIVATE_KEY - приватный SSH ключ
 SSH_PORT - порт SSH (по умолчанию 22)
-```
+````
 
 #### Для staging (опционально)
 
-```text
+````text
 STAGING_SSH_HOST
 STAGING_SSH_USERNAME
 STAGING_SSH_PRIVATE_KEY
 STAGING_SSH_PORT
-```
-
+```bash
 ### Шаг 3: Настройка Environments
 
 1. Перейдите в **Settings → Environments**
@@ -128,7 +129,7 @@ STAGING_SSH_PORT
 
    ```text
    CODECOV_TOKEN - токен из Codecov
-   ```
+````
 
 ### Шаг 5: Настройка деплоя
 
@@ -137,14 +138,16 @@ STAGING_SSH_PORT
 Раскомментируйте в `.github/workflows/ci.yml` (job `deploy`):
 
 ```yaml
-# Логин в Docker Hub
+## Логин в Docker Hub
+## Логин в Docker Hub
 - name: Login to Docker Hub
   uses: docker/login-action@v3
   with:
     username: ${{ secrets.DOCKER_USERNAME }}
     password: ${{ secrets.DOCKER_PASSWORD }}
 
-# Сборка и push образа
+## Сборка и push образа
+## Сборка и push образа
 - name: Build and push Docker image
   uses: docker/build-push-action@v6
   with:
@@ -154,7 +157,8 @@ STAGING_SSH_PORT
       ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
       ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ github.sha }}
 
-# SSH деплой
+## SSH деплой
+## SSH деплой
 - name: Deploy to server via SSH
   uses: appleboy/ssh-action@v1.0.0
   with:
@@ -171,7 +175,7 @@ STAGING_SSH_PORT
 
 #### Вариант Б: GitHub Container Registry
 
-```yaml
+````yaml
 - name: Login to GitHub Container Registry
   uses: docker/login-action@v3
   with:
@@ -187,8 +191,7 @@ STAGING_SSH_PORT
     tags: |
       ghcr.io/${{ github.repository }}:latest
       ghcr.io/${{ github.repository }}:${{ github.sha }}
-```
-
+```bash
 #### Вариант В: Cloud Providers
 
 - **AWS ECS/EKS**: Используйте `aws-actions/amazon-ecs-deploy-task-definition`
@@ -198,7 +201,8 @@ STAGING_SSH_PORT
 
 ### Шаг 6: Настройка линтера
 
-Файл `.golangci.yml` уже создан с оптимальными правилами. Вы можете настроить его под свои нужды:
+Файл `.golangci.yml` уже создан с оптимальными правилами. Вы можете настроить
+его под свои нужды:
 
 ```yaml
 linters:
@@ -207,20 +211,22 @@ linters:
     - gosimple
     - govet
     # ... добавьте или удалите линтеры
-```
+````
 
 Запуск локально:
 
-```bash
-# Установка golangci-lint
+````bash
+## Установка golangci-lint
+## Установка golangci-lint
 brew install golangci-lint  # macOS
-# или
+## или
+## или
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
-# Запуск
+## Запуск
+## Запуск
 golangci-lint run
-```
-
+```bash
 ## Локальные скрипты
 
 ### Deploy Script (`scripts/deploy.sh`)
@@ -228,12 +234,14 @@ golangci-lint run
 Деплой приложения на сервер:
 
 ```bash
-# Production деплой
+## Production деплой
+## Production деплой
 ./scripts/deploy.sh production
 
-# Staging деплой
+## Staging деплой
+## Staging деплой
 ./scripts/deploy.sh staging
-```
+````
 
 Скрипт выполняет:
 
@@ -249,14 +257,15 @@ golangci-lint run
 
 Создание бэкапа базы данных:
 
-```bash
-# Бэкап дефолтной БД (event_api)
+````bash
+## Бэкап дефолтной БД (event_api)
+## Бэкап дефолтной БД (event_api)
 ./scripts/backup.sh
 
-# Бэкап конкретной БД
+## Бэкап конкретной БД
+## Бэкап конкретной БД
 ./scripts/backup.sh my_database
-```
-
+```bash
 Особенности:
 
 - Сжатие через gzip
@@ -268,12 +277,14 @@ golangci-lint run
 Восстановление из бэкапа:
 
 ```bash
-# Восстановление
+## Восстановление
+## Восстановление
 ./scripts/restore.sh backups/event_api_backup_20250104_120000.sql.gz
 
-# В конкретную БД
+## В конкретную БД
+## В конкретную БД
 ./scripts/restore.sh backups/backup.sql.gz my_database
-```
+````
 
 ⚠️ **Внимание**: Это перезапишет текущую базу данных!
 
@@ -283,31 +294,36 @@ golangci-lint run
 
 Файл `docker-compose.prod.yml` настроен для production:
 
-```bash
-# Запуск всех сервисов
+````bash
+## Запуск всех сервисов
+## Запуск всех сервисов
 docker-compose -f docker-compose.prod.yml up -d
 
-# С Nginx reverse proxy
+## С Nginx reverse proxy
+## С Nginx reverse proxy
 docker-compose -f docker-compose.prod.yml --profile with-nginx up -d
 
-# Остановка
+## Остановка
+## Остановка
 docker-compose -f docker-compose.prod.yml down
 
-# Логи
+## Логи
+## Логи
 docker-compose -f docker-compose.prod.yml logs -f app
-```
-
+```bash
 ### Переменные окружения для Production
 
 Создайте `.env.production`:
 
 ```env
-# Server
+## Server
+## Server
 PORT=8080
 HOST=0.0.0.0
 ENV=production
 
-# Database
+## Database
+## Database
 DB_HOST=postgres
 DB_PORT=5432
 DB_USER=your_db_user
@@ -315,32 +331,37 @@ DB_PASSWORD=strong_password_here
 DB_NAME=event_api
 DB_SSLMODE=require
 
-# Redis
+## Redis
+## Redis
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=strong_redis_password
 REDIS_DB=0
 
-# JWT
+## JWT
+## JWT
 JWT_SECRET=very_long_random_secret_key_change_this_in_production
 JWT_EXPIRATION=24h
 
-# Email
+## Email
+## Email
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
 SMTP_FROM=noreply@yourdomain.com
 
-# SMS (выберите провайдер)
+## SMS (выберите провайдер)
+## SMS (выберите провайдер)
 SMS_PROVIDER=smsru  # или smsc, twilio
 SMS_API_KEY=your_api_key
 SMS_API_TOKEN=your_api_token
 SMS_FROM=YourApp
 
-# CORS
+## CORS
+## CORS
 CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
-```
+````
 
 ### Nginx Reverse Proxy
 
@@ -366,12 +387,11 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 1. Убедитесь, что все изменения в `master`/`main`
 2. Создайте и push тег версии:
 
-```bash
+````bash
 git tag -a v1.0.0 -m "Release version 1.0.0"
 git push origin v1.0.0
-```
-
-3. GitHub Actions автоматически:
+```bash
+1. GitHub Actions автоматически:
    - Соберёт бинарники для всех платформ
    - Создаст checksums
    - Соберёт Docker образ с версией
@@ -399,42 +419,50 @@ git push origin v1.0.0
 Пример:
 
 ```bash
-# В PR добавьте метку "feature"
-# В changelog появится под секцией "🚀 Features"
-```
+## В PR добавьте метку "feature"
+## В PR добавьте метку "feature"
+## В changelog появится под секцией "🚀 Features"
+## В changelog появится под секцией "🚀 Features"
+````
 
 ## Мониторинг и Логи
 
 ### Просмотр логов
 
-```bash
-# Application logs
+````bash
+## Application logs
+## Application logs
 docker-compose -f docker-compose.prod.yml logs -f app
 
-# PostgreSQL logs
+## PostgreSQL logs
+## PostgreSQL logs
 docker-compose -f docker-compose.prod.yml logs -f postgres
 
-# Redis logs
+## Redis logs
+## Redis logs
 docker-compose -f docker-compose.prod.yml logs -f redis
 
-# Nginx logs
+## Nginx logs
+## Nginx logs
 docker-compose -f docker-compose.prod.yml logs -f nginx
 
-# Все логи
+## Все логи
+## Все логи
 docker-compose -f docker-compose.prod.yml logs -f
-```
-
+```bash
 ### Health Checks
 
 Все сервисы имеют health checks:
 
 ```bash
-# Application
+## Application
+## Application
 curl http://localhost:8080/v1/api/health
 
-# Проверка всех контейнеров
+## Проверка всех контейнеров
+## Проверка всех контейнеров
 docker-compose -f docker-compose.prod.yml ps
-```
+````
 
 ### Prometheus Metrics (TODO)
 
@@ -502,14 +530,13 @@ docker-compose -f docker-compose.prod.yml ps
 
 Используйте conventional commits:
 
-```text
+````text
 feat: добавлена отправка SMS через Twilio
 fix: исправлена утечка памяти в Redis клиенте
 docs: обновлена документация по CI/CD
 chore: обновлены зависимости
 test: добавлены тесты для AuthService
-```
-
+```bash
 ### 3. Pull Requests
 
 - Используйте описательные названия
@@ -537,34 +564,43 @@ test: добавлены тесты для AuthService
 ## Полезные команды
 
 ```bash
-# Локальный запуск CI тестов
+## Локальный запуск CI тестов
+## Локальный запуск CI тестов
 make test
 
-# С coverage
+## С coverage
+## С coverage
 make test-coverage
 
-# Lint локально
+## Lint локально
+## Lint локально
 golangci-lint run
 
-# Сборка
+## Сборка
+## Сборка
 make build
 
-# Production деплой
+## Production деплой
+## Production деплой
 ./scripts/deploy.sh production
 
-# Бэкап БД
+## Бэкап БД
+## Бэкап БД
 ./scripts/backup.sh
 
-# Восстановление БД
+## Восстановление БД
+## Восстановление БД
 ./scripts/restore.sh backups/latest.sql.gz
 
-# Проверка Docker образа
+## Проверка Docker образа
+## Проверка Docker образа
 docker build -t event-api:test .
 docker run --rm event-api:test
 
-# Очистка
+## Очистка
+## Очистка
 docker system prune -a --volumes
-```
+````
 
 ## Roadmap
 
