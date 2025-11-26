@@ -384,8 +384,6 @@ func initEmailService(cfg *config.Config) (*email.Service, error) {
 	return service, nil
 }
 
-const discoveryWindowRange = 6 * time.Hour
-
 func bootstrapDiscovery(ctx context.Context, eventService *service.EventService, discoveryService *discovery.Service) error {
 	events, err := eventService.GetApprovedEvents(ctx)
 	if err != nil {
@@ -399,16 +397,12 @@ func bootstrapDiscovery(ctx context.Context, eventService *service.EventService,
 }
 
 func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
-	windowEnd := now.Add(discoveryWindowRange)
 	result := make([]discovery.Event, 0, len(src))
 	for _, evt := range src {
 		if evt == nil {
 			continue
 		}
 		if evt.EndTime.Before(now) {
-			continue
-		}
-		if evt.StartTime.After(windowEnd) {
 			continue
 		}
 		metadata := map[string]interface{}{

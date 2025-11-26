@@ -17,6 +17,7 @@ import (
 	"event-api/internal/service"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -110,6 +111,11 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		respondWithError(w, http.StatusBadRequest, "bad_request", "ID события обязателен")
+		return
+	}
+
+	if _, err := uuid.Parse(id); err != nil {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "ID события должен быть UUID")
 		return
 	}
 

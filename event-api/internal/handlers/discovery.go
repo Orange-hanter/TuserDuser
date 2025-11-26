@@ -118,7 +118,7 @@ func (h *DiscoveryHandler) Action(w http.ResponseWriter, r *http.Request) {
 	}
 	action := discovery.UserAction(strings.ToLower(strings.TrimSpace(req.Action)))
 	if action == discovery.ActionBook {
-		respondWithError(w, http.StatusBadRequest, "validation_error", "Используйте /book для бронирования")
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Используйте /book или другое действие")
 		return
 	}
 	entry, err := h.service.ApplyAction(r.Context(), userID, req.EventID, action)

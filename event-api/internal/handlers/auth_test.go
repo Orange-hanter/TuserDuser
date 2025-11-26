@@ -85,7 +85,7 @@ func TestRegisterHandler(t *testing.T) {
 			return validUser, "123456", nil
 		},
 	}
-	handler := NewAuthHandler(mockSvc)
+	handler := NewAuthHandler(mockSvc, nil)
 
 	t.Run("valid registration", func(t *testing.T) {
 		payload := models.RegisterRequest{
@@ -137,7 +137,7 @@ func TestRegisterHandler(t *testing.T) {
 func TestVerifyHandler(t *testing.T) {
 	logger.Log = zap.NewNop()
 	mockSvc := &mockAuthService{}
-	handler := NewAuthHandler(mockSvc)
+	handler := NewAuthHandler(mockSvc, nil)
 
 	t.Run("valid verification", func(t *testing.T) {
 		mockSvc.verifyFn = func(email, code string) (*models.AuthResponse, error) {
