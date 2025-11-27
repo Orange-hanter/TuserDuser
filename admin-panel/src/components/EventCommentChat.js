@@ -26,6 +26,7 @@ const EventCommentChat = ({ eventId, onClose }) => {
   // Use ref to track previous comments to avoid unnecessary re-renders
   const prevCommentsRef = useRef(null);
   const isMountedRef = useRef(true);
+  const flatListRef = useRef(null);
 
   // Memoized fetch function that only updates state if data changed
   const fetchComments = useCallback(async () => {
@@ -46,6 +47,12 @@ const EventCommentChat = ({ eventId, onClose }) => {
       if (commentsJson !== prevJson && isMountedRef.current) {
         setComments(newComments);
         prevCommentsRef.current = newComments;
+        // Auto-scroll to bottom when new comments arrive
+        if (flatListRef.current && newComments.length > 0) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        }
       }
 
       if (isMountedRef.current) {
@@ -89,6 +96,10 @@ const EventCommentChat = ({ eventId, onClose }) => {
       Alert.alert("Success", "Comment added");
       // Fetch updated comments immediately after sending
       await fetchComments();
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (error) {
       Alert.alert("Error", "Failed to send comment: " + error.message);
     } finally {
@@ -143,12 +154,17 @@ const EventCommentChat = ({ eventId, onClose }) => {
               </View>
             ) : (
               <FlatList
+                ref={flatListRef}
                 data={comments}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={renderComment}
                 style={styles.commentsList}
                 scrollEnabled={true}
                 contentContainerStyle={styles.listContent}
+                onContentSizeChange={() => {
+                  // Auto-scroll when content size changes
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }}
               />
             )}
 

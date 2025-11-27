@@ -26,6 +26,10 @@ const PendingEventsScreen = () => {
   const [revisionModalVisible, setRevisionModalVisible] = useState(false);
   const [revisionComment, setRevisionComment] = useState("");
 
+  // Filter states
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
+  const [selectedTypes, setSelectedTypes] = useState([]);
+
   const fetchEvents = async () => {
     setLoading(true);
     try {
@@ -88,6 +92,42 @@ const PendingEventsScreen = () => {
     }
   };
 
+  // Filter helpers
+  const toggleStatusFilter = (status) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(status)
+        ? prev.filter((s) => s !== status)
+        : [...prev, status],
+    );
+  };
+
+  const toggleTypeFilter = (type) => {
+    setSelectedTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    );
+  };
+
+  const getFilteredEvents = () => {
+    return events.filter((event) => {
+      const statusMatch =
+        selectedStatuses.length === 0 ||
+        selectedStatuses.includes(event.status);
+      const typeMatch =
+        selectedTypes.length === 0 || selectedTypes.includes(event.type);
+      return statusMatch && typeMatch;
+    });
+  };
+
+  const getUniqueStatuses = () => {
+    const statuses = new Set(events.map((e) => e.status || "pending"));
+    return Array.from(statuses).sort();
+  };
+
+  const getUniqueTypes = () => {
+    const types = new Set(events.map((e) => e.type || "Unknown"));
+    return Array.from(types).sort();
+  };
+
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.title || "No Title"}</Text>
@@ -123,14 +163,52 @@ const PendingEventsScreen = () => {
 
   return (
     <View style={styles.container}>
+      {/* Filter Bar */}
+      <View style={styles.filterBar}>
+        <Text style={styles.filterLabel}>Status:</Text>
+        <View style={styles.filterButtonsContainer}>
+          {getUniqueStatuses().map((status) => (
+            <Button
+              key={status}
+              title={status}
+              onPress={() => toggleStatusFilter(status)}
+              color={selectedStatuses.includes(status) ? "#2196F3" : "#ccc"}
+            />
+          ))}
+        </View>
+
+        <Text style={styles.filterLabel}>Type:</Text>
+        <View style={styles.filterButtonsContainer}>
+          {getUniqueTypes().map((type) => (
+            <Button
+              key={type}
+              title={type}
+              onPress={() => toggleTypeFilter(type)}
+              color={selectedTypes.includes(type) ? "#4CAF50" : "#ccc"}
+            />
+          ))}
+        </View>
+
+        {(selectedStatuses.length > 0 || selectedTypes.length > 0) && (
+          <Button
+            title="Clear Filters"
+            onPress={() => {
+              setSelectedStatuses([]);
+              setSelectedTypes([]);
+            }}
+            color="#FF9800"
+          />
+        )}
+      </View>
+
       {loading ? (
         <Text>Loading...</Text>
       ) : (
         <FlatList
-          data={events}
+          data={getFilteredEvents()}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          ListEmptyComponent={<Text>No pending events</Text>}
+          ListEmptyComponent={<Text>No events match filters</Text>}
         />
       )}
       <Button title="Refresh" onPress={fetchEvents} />
@@ -223,6 +301,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 10,
+  },
+  filterBar: {
+    backgroundColor: "#f9f9f9",
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  filterLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 8,
+    marginBottom: 6,
+    color: "#333",
+  },
+  filterButtonsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 8,
   },
   card: {
     backgroundColor: "#fff",
