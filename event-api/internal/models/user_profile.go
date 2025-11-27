@@ -51,3 +51,11 @@ type EventWithSubscription struct {
 type SubscribeRequest struct {
 	Metadata map[string]interface{} `json:"metadata" swaggertype:"object,string" example:"dietary_preferences:vegan"`
 }
+
+// Participant представляет участника события.
+type Participant struct {
+	UserID     string  `json:"user_id" example:"941b955e-ea57-dee3-565f-5684f81c4f14"`
+	PublicName string  `json:"public_name" example:"Иван Петров"`
+	AvatarURL  *string `json:"avatar_url,omitempty" example:"https://example.com/avatar.jpg"`
+	Status     string  `json:"status" example:"confirmed"` // "confirmed", "waitlisted", "cancelled"
+}

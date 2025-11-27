@@ -284,3 +284,46 @@ func (s *UserService) SubscribeToEvent(ctx context.Context, userID, eventID stri
 		SubscribedAt: now,
 	}, nil
 }
+
+// GetEventParticipants returns a list of participants for a specific event.
+// Returns participants sorted by registration time.
+//
+// @Summary Get event participants
+// @Description Retrieves the list of confirmed participants for an event
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param eventID path string true "Event ID"
+// @Success 200 {array} models.Participant
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) ([]models.Participant, error) {
+	query := `
+		SELECT user_id, public_name, avatar_url, status
+		FROM event_registrations
+		WHERE event_id = $1 AND status = 'confirmed'
+		ORDER BY registered_at ASC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch participants: %w", err)
+	}
+	defer rows.Close()
+
+	var participants []models.Participant
+	for rows.Next() {
+		var p models.Participant
+		if err := rows.Scan(&p.UserID, &p.PublicName, &p.AvatarURL, &p.Status); err != nil {
+			s.logger.Error("failed to scan participant", zap.Error(err))
+			continue
+		}
+		participants = append(participants, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating participants: %w", err)
+	}
+
+	return participants, nil
+}
