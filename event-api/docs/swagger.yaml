@@ -876,8 +876,34 @@ paths:
       - discovery
   /v1/api/discovery/next:
     get:
-      description: Возвращает следующее событие в очереди с учетом бронирований и
-        конфликтов
+      description: Возвращает следующее событие в очереди с учетом бронирований, конфликтов
+        и фильтров
+      parameters:
+      - description: Типы событий через запятую
+        example: '"Конференция,Мастер-класс"'
+        in: query
+        name: types
+        type: string
+      - description: Типы цен через запятую
+        example: '"free,paid"'
+        in: query
+        name: priceTypes
+        type: string
+      - description: Места проведения (поиск по подстроке)
+        example: '"Коворкинг"'
+        in: query
+        name: places
+        type: string
+      - description: Начало диапазона дат (RFC3339)
+        example: '"2025-01-01T00:00:00Z"'
+        in: query
+        name: dateFrom
+        type: string
+      - description: Конец диапазона дат (RFC3339)
+        example: '"2025-12-31T23:59:59Z"'
+        in: query
+        name: dateTo
+        type: string
       produces:
       - application/json
       responses:

@@ -768,7 +768,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Возвращает следующее событие в очереди с учетом бронирований и конфликтов",
+                "description": "Возвращает следующее событие в очереди с учетом бронирований, конфликтов и фильтров",
                 "produces": [
                     "application/json"
                 ],
@@ -776,6 +776,43 @@ const docTemplate = `{
                     "discovery"
                 ],
                 "summary": "Получить следующее событие окна",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"Конференция,Мастер-класс\"",
+                        "description": "Типы событий через запятую",
+                        "name": "types",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"free,paid\"",
+                        "description": "Типы цен через запятую",
+                        "name": "priceTypes",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"Коворкинг\"",
+                        "description": "Места проведения (поиск по подстроке)",
+                        "name": "places",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"2025-01-01T00:00:00Z\"",
+                        "description": "Начало диапазона дат (RFC3339)",
+                        "name": "dateFrom",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"2025-12-31T23:59:59Z\"",
+                        "description": "Конец диапазона дат (RFC3339)",
+                        "name": "dateTo",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
