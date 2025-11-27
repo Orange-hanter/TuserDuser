@@ -1,0 +1,151 @@
+version: "3.8"
+
+# NOTE: This file is kept for reference only
+# Use event-api/docker-compose.yml instead - it contains the complete stack
+# with PostgreSQL, Redis, Event API, Prometheus, Grafana, Loki, and Promtail
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: event-api-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: event_api
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - event-api
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: event-api-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - event-api
+    restart: unless-stopped
+
+  event-api:
+    build:
+      context: ./event-api
+      dockerfile: Dockerfile
+    container_name: event-api-app
+    restart: unless-stopped
+
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+
+    environment:
+      PORT: ${PORT:-8080}
+      ENV: ${ENV:-development}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-event_api}
+      DB_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-devpass}
+      REDIS_DB: 0
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    volumes:
+      - ./event-api:/app
+
+    networks:
+      - event-api
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: event-api-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./event-api/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./event-api/monitoring/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    networks:
+      - event-api
+    restart: unless-stopped
+    depends_on:
+      - event-api
+
+  loki:
+    image: grafana/loki:latest
+    container_name: event-api-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./event-api/monitoring/loki-config.yml:/etc/loki/local-config.yml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yml
+    networks:
+      - event-api
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: event-api-promtail
+    volumes:
+      - ./event-api/monitoring/promtail-config.yml:/etc/promtail/config.yml
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - event-api
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: event-api-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./event-api/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - event-api
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  event-api:
+    driver: bridge

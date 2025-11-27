@@ -1,0 +1,58 @@
+{
+  "dashboard": {
+    "title": "Event API - Logs",
+    "tags": ["event-api", "logs"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Application Logs",
+        "targets": [
+          {
+            "expr": "{job=\"event-api\"}",
+            "refId": "A"
+          }
+        ],
+        "type": "logs",
+        "gridPos": {
+          "h": 12,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "title": "Error Logs",
+        "targets": [
+          {
+            "expr": "{job=\"event-api\"} |= \"error\" or |= \"ERROR\"",
+            "refId": "A"
+          }
+        ],
+        "type": "logs",
+        "gridPos": {
+          "h": 12,
+          "w": 24,
+          "x": 0,
+          "y": 12
+        }
+      },
+      {
+        "title": "System Logs",
+        "targets": [
+          {
+            "expr": "{job=\"system\"}",
+            "refId": "A"
+          }
+        ],
+        "type": "logs",
+        "gridPos": {
+          "h": 12,
+          "w": 24,
+          "x": 0,
+          "y": 24
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

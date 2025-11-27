@@ -18,6 +18,7 @@ import (
 	"event-api/internal/email"
 	"event-api/internal/handlers"
 	"event-api/internal/logger"
+	"event-api/internal/metrics"
 	"event-api/internal/middleware"
 	"event-api/internal/migrations"
 	"event-api/internal/models"
@@ -99,6 +100,16 @@ func run(versionInfo VersionInfo) error {
 		return err
 	}
 	defer closeRedis(redis)
+
+	// Инициализируем Prometheus метрики
+	var redisMetrics *metrics.RedisMetrics
+	if redis != nil {
+		redisMetrics = metrics.NewRedisMetrics()
+		logger.Log.Info("✅ Prometheus metrics initialized")
+		_ = redisMetrics // TODO: Pass to services for recording metrics
+	} else {
+		logger.Log.Warn("⚠️  Redis not available, metrics disabled")
+	}
 
 	// Инициализируем SMS сервис
 	smsService, err := initSMSService(cfg)
@@ -570,6 +581,7 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 	r.Use(middleware.SecurityHeaders)
 	r.Get("/health", handlers.HealthCheck)
 	r.Get("/version", versionHandler(versionInfo))
+	r.Handle("/metrics", handlers.MetricsHandler)
 
 	if telegramHandler != nil {
 		r.Route("/webhooks/telegram", func(r chi.Router) {

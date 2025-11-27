@@ -1,0 +1,56 @@
+server:
+  http_listen_port: 9080
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Application logs
+  - job_name: event-api
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: event-api
+          service: event-api
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Docker logs
+  - job_name: docker
+    docker:
+      host: unix:///var/run/docker.sock
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        target_label: container_name
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+
+  # System logs
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          service: host
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<time>\S+) (?P<level>\w+) (?P<message>.*)$'
+      - labels:
+          level:
+
+  # Syslog
+  - job_name: syslog
+    syslog:
+      listen_address: 0.0.0.0:514
+      labels:
+        job: syslog

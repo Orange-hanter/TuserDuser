@@ -1,0 +1,58 @@
+{
+  "dashboard": {
+    "title": "Event API - Discovery Engine",
+    "tags": ["event-api", "discovery"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Queue Sizes",
+        "targets": [
+          {
+            "expr": "discovery_queue_size",
+            "legendFormat": "{{queue_name}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "title": "Queue Operations Per Second",
+        "targets": [
+          {
+            "expr": "rate(discovery_queue_ops_total[1m])",
+            "legendFormat": "{{queue_name}} - {{operation}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "title": "Queue Error Rates",
+        "targets": [
+          {
+            "expr": "discovery_queue_error_rate",
+            "legendFormat": "{{queue_name}}"
+          }
+        ],
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

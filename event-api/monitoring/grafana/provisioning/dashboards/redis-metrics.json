@@ -1,0 +1,106 @@
+{
+  "dashboard": {
+    "title": "Event API - Redis Metrics",
+    "tags": ["event-api", "redis"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Redis Commands Per Second",
+        "targets": [
+          {
+            "expr": "rate(redis_commands_total[1m])",
+            "legendFormat": "{{command}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "title": "Redis Command Errors",
+        "targets": [
+          {
+            "expr": "rate(redis_command_errors_total[5m])",
+            "legendFormat": "{{command}} - {{error_type}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "title": "Redis Memory Usage",
+        "targets": [
+          {
+            "expr": "redis_memory_usage_bytes",
+            "legendFormat": "Memory"
+          }
+        ],
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "title": "Redis Keys Count",
+        "targets": [
+          {
+            "expr": "redis_keys_total",
+            "legendFormat": "Keys"
+          }
+        ],
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 8
+        }
+      },
+      {
+        "title": "Active Connections",
+        "targets": [
+          {
+            "expr": "redis_connections_active",
+            "legendFormat": "Connections"
+          }
+        ],
+        "type": "gauge",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "title": "Command Duration (p95)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(redis_command_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{command}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

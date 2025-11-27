@@ -4,75 +4,167 @@ services:
     image: postgres:18-alpine
     container_name: event_api_postgres
     restart: unless-stopped
-    
+
     environment:
       POSTGRES_USER: ${DB_USER:-devuser}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-devpass}
       POSTGRES_DB: ${DB_NAME:-event_api}
       POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
-    
+
     ports:
       - "${DB_PORT:-5432}:5432"
-    
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-    
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-devuser}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    
+
     networks:
       - event_api_network
-  
+
   # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: event_api_redis
     restart: unless-stopped
-    
+
     ports:
       - "${REDIS_PORT:-6379}:6379"
-    
+
     volumes:
       - redis_data:/data
-    
+
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-devpass}
-    
+
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    
+
     networks:
       - event_api_network
-  
+
   # Optional: pgAdmin for database management
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: event_api_pgadmin
     restart: unless-stopped
-    
+
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
-    
+
     ports:
       - "5050:80"
-    
+
     depends_on:
       - postgres
-    
+
     networks:
       - event_api_network
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: event_api_prometheus
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+    networks:
+      - event_api_network
+
+    depends_on:
+      - postgres
+      - redis
+
+  # Loki - Log Storage
+  loki:
+    image: grafana/loki:latest
+    container_name: event_api_loki
+    restart: unless-stopped
+
+    ports:
+      - "3100:3100"
+
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yml:ro
+      - loki_data:/loki
+
+    command: -config.file=/etc/loki/local-config.yml
+
+    networks:
+      - event_api_network
+
+  # Promtail - Log Collector
+  promtail:
+    image: grafana/promtail:latest
+    container_name: event_api_promtail
+    restart: unless-stopped
+
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    command: -config.file=/etc/promtail/config.yml
+
+    networks:
+      - event_api_network
+
+    depends_on:
+      - loki
+
+  # Grafana - Visualization & Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: event_api_grafana
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+    networks:
+      - event_api_network
+
+    depends_on:
+      - prometheus
+      - loki
 
 volumes:
   postgres_data:
   redis_data:
     driver: local
+  prometheus_data:
+  loki_data:
+  grafana_data:
 
 networks:
   event_api_network:
