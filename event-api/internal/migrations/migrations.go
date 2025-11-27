@@ -90,6 +90,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   updateReviewTriggerWithCreatorId,
 			down: revertReviewTriggerWithCreatorId,
 		},
+		{
+			name: "011_create_event_registrations",
+			up:   createEventRegistrations,
+			down: dropEventRegistrations,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -453,7 +458,7 @@ DROP TABLE IF EXISTS telegram_binding_tokens;
 // createEventSubscriptions - SQL для создания таблицы подписок на события.
 const createEventSubscriptions = `
 CREATE TABLE IF NOT EXISTS event_subscriptions (
-    user_id UUID NOT NULL,
+    user_id TEXT NOT NULL,
     event_id UUID NOT NULL,
     status VARCHAR(50) NOT NULL,
     subscribed_at TIMESTAMPTZ DEFAULT NOW(),
@@ -828,3 +833,27 @@ func (m *Migrator) tryInsertAdmin(ctx context.Context, id, email, phone, passwor
 	rows, _ := res.RowsAffected()
 	return rows > 0, nil
 }
+
+const createEventRegistrations = `
+CREATE TABLE IF NOT EXISTS event_registrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    public_name VARCHAR(255) NOT NULL,
+    avatar_url TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
+    registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_registrations_event_id ON event_registrations(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_user_id ON event_registrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_status ON event_registrations(status);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_event_status ON event_registrations(event_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_registrations_unique ON event_registrations(event_id, user_id);
+`
+
+const dropEventRegistrations = `
+DROP TABLE IF EXISTS event_registrations CASCADE;
+`

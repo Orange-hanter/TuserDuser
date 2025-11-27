@@ -187,3 +187,36 @@ func (h *UserHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to write response", http.StatusInternalServerError)
 	}
 }
+
+// GetEventParticipants godoc
+// @Summary Get event participants
+// @Description Returns a list of confirmed participants for a specific event.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param event_id path string true "Event ID"
+// @Success 200 {array} models.Participant
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 401 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /api/events/{event_id}/participants [get]
+func (h *UserHandler) GetEventParticipants(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "event_id")
+	if eventID == "" {
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Event ID is required")
+		return
+	}
+
+	participants, err := h.userService.GetEventParticipants(r.Context(), eventID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch participants")
+		return
+	}
+
+	if participants == nil {
+		participants = []models.Participant{}
+	}
+
+	respondWithJSON(w, http.StatusOK, participants)
+}

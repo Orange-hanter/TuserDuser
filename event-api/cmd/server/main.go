@@ -588,6 +588,7 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 		r.Get("/api/events", eventHandler.GetApprovedEvents)
 		r.Get("/api/events/approved", eventHandler.GetApprovedEvents)
 		r.Get("/api/events/{id}", eventHandler.GetEventByID)
+		r.Get("/api/events/{event_id}/participants", userHandler.GetEventParticipants)
 
 		// Authenticated user endpoints
 		authenticated := r.With(middleware.AuthMiddleware(authService))
