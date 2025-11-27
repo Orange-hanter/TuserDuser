@@ -125,12 +125,31 @@ func run(versionInfo VersionInfo) error {
 	authService := service.NewAuthService(cfg, db.DB, redis, smsService, emailService, workerPool, logger.Log)
 	eventService := service.NewEventService(db.DB, logger.Log)
 
-	// Discovery engine with PostgreSQL history for analytics persistence
-	discoveryHistoryRepo := discovery.NewPostgresHistoryRepository(db.DB)
+	// Discovery engine with optional Redis for queue and history
+	var discoveryHistoryRepo discovery.HistoryRepository
+	discoveryHistoryRepo = discovery.NewPostgresHistoryRepository(db.DB)
+	var discoveryQueueRepo discovery.QueueRepository
+
+	// Try to use Redis for queues if available
+	if redis != nil {
+		queueTTL := time.Duration(cfg.DiscoveryQueueTTL) * time.Second
+		discoveryQueueRepo = discovery.NewRedisQueueRepository(redis.GetClient(), queueTTL)
+		logger.Log.Info("✅ Redis queue repository initialized", zap.Int("ttl_seconds", cfg.DiscoveryQueueTTL))
+
+		// Also use Redis for hot history data
+		historyTTL := time.Duration(cfg.DiscoveryHistoryTTL) * time.Second
+		discoveryHistoryRepo = discovery.NewRedisHistoryRepository(redis.GetClient(), historyTTL, 100)
+		logger.Log.Info("✅ Redis history repository initialized", zap.Int("ttl_seconds", cfg.DiscoveryHistoryTTL))
+	} else {
+		// Fallback to in-memory
+		discoveryQueueRepo = discovery.NewInMemoryQueueRepository()
+		logger.Log.Warn("⚠️  Redis not available, using in-memory queue repository")
+	}
+
 	discoveryEngine := discovery.NewEngine(
 		discovery.NewInMemoryEventRepository(nil),
-		discovery.NewInMemoryQueueRepository(),
-		discoveryHistoryRepo, // PostgreSQL for persistence
+		discoveryQueueRepo,
+		discoveryHistoryRepo,
 		discovery.EngineConfig{},
 	)
 	discoveryService := discovery.NewService(discoveryEngine)
@@ -175,8 +194,10 @@ func run(versionInfo VersionInfo) error {
 		}
 	}
 	eventHandler := handlers.NewEventHandler(eventService, discoveryNotifier)
-	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService)
+	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService, userService)
 	userHandler := handlers.NewUserHandler(userService)
+	creatorService := service.NewCreatorService(db.DB, logger.Log)
+	creatorHandler := handlers.NewCreatorHandler(creatorService, logger.Log)
 
 	// Инициализируем Telegram
 	var telegramHandler *handlers.TelegramHandler
@@ -191,7 +212,7 @@ func run(versionInfo VersionInfo) error {
 		logger.Log.Info("telegram handler disabled")
 	}
 
-	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, userHandler, authService, telegramHandler, versionInfo)
+	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, userHandler, authService, telegramHandler, creatorHandler, versionInfo)
 
 	// Создаем HTTP сервер с явными настройками
 	srv := &http.Server{
@@ -544,7 +565,7 @@ func runDiscoveryUpdateLoop(ctx context.Context, redisClient *redisClient.Client
 	}
 }
 
-func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, userHandler *handlers.UserHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, versionInfo VersionInfo) http.Handler {
+func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, userHandler *handlers.UserHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, creatorHandler *handlers.CreatorHandler, versionInfo VersionInfo) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.SecurityHeaders)
 	r.Get("/health", handlers.HealthCheck)
@@ -596,10 +617,19 @@ func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eve
 		creatorOrAdmin.Post("/api/events", eventHandler.CreateEvent)
 		creatorOrAdmin.Delete("/api/events/{id}", eventHandler.DeleteEvent)
 
+		// Creator: My events management
+		creatorOrAdmin.Get("/api/creator/events", creatorHandler.GetMyEvents)
+		creatorOrAdmin.Get("/api/creator/events/blocked", creatorHandler.GetBlockedEvents)
+		creatorOrAdmin.Get("/api/creator/events/{eventId}/comments", creatorHandler.GetEventComments)
+		creatorOrAdmin.Post("/api/creator/events/{eventId}/comments", creatorHandler.AddComment)
+
 		// Admin only: Event moderation endpoints
 		adminOnly := authenticated.With(middleware.RequireAdmin)
 		adminOnly.Get("/api/events/pending", eventHandler.GetPendingEvents)
 		adminOnly.Post("/api/events/{id}/review", eventHandler.ReviewPendingEvent)
+		adminOnly.Get("/api/admin/events/{eventId}/comments", creatorHandler.GetEventCommentsAsAdmin)
+		adminOnly.Post("/api/admin/events/{eventId}/request-revision", creatorHandler.RequestRevision)
+		adminOnly.Post("/api/admin/events/{eventId}/block", creatorHandler.BlockEvent)
 
 		// Admin only: User management
 		adminOnly.Get("/api/admin/users", authHandler.GetAllUsers)

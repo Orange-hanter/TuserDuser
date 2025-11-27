@@ -80,6 +80,16 @@ func (m *Migrator) RunMigrations() error {
 			up:   createDiscoveryActions,
 			down: dropDiscoveryActions,
 		},
+		{
+			name: "009_add_creator_id_to_events",
+			up:   addCreatorIdToEvents,
+			down: dropCreatorIdFromEvents,
+		},
+		{
+			name: "010_update_review_trigger_with_creator_id",
+			up:   updateReviewTriggerWithCreatorId,
+			down: revertReviewTriggerWithCreatorId,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -502,6 +512,162 @@ COMMENT ON COLUMN discovery_actions.context IS 'Additional metadata: conflictedE
 // dropDiscoveryActions - SQL для удаления таблицы discovery_actions.
 const dropDiscoveryActions = `
 DROP TABLE IF EXISTS discovery_actions;
+`
+
+// addCreatorIdToEvents добавляет creator_id и расширяет статусы событий.
+const addCreatorIdToEvents = `
+-- Добавляем creator_id в events_pending
+ALTER TABLE events_pending ADD COLUMN IF NOT EXISTS creator_id UUID;
+CREATE INDEX IF NOT EXISTS idx_events_pending_creator ON events_pending(creator_id);
+
+-- Добавляем creator_id в events
+ALTER TABLE events ADD COLUMN IF NOT EXISTS creator_id UUID;
+CREATE INDEX IF NOT EXISTS idx_events_creator ON events(creator_id);
+
+-- Добавляем creator_id в events_rejected  
+ALTER TABLE events_rejected ADD COLUMN IF NOT EXISTS creator_id UUID;
+CREATE INDEX IF NOT EXISTS idx_events_rejected_creator ON events_rejected(creator_id);
+
+-- Расширяем статусы: pending, needs_revision, approved, rejected, blocked
+ALTER TABLE events_pending DROP CONSTRAINT IF EXISTS events_pending_status_check;
+ALTER TABLE events_pending ADD CONSTRAINT events_pending_status_check 
+    CHECK (status IN ('pending', 'needs_revision', 'approved', 'rejected'));
+
+-- Таблица для заблокированных событий
+CREATE TABLE IF NOT EXISTS events_blocked (
+    id UUID PRIMARY KEY,
+    type VARCHAR(100) NOT NULL,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    duration INTEGER NOT NULL,
+    place VARCHAR(255),
+    price_type VARCHAR(50) NOT NULL DEFAULT 'free',
+    need_registration BOOLEAN NOT NULL DEFAULT false,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    creator_id UUID,
+    block_reason TEXT,
+    blocked_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_blocked_creator ON events_blocked(creator_id);
+CREATE INDEX IF NOT EXISTS idx_events_blocked_at ON events_blocked(blocked_at);
+
+-- Таблица комментариев модерации
+CREATE TABLE IF NOT EXISTS event_review_comments (
+    id SERIAL PRIMARY KEY,
+    event_id UUID NOT NULL,
+    author_id UUID NOT NULL,
+    author_role VARCHAR(20) NOT NULL,
+    comment TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_review_comments_event ON event_review_comments(event_id);
+`
+
+// dropCreatorIdFromEvents откатывает миграцию.
+const dropCreatorIdFromEvents = `
+DROP TABLE IF EXISTS event_review_comments;
+DROP TABLE IF EXISTS events_blocked;
+ALTER TABLE events_pending DROP COLUMN IF EXISTS creator_id;
+ALTER TABLE events DROP COLUMN IF EXISTS creator_id;
+ALTER TABLE events_rejected DROP COLUMN IF EXISTS creator_id;
+`
+
+// updateReviewTriggerWithCreatorId обновляет триггер для копирования creator_id.
+const updateReviewTriggerWithCreatorId = `
+-- Обновляем триггер для включения creator_id
+CREATE OR REPLACE FUNCTION handle_events_pending_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status = 'approved' AND OLD.status <> 'approved' THEN
+        INSERT INTO events (id, type, start_time, end_time, duration, place, price_type, need_registration, details, creator_id, created_at, updated_at)
+        VALUES (NEW.id, NEW.type, NEW.start_time, NEW.end_time, NEW.duration, NEW.place, NEW.price_type, NEW.need_registration, NEW.details, NEW.creator_id, NEW.created_at, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+            type = EXCLUDED.type,
+            start_time = EXCLUDED.start_time,
+            end_time = EXCLUDED.end_time,
+            duration = EXCLUDED.duration,
+            place = EXCLUDED.place,
+            price_type = EXCLUDED.price_type,
+            need_registration = EXCLUDED.need_registration,
+            details = EXCLUDED.details,
+            creator_id = EXCLUDED.creator_id,
+            updated_at = NOW();
+
+        DELETE FROM events_pending WHERE id = NEW.id;
+        RETURN NULL;
+    ELSIF NEW.status = 'rejected' AND OLD.status <> 'rejected' THEN
+        INSERT INTO events_rejected (id, type, start_time, end_time, duration, place, price_type, need_registration, details, review_comment, creator_id, created_at, updated_at, rejected_at)
+        VALUES (NEW.id, NEW.type, NEW.start_time, NEW.end_time, NEW.duration, NEW.place, NEW.price_type, NEW.need_registration, NEW.details, NEW.review_comment, NEW.creator_id, NEW.created_at, NEW.updated_at, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+            type = EXCLUDED.type,
+            start_time = EXCLUDED.start_time,
+            end_time = EXCLUDED.end_time,
+            duration = EXCLUDED.duration,
+            place = EXCLUDED.place,
+            price_type = EXCLUDED.price_type,
+            need_registration = EXCLUDED.need_registration,
+            details = EXCLUDED.details,
+            review_comment = EXCLUDED.review_comment,
+            creator_id = EXCLUDED.creator_id,
+            updated_at = NOW(),
+            rejected_at = NOW();
+
+        DELETE FROM events_pending WHERE id = NEW.id;
+        RETURN NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+`
+
+// revertReviewTriggerWithCreatorId откатывает миграцию триггера.
+const revertReviewTriggerWithCreatorId = `
+-- Возвращаем старую версию триггера без creator_id
+CREATE OR REPLACE FUNCTION handle_events_pending_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status = 'approved' AND OLD.status <> 'approved' THEN
+        INSERT INTO events (id, type, start_time, end_time, duration, place, price_type, need_registration, details, created_at, updated_at)
+        VALUES (NEW.id, NEW.type, NEW.start_time, NEW.end_time, NEW.duration, NEW.place, NEW.price_type, NEW.need_registration, NEW.details, NEW.created_at, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+            type = EXCLUDED.type,
+            start_time = EXCLUDED.start_time,
+            end_time = EXCLUDED.end_time,
+            duration = EXCLUDED.duration,
+            place = EXCLUDED.place,
+            price_type = EXCLUDED.price_type,
+            need_registration = EXCLUDED.need_registration,
+            details = EXCLUDED.details,
+            updated_at = NOW();
+
+        DELETE FROM events_pending WHERE id = NEW.id;
+        RETURN NULL;
+    ELSIF NEW.status = 'rejected' AND OLD.status <> 'rejected' THEN
+        INSERT INTO events_rejected (id, type, start_time, end_time, duration, place, price_type, need_registration, details, review_comment, created_at, updated_at, rejected_at)
+        VALUES (NEW.id, NEW.type, NEW.start_time, NEW.end_time, NEW.duration, NEW.place, NEW.price_type, NEW.need_registration, NEW.details, NEW.review_comment, NEW.created_at, NEW.updated_at, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+            type = EXCLUDED.type,
+            start_time = EXCLUDED.start_time,
+            end_time = EXCLUDED.end_time,
+            duration = EXCLUDED.duration,
+            place = EXCLUDED.place,
+            price_type = EXCLUDED.price_type,
+            need_registration = EXCLUDED.need_registration,
+            details = EXCLUDED.details,
+            review_comment = EXCLUDED.review_comment,
+            updated_at = NOW(),
+            rejected_at = NOW();
+
+        DELETE FROM events_pending WHERE id = NEW.id;
+        RETURN NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 `
 
 // Rollback откатывает все миграции (только для разработки!)

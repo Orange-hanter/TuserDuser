@@ -41,6 +41,7 @@ type CreateEventRequest struct {
 	PriceType        string                 `json:"priceType" binding:"required"`
 	Duration         int                    `json:"duration" binding:"required"`
 	NeedRegistration bool                   `json:"needReg"`
+	CreatorID        string                 `json:"-"` // Заполняется из авторизации
 }
 
 // ReviewEventRequest описывает действие по одобрению/отклонению события.

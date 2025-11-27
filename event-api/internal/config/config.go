@@ -73,6 +73,10 @@ type Config struct {
 	// Discovery streaming config
 	DiscoveryUpdatesEnabled bool
 	DiscoveryUpdatesChannel string
+
+	// Discovery Redis config
+	DiscoveryHistoryTTL int
+	DiscoveryQueueTTL   int
 }
 
 // Load загружает конфигурацию из переменных окружения.
@@ -141,6 +145,10 @@ func Load() *Config {
 
 		DiscoveryUpdatesEnabled: getEnvAsBool("DISCOVERY_UPDATES_ENABLED", true),
 		DiscoveryUpdatesChannel: getEnv("DISCOVERY_UPDATES_CHANNEL", "discovery:event_updates"),
+
+		// Discovery Redis TTL config (in seconds)
+		DiscoveryHistoryTTL: getEnvAsInt("DISCOVERY_HISTORY_TTL", 7*24*3600), // 7 days
+		DiscoveryQueueTTL:   getEnvAsInt("DISCOVERY_QUEUE_TTL", 30*24*3600),  // 30 days
 	}
 }
 

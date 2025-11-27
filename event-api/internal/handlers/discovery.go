@@ -17,6 +17,7 @@ import (
 	"event-api/internal/discovery"
 	"event-api/internal/logger"
 	"event-api/internal/models"
+	"event-api/internal/service"
 
 	"go.uber.org/zap"
 )
@@ -29,7 +30,8 @@ import (
 //   - Ожидает, что middleware аутентификации поставит `X-User-ID` в заголовок
 //     запроса (см. `extractUserID`).
 type DiscoveryHandler struct {
-	service *discovery.Service
+	service     *discovery.Service
+	userService *service.UserService
 }
 
 // NewDiscoveryHandler создает инстанс `DiscoveryHandler`.
@@ -37,8 +39,9 @@ type DiscoveryHandler struct {
 // Параметры:
 //   - `service` — реализация discovery-логики, отвечающая за получение событий,
 //     применение действий пользователя и бронирования.
-func NewDiscoveryHandler(service *discovery.Service) *DiscoveryHandler {
-	return &DiscoveryHandler{service: service}
+//   - `userService` — сервис для управления подписками на события (опционально).
+func NewDiscoveryHandler(service *discovery.Service, userService *service.UserService) *DiscoveryHandler {
+	return &DiscoveryHandler{service: service, userService: userService}
 }
 
 // Next возвращает следующее событие в очереди для текущего пользователя.
@@ -240,6 +243,19 @@ func (h *DiscoveryHandler) Book(w http.ResponseWriter, r *http.Request) {
 		h.handleDomainError(w, err)
 		return
 	}
+
+	// Создаём подписку на событие в event_subscriptions
+	if h.userService != nil {
+		_, subErr := h.userService.SubscribeToEvent(r.Context(), userID, req.EventID, nil)
+		if subErr != nil {
+			logger.Log.Warn("failed to create subscription after booking",
+				zap.String("user_id", userID),
+				zap.String("event_id", req.EventID),
+				zap.Error(subErr))
+			// Не возвращаем ошибку — бронирование уже успешно
+		}
+	}
+
 	respondWithJSON(w, http.StatusOK, result)
 }
 

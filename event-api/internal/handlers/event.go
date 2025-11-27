@@ -152,6 +152,13 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка сервера"
 // @Router /v1/api/events [post].
 func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
+	// Получаем ID автора из авторизации
+	creatorID := r.Header.Get("X-User-ID")
+	if creatorID == "" {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", "Требуется авторизация")
+		return
+	}
+
 	var req models.CreateEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Log.Error("Ошибка при парсинге CreateEventRequest", zap.Error(err))
@@ -165,6 +172,9 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Устанавливаем creator_id
+	req.CreatorID = creatorID
+
 	event, err := h.eventService.CreateEvent(r.Context(), &req)
 	if err != nil {
 		logger.Log.Error("Ошибка при создании события", zap.Error(err))
@@ -172,7 +182,7 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Log.Info("Событие создано", zap.String("id", event.ID))
+	logger.Log.Info("Событие создано", zap.String("id", event.ID), zap.String("creator_id", creatorID))
 	respondWithJSON(w, http.StatusCreated, event)
 }
 

@@ -80,6 +80,16 @@ definitions:
     - ActionDislike
     - ActionNeutral
     - ActionBook
+  models.AddReviewCommentRequest:
+    properties:
+      comment:
+        type: string
+      eventId:
+        type: string
+    required:
+    - comment
+    - eventId
+    type: object
   models.AuthResponse:
     properties:
       access_token:
@@ -92,6 +102,50 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/models.User'
+    type: object
+  models.BlockEventRequest:
+    properties:
+      eventId:
+        type: string
+      reason:
+        type: string
+    required:
+    - eventId
+    - reason
+    type: object
+  models.BlockedEvent:
+    properties:
+      blockReason:
+        type: string
+      blockedAt:
+        type: string
+      createdAt:
+        type: string
+      details:
+        additionalProperties: {}
+        type: object
+      duration:
+        type: integer
+      endTime:
+        type: string
+      id:
+        type: string
+      needRegistration:
+        type: boolean
+      place:
+        type: string
+      priceType:
+        type: string
+      reviewComment:
+        type: string
+      startTime:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+      updatedAt:
+        type: string
     type: object
   models.CreateEventRequest:
     properties:
@@ -118,6 +172,54 @@ definitions:
     - priceType
     - start
     - type
+    type: object
+  models.CreatorEvent:
+    properties:
+      createdAt:
+        type: string
+      details:
+        additionalProperties: {}
+        type: object
+      duration:
+        type: integer
+      endTime:
+        type: string
+      id:
+        type: string
+      needRegistration:
+        type: boolean
+      place:
+        type: string
+      priceType:
+        type: string
+      reviewComment:
+        type: string
+      startTime:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  models.CreatorEventsResponse:
+    properties:
+      active:
+        description: Одобренные и еще не прошедшие
+        items:
+          $ref: '#/definitions/models.CreatorEvent'
+        type: array
+      pending:
+        description: Ожидающие проверки
+        items:
+          $ref: '#/definitions/models.CreatorEvent'
+        type: array
+      rejected:
+        description: Отклонённые
+        items:
+          $ref: '#/definitions/models.CreatorEvent'
+        type: array
     type: object
   models.DiscoveryActionRequest:
     properties:
@@ -284,6 +386,21 @@ definitions:
     - email
     - password
     - phone
+    type: object
+  models.ReviewComment:
+    properties:
+      authorId:
+        type: string
+      authorRole:
+        type: string
+      comment:
+        type: string
+      createdAt:
+        type: string
+      eventId:
+        type: string
+      id:
+        type: integer
     type: object
   models.ReviewEventRequest:
     properties:
@@ -555,6 +672,100 @@ paths:
       summary: Проверка здоровья сервиса
       tags:
       - health
+  /v1/api/admin/events/{eventId}/block:
+    post:
+      consumes:
+      - application/json
+      description: Переносит событие в заблокированные с указанием причины
+      parameters:
+      - description: ID события
+        in: path
+        name: eventId
+        required: true
+        type: string
+      - description: Причина блокировки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.BlockEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Ошибка валидации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Заблокировать событие
+      tags:
+      - admin
+  /v1/api/admin/events/{eventId}/request-revision:
+    post:
+      consumes:
+      - application/json
+      description: Переводит событие в статус needs_revision с комментарием
+      parameters:
+      - description: ID события
+        in: path
+        name: eventId
+        required: true
+        type: string
+      - description: Комментарий
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddReviewCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Ошибка валидации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Запросить доработку события
+      tags:
+      - admin
   /v1/api/admin/users:
     get:
       description: Возвращает список всех пользователей системы
@@ -759,6 +970,131 @@ paths:
       summary: Верификация email
       tags:
       - auth
+  /v1/api/creator/events:
+    get:
+      description: 'Возвращает события автора: ожидающие проверки, активные и отклонённые'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CreatorEventsResponse'
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить мои события
+      tags:
+      - creator
+  /v1/api/creator/events/{eventId}/comments:
+    get:
+      description: Возвращает историю комментариев модерации для указанного события
+      parameters:
+      - description: ID события
+        in: path
+        name: eventId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ReviewComment'
+            type: array
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить комментарии к событию
+      tags:
+      - creator
+    post:
+      consumes:
+      - application/json
+      description: Позволяет автору добавить комментарий к своему событию
+      parameters:
+      - description: ID события
+        in: path
+        name: eventId
+        required: true
+        type: string
+      - description: Комментарий
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddReviewCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Ошибка валидации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Добавить комментарий
+      tags:
+      - creator
+  /v1/api/creator/events/blocked:
+    get:
+      description: Возвращает список заблокированных событий автора с причинами блокировки
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.BlockedEvent'
+            type: array
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить заблокированные события
+      tags:
+      - creator
   /v1/api/discovery/action:
     post:
       consumes:

@@ -148,9 +148,15 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 		return nil, fmt.Errorf("ошибка при сериализации details: %w", err)
 	}
 
+	// Подготавливаем creator_id (может быть пустым)
+	var creatorID interface{}
+	if req.CreatorID != "" {
+		creatorID = req.CreatorID
+	}
+
 	query := `
-		INSERT INTO events_pending (type, start_time, end_time, duration, place, price_type, need_registration, details)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO events_pending (type, start_time, end_time, duration, place, price_type, need_registration, details, creator_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, type, start_time, end_time, duration, place, price_type, need_registration, details, status, review_comment, created_at, updated_at, reviewed_at
 	`
 
@@ -168,6 +174,7 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 		req.PriceType,
 		req.NeedRegistration,
 		detailsJSON,
+		creatorID,
 	).Scan(
 		&event.ID,
 		&event.Type,

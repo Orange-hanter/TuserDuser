@@ -48,6 +48,17 @@ func NewEngine(events EventRepository, queues QueueRepository, history HistoryRe
 	}
 }
 
+// NewEngineWithRedis builds engine with optional Redis repositories for queues and history.
+// Falls back to in-memory repositories if Redis clients are nil.
+func NewEngineWithRedis(
+	events EventRepository,
+	queueRepo QueueRepository,
+	historyRepo HistoryRepository,
+	cfg EngineConfig,
+) *Engine {
+	return NewEngine(events, queueRepo, historyRepo, cfg)
+}
+
 // NextEvent returns the next item for a user, lazily initializing their queue.
 // Deprecated: Use NextEventFiltered with empty filter instead.
 func (e *Engine) NextEvent(ctx context.Context, userID string) (NextEvent, error) {
