@@ -67,4 +67,30 @@ export const updateUserRole = async (userId, role) => {
   return response.data;
 };
 
+// Creator Event Comments API
+export const getEventComments = async (eventId) => {
+  const response = await api.get(`/v1/api/admin/events/${eventId}/comments`);
+  return response.data;
+};
+
+export const addEventComment = async (eventId, comment) => {
+  const response = await api.post(
+    `/v1/api/creator/events/${eventId}/comments`,
+    {
+      comment,
+    },
+  );
+  return response.data;
+};
+
+export const requestEventRevision = async (eventId, comment) => {
+  const response = await api.post(
+    `/v1/api/admin/events/${eventId}/request-revision`,
+    {
+      comment,
+    },
+  );
+  return response.data;
+};
+
 export default api;
