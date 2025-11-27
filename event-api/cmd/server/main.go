@@ -67,7 +67,8 @@ func run(versionInfo VersionInfo) error {
 	defer syncLogger()
 
 	logVersionInfo(versionInfo)
-	appCtx := context.Background()
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
 	cfg := config.Load()
 	logConfig(cfg)
@@ -124,10 +125,12 @@ func run(versionInfo VersionInfo) error {
 	authService := service.NewAuthService(cfg, db.DB, redis, smsService, emailService, workerPool, logger.Log)
 	eventService := service.NewEventService(db.DB, logger.Log)
 
+	// Discovery engine with PostgreSQL history for analytics persistence
+	discoveryHistoryRepo := discovery.NewPostgresHistoryRepository(db.DB)
 	discoveryEngine := discovery.NewEngine(
 		discovery.NewInMemoryEventRepository(nil),
 		discovery.NewInMemoryQueueRepository(),
-		discovery.NewInMemoryHistoryRepository(),
+		discoveryHistoryRepo, // PostgreSQL for persistence
 		discovery.EngineConfig{},
 	)
 	discoveryService := discovery.NewService(discoveryEngine)
@@ -137,13 +140,41 @@ func run(versionInfo VersionInfo) error {
 		logger.Log.Warn("failed to seed discovery engine", zap.Error(err))
 	}
 
+	// Start periodic lock cleanup to prevent memory leaks (every hour, remove locks unused for 24h)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-appCtx.Done():
+				return
+			case <-ticker.C:
+				removed := discoveryService.CleanupStaleLocks(24 * time.Hour)
+				if removed > 0 {
+					logger.Log.Info("discovery locks cleaned up", zap.Int("removed", removed))
+				}
+			}
+		}
+	}()
+
+	startDiscoveryUpdateWorker(appCtx, cfg, redis, eventService, discoveryService)
+
 	// Инициализируем handlers
-	var telStore *telegram.Store
-	if cfg.TelegramEnabled {
-		telStore = telegram.NewStore(db.DB)
+	authHandler := handlers.NewAuthHandler(authService, nil) // telegram store created below if enabled
+	var discoveryNotifier func(context.Context, string)
+	if cfg.DiscoveryUpdatesEnabled {
+		if redis != nil {
+			channel := cfg.DiscoveryUpdatesChannel
+			discoveryNotifier = func(_ context.Context, eventID string) {
+				notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				publishDiscoveryUpdate(notifyCtx, redis, channel, eventID)
+			}
+		} else {
+			logger.Log.Warn("discovery updates enabled but Redis is not configured")
+		}
 	}
-	authHandler := handlers.NewAuthHandler(authService, telStore)
-	eventHandler := handlers.NewEventHandler(eventService)
+	eventHandler := handlers.NewEventHandler(eventService, discoveryNotifier)
 	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService)
 	userHandler := handlers.NewUserHandler(userService)
 
@@ -198,6 +229,9 @@ func run(versionInfo VersionInfo) error {
 		"Graceful shutdown started",
 		"Timeout: "+fmt.Sprintf("%d seconds", cfg.ShutdownTimeout),
 	))
+
+	// Cancel app context to stop background workers (discovery updater, etc.)
+	appCancel()
 
 	// Создаем контекст с таймаутом для shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.ShutdownTimeout)*time.Second)
@@ -385,13 +419,18 @@ func initEmailService(cfg *config.Config) (*email.Service, error) {
 }
 
 func bootstrapDiscovery(ctx context.Context, eventService *service.EventService, discoveryService *discovery.Service) error {
+	return refreshDiscoveryState(ctx, eventService, discoveryService)
+}
+
+func refreshDiscoveryState(ctx context.Context, eventService *service.EventService, discoveryService *discovery.Service) error {
 	events, err := eventService.GetApprovedEvents(ctx)
 	if err != nil {
 		return fmt.Errorf("load approved events: %w", err)
 	}
 	converted := toDiscoveryEvents(time.Now(), events)
-	if err := discoveryService.ReplaceEvents(ctx, converted); err != nil {
-		return fmt.Errorf("seed discovery events: %w", err)
+	// Use atomic RefreshCatalog to prevent race conditions
+	if err := discoveryService.RefreshCatalog(ctx, converted); err != nil {
+		return fmt.Errorf("refresh discovery catalog: %w", err)
 	}
 	return nil
 }
@@ -426,6 +465,83 @@ func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
 		})
 	}
 	return result
+}
+
+func publishDiscoveryUpdate(ctx context.Context, redisClient *redisClient.Client, channel, eventID string) {
+	if redisClient == nil || channel == "" || eventID == "" {
+		return
+	}
+	msg := discovery.UpdateMessage{
+		Action:      discovery.UpdateActionEventApproved,
+		EventID:     eventID,
+		TriggeredAt: time.Now().UTC(),
+	}
+	if err := discovery.PublishUpdate(ctx, redisClient.GetClient(), channel, msg); err != nil {
+		logger.Log.Warn("failed to publish discovery update", zap.Error(err), zap.String("event_id", eventID))
+	}
+}
+
+func startDiscoveryUpdateWorker(ctx context.Context, cfg *config.Config, redisClient *redisClient.Client, eventService *service.EventService, discoveryService *discovery.Service) {
+	if !cfg.DiscoveryUpdatesEnabled {
+		logger.Log.Info("discovery updates disabled")
+		return
+	}
+	if redisClient == nil {
+		logger.Log.Warn("discovery updates enabled but Redis client is nil")
+		return
+	}
+	channel := cfg.DiscoveryUpdatesChannel
+	if channel == "" {
+		logger.Log.Warn("discovery updates channel is empty")
+		return
+	}
+	go func() {
+		backoff := 5 * time.Second
+		for {
+			if err := runDiscoveryUpdateLoop(ctx, redisClient, channel, eventService, discoveryService); err != nil {
+				logger.Log.Error("discovery update worker exited", zap.Error(err))
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+		}
+	}()
+}
+
+func runDiscoveryUpdateLoop(ctx context.Context, redisClient *redisClient.Client, channel string, eventService *service.EventService, discoveryService *discovery.Service) error {
+	sub := redisClient.GetClient().Subscribe(ctx, channel)
+	defer func() {
+		if err := sub.Close(); err != nil {
+			logger.Log.Warn("failed to close redis subscription", zap.Error(err))
+		}
+	}()
+	logger.Log.Info("discovery update worker subscribed", zap.String("channel", channel))
+	ch := sub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg, ok := <-ch:
+			if !ok {
+				return fmt.Errorf("redis pubsub channel closed")
+			}
+			update, err := discovery.DecodeUpdateMessage(msg.Payload)
+			if err != nil {
+				logger.Log.Warn("invalid discovery update message", zap.Error(err))
+				continue
+			}
+			refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			err = refreshDiscoveryState(refreshCtx, eventService, discoveryService)
+			cancel()
+			if err != nil {
+				logger.Log.Error("failed to refresh discovery state", zap.Error(err))
+				continue
+			}
+			logger.Log.Info("discovery state refreshed", zap.String("action", string(update.Action)), zap.String("event_id", update.EventID))
+		}
+	}
 }
 
 func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, userHandler *handlers.UserHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, versionInfo VersionInfo) http.Handler {

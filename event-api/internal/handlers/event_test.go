@@ -27,7 +27,7 @@ func setupEventHandlerTest(t *testing.T) (*EventHandler, sqlmock.Sqlmock, func()
 	}
 	logger.Log = zap.NewNop()
 	svc := service.NewEventService(db, zap.NewNop())
-	handler := NewEventHandler(svc)
+	handler := NewEventHandler(svc, nil)
 	return handler, mock, func() { _ = db.Close() }
 }
 

@@ -69,6 +69,10 @@ type Config struct {
 	TelegramWebhookAlias     string
 	TelegramBotUsername      string
 	TelegramAPIBaseURL       string
+
+	// Discovery streaming config
+	DiscoveryUpdatesEnabled bool
+	DiscoveryUpdatesChannel string
 }
 
 // Load загружает конфигурацию из переменных окружения.
@@ -134,6 +138,9 @@ func Load() *Config {
 		TelegramWebhookAlias:     getEnv("TELEGRAM_WEBHOOK_ALIAS", "primary"),
 		TelegramBotUsername:      getEnv("TELEGRAM_BOT_USERNAME", ""),
 		TelegramAPIBaseURL:       getEnv("TELEGRAM_API_BASE_URL", "https://api.telegram.org"),
+
+		DiscoveryUpdatesEnabled: getEnvAsBool("DISCOVERY_UPDATES_ENABLED", true),
+		DiscoveryUpdatesChannel: getEnv("DISCOVERY_UPDATES_CHANNEL", "discovery:event_updates"),
 	}
 }
 

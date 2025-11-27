@@ -175,7 +175,7 @@ func TestVerifyHandler(t *testing.T) {
 func TestLoginHandler(t *testing.T) {
 	logger.Log = zap.NewNop()
 	mockSvc := &mockAuthService{}
-	handler := NewAuthHandler(mockSvc)
+	handler := NewAuthHandler(mockSvc, nil)
 
 	t.Run("login success", func(t *testing.T) {
 		mockSvc.loginFn = func(req *models.LoginRequest) (*models.AuthResponse, error) {
@@ -216,7 +216,7 @@ func TestLoginHandler(t *testing.T) {
 func TestLogoutHandler(t *testing.T) {
 	logger.Log = zap.NewNop()
 	mockSvc := &mockAuthService{}
-	handler := NewAuthHandler(mockSvc)
+	handler := NewAuthHandler(mockSvc, nil)
 
 	t.Run("logout success via header", func(t *testing.T) {
 		called := false
@@ -269,14 +269,14 @@ func TestLogoutHandler(t *testing.T) {
 func TestGetMeHandler(t *testing.T) {
 	logger.Log = zap.NewNop()
 	mockSvc := &mockAuthService{}
-	handler := NewAuthHandler(mockSvc)
+	handler := NewAuthHandler(mockSvc, nil)
 
 	t.Run("user found", func(t *testing.T) {
 		mockSvc.getUserFn = func(userID string) (*models.User, error) {
 			if userID != "user-1" {
 				t.Fatalf("unexpected userID %s", userID)
 			}
-			return &models.User{ID: userID, Email: "me@example.com"}, nil
+			return &models.User{ID: userID, Email: "me@example.com", Role: "user"}, nil
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
@@ -288,12 +288,19 @@ func TestGetMeHandler(t *testing.T) {
 			t.Fatalf("expected 200, got %d", w.Code)
 		}
 
-		var user models.User
-		if err := json.NewDecoder(w.Body).Decode(&user); err != nil {
+		var resp struct {
+			User               *models.User `json:"user"`
+			Role               string       `json:"role"`
+			TelegramRegistered bool         `json:"telegram_registered"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
-		if user.Email != "me@example.com" {
-			t.Fatalf("expected email me@example.com, got %s", user.Email)
+		if resp.User == nil || resp.User.Email != "me@example.com" {
+			t.Fatalf("unexpected user payload: %+v", resp.User)
+		}
+		if resp.Role == "" {
+			t.Fatalf("expected role to be propagated")
 		}
 	})
 

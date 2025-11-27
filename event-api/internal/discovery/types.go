@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -219,3 +220,81 @@ var (
 	// ErrNoActiveEvent is returned when ApplyAction is invoked without requesting Next first.
 	ErrNoActiveEvent = errors.New("no active event")
 )
+
+// Filter specifies criteria for filtering events in discovery.
+type Filter struct {
+	Types      []string   // Event types to include
+	PriceTypes []string   // Price types: "free", "paid", "donation"
+	Places     []string   // Venue names (substring match)
+	DateFrom   *time.Time // Events starting after this time
+	DateTo     *time.Time // Events starting before this time
+}
+
+// IsEmpty returns true if no filter criteria are set.
+func (f Filter) IsEmpty() bool {
+	return len(f.Types) == 0 &&
+		len(f.PriceTypes) == 0 &&
+		len(f.Places) == 0 &&
+		f.DateFrom == nil &&
+		f.DateTo == nil
+}
+
+// Matches checks if an event matches all filter criteria.
+// Empty filter matches all events.
+func (f Filter) Matches(e Event) bool {
+	// Type filter
+	if len(f.Types) > 0 {
+		eventType, _ := e.Metadata["type"].(string)
+		if !containsIgnoreCase(f.Types, eventType) {
+			return false
+		}
+	}
+
+	// PriceType filter
+	if len(f.PriceTypes) > 0 {
+		priceType, _ := e.Metadata["priceType"].(string)
+		if !containsIgnoreCase(f.PriceTypes, priceType) {
+			return false
+		}
+	}
+
+	// Place filter (substring match)
+	if len(f.Places) > 0 {
+		place, _ := e.Metadata["place"].(string)
+		if !containsSubstringIgnoreCase(f.Places, place) {
+			return false
+		}
+	}
+
+	// Date filters
+	if f.DateFrom != nil && e.Slot.Start.Before(*f.DateFrom) {
+		return false
+	}
+	if f.DateTo != nil && e.Slot.Start.After(*f.DateTo) {
+		return false
+	}
+
+	return true
+}
+
+// containsIgnoreCase checks if slice contains value (case-insensitive).
+func containsIgnoreCase(slice []string, val string) bool {
+	valLower := strings.ToLower(val)
+	for _, s := range slice {
+		if strings.ToLower(s) == valLower {
+			return true
+		}
+	}
+	return false
+}
+
+// containsSubstringIgnoreCase checks if any element is a substring of val.
+func containsSubstringIgnoreCase(patterns []string, val string) bool {
+	valLower := strings.ToLower(val)
+	for _, p := range patterns {
+		if strings.Contains(valLower, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
+}

@@ -19,6 +19,7 @@ type QueueRepository interface {
 	Get(ctx context.Context, userID string) (QueueState, error)
 	Save(ctx context.Context, userID string, state QueueState) error
 	Clear(ctx context.Context, userID string) error
+	ClearAll(ctx context.Context) error
 }
 
 // HistoryRepository persists chronological logs of user actions.
@@ -26,6 +27,12 @@ type HistoryRepository interface {
 	Append(ctx context.Context, entry HistoryEntry) error
 	List(ctx context.Context, userID string) ([]HistoryEntry, error)
 	LastAction(ctx context.Context, userID, eventID string) (HistoryEntry, bool, error)
+}
+
+// ExcludedEventsProvider is an optional interface for optimized excluded events lookup.
+// PostgresHistoryRepository implements this for better performance.
+type ExcludedEventsProvider interface {
+	GetExcludedEventIDs(ctx context.Context, userID string) (map[string]bool, error)
 }
 
 // ErrQueueStateNotFound indicates missing state for provided user.
@@ -45,8 +52,6 @@ func NewInMemoryEventRepository(seed []Event) *InMemoryEventRepository {
 }
 
 // ReplaceAll swaps entire dataset atomically.
-//
-// Place records in "databsae"
 func (r *InMemoryEventRepository) ReplaceAll(_ context.Context, events []Event) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -129,6 +134,14 @@ func (r *InMemoryQueueRepository) Clear(_ context.Context, userID string) error 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.states, userID)
+	return nil
+}
+
+// ClearAll remove all stored states.
+func (r *InMemoryQueueRepository) ClearAll(_ context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.states = make(map[string]QueueState)
 	return nil
 }
 

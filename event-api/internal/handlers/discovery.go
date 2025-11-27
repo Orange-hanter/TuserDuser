@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"event-api/internal/discovery"
 	"event-api/internal/logger"
@@ -44,16 +45,27 @@ func NewDiscoveryHandler(service *discovery.Service) *DiscoveryHandler {
 //
 // Описание поведения:
 //   - Проверяет наличие `X-User-ID` (middleware должен установить его).
-//   - Вызывает `service.NextEvent`, который применяет правила очереди,
+//   - Опционально принимает фильтры через query-параметры:
+//   - types: типы событий (через запятую)
+//   - priceTypes: типы цен (через запятую)
+//   - places: места проведения (через запятую, поиск по подстроке)
+//   - dateFrom: начало диапазона дат (RFC3339)
+//   - dateTo: конец диапазона дат (RFC3339)
+//   - Вызывает `service.NextEventFiltered`, который применяет правила очереди,
 //     пропуская конфликтующие события и возвращая первое подходящее.
 //   - Возможные ответы: 200 с данными события, 404 если очередь пуста,
 //     409 при конфликте действий, 500 при внутренних ошибках.
 //
 // @Summary Получить следующее событие окна
-// @Description Возвращает следующее событие в очереди с учетом бронирований и конфликтов
+// @Description Возвращает следующее событие в очереди с учетом бронирований, конфликтов и фильтров
 // @Tags discovery
 // @Produce json
 // @Security BearerAuth
+// @Param types query string false "Типы событий через запятую" example("Конференция,Мастер-класс")
+// @Param priceTypes query string false "Типы цен через запятую" example("free,paid")
+// @Param places query string false "Места проведения (поиск по подстроке)" example("Коворкинг")
+// @Param dateFrom query string false "Начало диапазона дат (RFC3339)" example("2025-01-01T00:00:00Z")
+// @Param dateTo query string false "Конец диапазона дат (RFC3339)" example("2025-12-31T23:59:59Z")
 // @Success 200 {object} discovery.NextEvent
 // @Failure 401 {object} models.ErrorResponse "Нет авторизации"
 // @Failure 404 {object} models.ErrorResponse "Очередь пуста"
@@ -65,12 +77,67 @@ func (h *DiscoveryHandler) Next(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.service.NextEvent(r.Context(), userID)
+
+	// Parse filter from query parameters
+	filter, err := parseFilterFromQuery(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+
+	result, err := h.service.NextEventFiltered(r.Context(), userID, filter)
 	if err != nil {
 		h.handleDomainError(w, err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, result)
+}
+
+// parseFilterFromQuery extracts discovery filter from query parameters.
+func parseFilterFromQuery(r *http.Request) (discovery.Filter, error) {
+	q := r.URL.Query()
+	filter := discovery.Filter{}
+
+	// Parse comma-separated string values
+	if types := q.Get("types"); types != "" {
+		filter.Types = splitAndTrim(types)
+	}
+	if priceTypes := q.Get("priceTypes"); priceTypes != "" {
+		filter.PriceTypes = splitAndTrim(priceTypes)
+	}
+	if places := q.Get("places"); places != "" {
+		filter.Places = splitAndTrim(places)
+	}
+
+	// Parse date filters
+	if dateFrom := q.Get("dateFrom"); dateFrom != "" {
+		t, err := time.Parse(time.RFC3339, dateFrom)
+		if err != nil {
+			return filter, err
+		}
+		filter.DateFrom = &t
+	}
+	if dateTo := q.Get("dateTo"); dateTo != "" {
+		t, err := time.Parse(time.RFC3339, dateTo)
+		if err != nil {
+			return filter, err
+		}
+		filter.DateTo = &t
+	}
+
+	return filter, nil
+}
+
+// splitAndTrim splits comma-separated string and trims whitespace.
+func splitAndTrim(s string) []string {
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // Action обрабатывает реакцию пользователя на текущее событие очереди.

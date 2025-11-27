@@ -8,6 +8,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -28,16 +29,21 @@ import (
 // - Делегировать бизнес-логику в `service.EventService`.
 // - Обрабатывать ошибки сервисного слоя и возвращать понятные клиенту JSON-ответы.
 type EventHandler struct {
-	eventService *service.EventService
+	eventService    *service.EventService
+	notifyDiscovery func(context.Context, string)
 }
 
 // NewEventHandler создает новый экземпляр `EventHandler`.
 //
 // Параметры:
 // - `eventService` — реализация бизнес-логики работы с событиями.
-func NewEventHandler(eventService *service.EventService) *EventHandler {
+func NewEventHandler(eventService *service.EventService, notify func(context.Context, string)) *EventHandler {
+	if notify == nil {
+		notify = func(context.Context, string) {}
+	}
 	return &EventHandler{
-		eventService: eventService,
+		eventService:    eventService,
+		notifyDiscovery: notify,
 	}
 }
 
@@ -228,6 +234,8 @@ func (h *EventHandler) ReviewPendingEvent(w http.ResponseWriter, r *http.Request
 		respondWithError(w, http.StatusBadRequest, "review_failed", err.Error())
 		return
 	}
+
+	go h.notifyDiscovery(context.Background(), id)
 
 	respondWithJSON(w, http.StatusOK, map[string]string{
 		"status": action,

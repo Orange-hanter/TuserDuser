@@ -204,17 +204,43 @@ func TestQueueExhaustion(t *testing.T) {
 }
 
 func TestIdempotentActions(t *testing.T) {
-	engine := newTestEngine([]Event{buildTestEvent("idem", 0)})
+	engine := newTestEngine([]Event{
+		buildTestEvent("idem1", 0),
+		buildTestEvent("idem2", 60),
+	})
 	first, err := engine.NextEvent(ctx, "idem-user")
 	if err != nil {
 		t.Fatalf("next failed: %v", err)
 	}
-	if _, err := engine.ApplyAction(ctx, "idem-user", first.Event.ID, ActionLike); err != nil {
+
+	// First like should work
+	entry1, err := engine.ApplyAction(ctx, "idem-user", first.Event.ID, ActionLike)
+	if err != nil {
 		t.Fatalf("first like failed: %v", err)
 	}
-	if _, err := engine.ApplyAction(ctx, "idem-user", first.Event.ID, ActionLike); err != nil {
-		t.Fatalf("idempotent like failed: %v", err)
+
+	// After like, event is no longer current, so second like should fail with ErrNoActiveEvent
+	_, err = engine.ApplyAction(ctx, "idem-user", first.Event.ID, ActionLike)
+	if !errors.Is(err, ErrNoActiveEvent) && !errors.Is(err, ErrOutOfOrderAction) {
+		t.Fatalf("expected no active event or out of order error, got: %v", err)
 	}
+
+	// Get next event and verify idempotency works for CURRENT event
+	second, err := engine.NextEvent(ctx, "idem-user")
+	if err != nil {
+		t.Fatalf("second next failed: %v", err)
+	}
+
+	// Call next again without action - should return same event (idempotent)
+	secondAgain, err := engine.NextEvent(ctx, "idem-user")
+	if err != nil {
+		t.Fatalf("third next failed: %v", err)
+	}
+	if secondAgain.Event.ID != second.Event.ID {
+		t.Fatalf("next should be idempotent, got %s then %s", second.Event.ID, secondAgain.Event.ID)
+	}
+
+	_ = entry1 // use variable
 }
 
 func TestBookEventIdempotency(t *testing.T) {
@@ -290,5 +316,309 @@ func buildTestEvent(id string, startMinute int) Event {
 			End:   start.Add(30 * time.Minute),
 		},
 		Metadata: map[string]interface{}{},
+	}
+}
+
+func TestRefreshCatalogAtomic(t *testing.T) {
+	engine := newTestEngine([]Event{buildTestEvent("old1", 0)})
+
+	// User gets first event
+	res, err := engine.NextEvent(ctx, "refresh-user")
+	if err != nil {
+		t.Fatalf("next failed: %v", err)
+	}
+	if res.Event.ID != "old1" {
+		t.Fatalf("expected old1, got %s", res.Event.ID)
+	}
+
+	// Atomic refresh with new events
+	newEvents := []Event{buildTestEvent("new1", 0), buildTestEvent("new2", 60)}
+	if err := engine.RefreshCatalog(ctx, newEvents); err != nil {
+		t.Fatalf("refresh failed: %v", err)
+	}
+
+	// User should see new events (queue was reset)
+	res2, err := engine.NextEvent(ctx, "refresh-user")
+	if err != nil {
+		t.Fatalf("next after refresh failed: %v", err)
+	}
+	if res2.Event.ID != "new1" {
+		t.Fatalf("expected new1, got %s", res2.Event.ID)
+	}
+}
+
+func TestCleanupStaleLocks(t *testing.T) {
+	engine := newTestEngine([]Event{buildTestEvent("c1", 0)})
+
+	// Create some locks by accessing users
+	for i := 0; i < 5; i++ {
+		_, _ = engine.NextEvent(ctx, fmt.Sprintf("cleanup-user-%d", i))
+	}
+
+	// Cleanup with 0 duration should remove all
+	removed := engine.CleanupStaleLocks(0)
+	if removed != 5 {
+		t.Fatalf("expected 5 removed, got %d", removed)
+	}
+
+	// Second cleanup should find nothing
+	removed2 := engine.CleanupStaleLocks(0)
+	if removed2 != 0 {
+		t.Fatalf("expected 0 removed on second pass, got %d", removed2)
+	}
+}
+
+func TestConcurrentRefreshAndRead(t *testing.T) {
+	engine := newTestEngine([]Event{buildTestEvent("r1", 0), buildTestEvent("r2", 60)})
+
+	var wg sync.WaitGroup
+	const iterations = 100
+
+	// Reader goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_, err := engine.NextEvent(ctx, "concurrent-reader")
+			if err != nil && !errors.Is(err, ErrQueueEmpty) {
+				t.Errorf("reader iteration %d failed: %v", i, err)
+				return
+			}
+			// Reset queue to allow re-reading
+			_ = engine.ResetUserQueue(ctx, "concurrent-reader")
+		}
+	}()
+
+	// Writer goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			events := []Event{buildTestEvent(fmt.Sprintf("refresh-%d", i), 0)}
+			if err := engine.RefreshCatalog(ctx, events); err != nil {
+				t.Errorf("writer iteration %d failed: %v", i, err)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+}
+
+// --- Filter Tests ---
+
+func TestFilterMatches(t *testing.T) {
+	baseEvent := Event{
+		ID:    "test-event",
+		Title: "Test Event",
+		Slot: TimeSlot{
+			Start: testBaseTime,
+			End:   testBaseTime.Add(60 * time.Minute),
+		},
+		Metadata: map[string]any{
+			"type":      "Конференция",
+			"priceType": "paid",
+			"place":     "Коворкинг \"Старт\"",
+		},
+	}
+
+	tests := []struct {
+		name     string
+		filter   Filter
+		event    Event
+		expected bool
+	}{
+		{
+			name:     "empty filter matches all",
+			filter:   Filter{},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name:     "type filter matches",
+			filter:   Filter{Types: []string{"Конференция"}},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name:     "type filter case insensitive",
+			filter:   Filter{Types: []string{"конференция"}},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name:     "type filter no match",
+			filter:   Filter{Types: []string{"Воркшоп"}},
+			event:    baseEvent,
+			expected: false,
+		},
+		{
+			name:     "priceType filter matches",
+			filter:   Filter{PriceTypes: []string{"paid"}},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name:     "priceType filter no match",
+			filter:   Filter{PriceTypes: []string{"free"}},
+			event:    baseEvent,
+			expected: false,
+		},
+		{
+			name:     "place substring match",
+			filter:   Filter{Places: []string{"Коворкинг"}},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name:     "place partial match",
+			filter:   Filter{Places: []string{"Старт"}},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name:     "place no match",
+			filter:   Filter{Places: []string{"Стадион"}},
+			event:    baseEvent,
+			expected: false,
+		},
+		{
+			name: "dateFrom filter matches",
+			filter: Filter{
+				DateFrom: func() *time.Time { t := testBaseTime.Add(-1 * time.Hour); return &t }(),
+			},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name: "dateFrom filter no match",
+			filter: Filter{
+				DateFrom: func() *time.Time { t := testBaseTime.Add(1 * time.Hour); return &t }(),
+			},
+			event:    baseEvent,
+			expected: false,
+		},
+		{
+			name: "dateTo filter matches",
+			filter: Filter{
+				DateTo: func() *time.Time { t := testBaseTime.Add(1 * time.Hour); return &t }(),
+			},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name: "dateTo filter no match",
+			filter: Filter{
+				DateTo: func() *time.Time { t := testBaseTime.Add(-1 * time.Hour); return &t }(),
+			},
+			event:    baseEvent,
+			expected: false,
+		},
+		{
+			name: "multiple filters all match",
+			filter: Filter{
+				Types:      []string{"Конференция"},
+				PriceTypes: []string{"paid", "free"},
+				Places:     []string{"Коворкинг"},
+			},
+			event:    baseEvent,
+			expected: true,
+		},
+		{
+			name: "multiple filters one fails",
+			filter: Filter{
+				Types:      []string{"Конференция"},
+				PriceTypes: []string{"free"},
+			},
+			event:    baseEvent,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.filter.Matches(tt.event)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestNextEventFiltered(t *testing.T) {
+	events := []Event{
+		{
+			ID:    "e1",
+			Title: "Conference",
+			Slot:  TimeSlot{Start: testBaseTime, End: testBaseTime.Add(60 * time.Minute)},
+			Metadata: map[string]any{
+				"type":      "Конференция",
+				"priceType": "paid",
+			},
+		},
+		{
+			ID:    "e2",
+			Title: "Workshop",
+			Slot:  TimeSlot{Start: testBaseTime.Add(120 * time.Minute), End: testBaseTime.Add(180 * time.Minute)},
+			Metadata: map[string]any{
+				"type":      "Воркшоп",
+				"priceType": "free",
+			},
+		},
+		{
+			ID:    "e3",
+			Title: "Party",
+			Slot:  TimeSlot{Start: testBaseTime.Add(240 * time.Minute), End: testBaseTime.Add(300 * time.Minute)},
+			Metadata: map[string]any{
+				"type":      "Вечеринка",
+				"priceType": "paid",
+			},
+		},
+	}
+	engine := newTestEngine(events)
+
+	// Without filter - get first event
+	res, err := engine.NextEventFiltered(ctx, "filter-user-1", Filter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Event.ID != "e1" {
+		t.Errorf("expected e1, got %s", res.Event.ID)
+	}
+
+	// With type filter - get only Воркшоп
+	res, err = engine.NextEventFiltered(ctx, "filter-user-2", Filter{Types: []string{"Воркшоп"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Event.ID != "e2" {
+		t.Errorf("expected e2, got %s", res.Event.ID)
+	}
+
+	// With priceType filter - get only free
+	res, err = engine.NextEventFiltered(ctx, "filter-user-3", Filter{PriceTypes: []string{"free"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Event.ID != "e2" {
+		t.Errorf("expected e2, got %s", res.Event.ID)
+	}
+
+	// With combined filters
+	res, err = engine.NextEventFiltered(ctx, "filter-user-4", Filter{
+		Types:      []string{"Вечеринка"},
+		PriceTypes: []string{"paid"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Event.ID != "e3" {
+		t.Errorf("expected e3, got %s", res.Event.ID)
+	}
+
+	// No matching events
+	_, err = engine.NextEventFiltered(ctx, "filter-user-5", Filter{Types: []string{"NonExistent"}})
+	if !errors.Is(err, ErrQueueEmpty) {
+		t.Errorf("expected ErrQueueEmpty, got %v", err)
 	}
 }

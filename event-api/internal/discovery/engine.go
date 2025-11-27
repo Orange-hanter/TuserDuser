@@ -20,7 +20,16 @@ type Engine struct {
 	queues  QueueRepository
 	history HistoryRepository
 	cfg     EngineConfig
-	locks   sync.Map // map[userID]*sync.Mutex
+	locks   sync.Map // map[userID]*lockEntry
+
+	// mu protects atomic operations like ReplaceEvents + ResetAllQueues
+	mu sync.RWMutex
+}
+
+// lockEntry wraps a mutex with last-access tracking for cleanup.
+type lockEntry struct {
+	mu         sync.Mutex
+	lastAccess int64 // unix nano
 }
 
 // NewEngine builds a ready-to-use deterministic engine.
@@ -40,11 +49,21 @@ func NewEngine(events EventRepository, queues QueueRepository, history HistoryRe
 }
 
 // NextEvent returns the next item for a user, lazily initializing their queue.
+// Deprecated: Use NextEventFiltered with empty filter instead.
 func (e *Engine) NextEvent(ctx context.Context, userID string) (NextEvent, error) {
+	return e.NextEventFiltered(ctx, userID, Filter{})
+}
+
+// NextEventFiltered returns the next event matching the filter criteria.
+// If the current queue doesn't match the filter, a new filtered queue is built.
+func (e *Engine) NextEventFiltered(ctx context.Context, userID string, filter Filter) (NextEvent, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	unlock := e.lock(userID)
 	defer unlock()
 
-	state, err := e.ensureState(ctx, userID)
+	state, err := e.ensureStateFiltered(ctx, userID, filter)
 	if err != nil {
 		return NextEvent{}, err
 	}
@@ -86,12 +105,11 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 	if action == ActionBook {
 		return HistoryEntry{}, ErrInvalidAction
 	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	unlock := e.lock(userID)
 	defer unlock()
-
-	if last, ok, _ := e.history.LastAction(ctx, userID, eventID); ok && last.Action == action {
-		return last, nil
-	}
 
 	state, err := e.ensureState(ctx, userID)
 	if err != nil {
@@ -103,6 +121,13 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 	if state.CurrentEventID != eventID {
 		return HistoryEntry{}, ErrOutOfOrderAction
 	}
+
+	// Idempotency check AFTER verifying event is current.
+	// This prevents stale history from blocking actions after queue refresh.
+	if last, ok, _ := e.history.LastAction(ctx, userID, eventID); ok && last.Action == action {
+		return last, nil
+	}
+
 	if action != ActionLike && action != ActionDislike && action != ActionNeutral {
 		return HistoryEntry{}, ErrInvalidAction
 	}
@@ -138,6 +163,9 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 
 // BookEvent commits to the current event and propagates conflicts.
 func (e *Engine) BookEvent(ctx context.Context, userID, eventID string) (BookingResult, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	unlock := e.lock(userID)
 	defer unlock()
 
@@ -185,6 +213,9 @@ func (e *Engine) BookEvent(ctx context.Context, userID, eventID string) (Booking
 // RegisterBooking records a booking from an external source (e.g. direct subscription)
 // and updates conflicts in the discovery queue.
 func (e *Engine) RegisterBooking(ctx context.Context, userID, eventID string) (BookingResult, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	unlock := e.lock(userID)
 	defer unlock()
 
@@ -247,6 +278,8 @@ func (e *Engine) History(ctx context.Context, userID string) ([]HistoryEntry, er
 
 // ReplaceEvents swaps entire candidate pool atomically.
 func (e *Engine) ReplaceEvents(ctx context.Context, events []Event) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	return e.events.ReplaceAll(ctx, events)
 }
 
@@ -257,14 +290,44 @@ func (e *Engine) ResetUserQueue(ctx context.Context, userID string) error {
 	return e.queues.Clear(ctx, userID)
 }
 
+// ResetAllQueues очищает очереди всех пользователей.
+func (e *Engine) ResetAllQueues(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.queues.ClearAll(ctx)
+}
+
+// RefreshCatalog atomically replaces events and resets all queues.
+// Use this instead of separate ReplaceEvents + ResetAllQueues calls.
+func (e *Engine) RefreshCatalog(ctx context.Context, events []Event) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.events.ReplaceAll(ctx, events); err != nil {
+		return err
+	}
+	return e.queues.ClearAll(ctx)
+}
+
 func (e *Engine) ensureState(ctx context.Context, userID string) (QueueState, error) {
-	state, err := e.queues.Get(ctx, userID)
-	if err == nil {
-		return state, nil
+	return e.ensureStateFiltered(ctx, userID, Filter{})
+}
+
+// ensureStateFiltered builds queue with applied filter criteria.
+// When filter is empty, behaves like ensureState (no filtering).
+// When filter is provided, rebuilds queue with matching events only.
+func (e *Engine) ensureStateFiltered(ctx context.Context, userID string, filter Filter) (QueueState, error) {
+	// If no filter, try to use cached state
+	if filter.IsEmpty() {
+		state, err := e.queues.Get(ctx, userID)
+		if err == nil {
+			return state, nil
+		}
+		if !errors.Is(err, ErrQueueStateNotFound) {
+			return QueueState{}, err
+		}
 	}
-	if !errors.Is(err, ErrQueueStateNotFound) {
-		return QueueState{}, err
-	}
+
+	// Always rebuild queue when filter is provided (filter might have changed)
 	events, err := e.events.List(ctx)
 	if err != nil {
 		return QueueState{}, err
@@ -272,24 +335,69 @@ func (e *Engine) ensureState(ctx context.Context, userID string) (QueueState, er
 	if len(events) == 0 {
 		return QueueState{}, ErrQueueEmpty
 	}
-	limit := e.cfg.MaxQueueLength
-	if limit > len(events) {
-		limit = len(events)
+
+	// Build set of events user already actioned
+	excluded, err := e.getExcludedEvents(ctx, userID)
+	if err != nil {
+		return QueueState{}, err
 	}
-	state = QueueState{
+
+	limit := e.cfg.MaxQueueLength
+	state := QueueState{
 		Primary:           make([]string, 0, limit),
 		Conflicts:         []string{},
 		ConflictRegistry:  map[string]ConflictFlag{},
 		CurrentEventID:    "",
 		CurrentIsConflict: false,
 	}
-	for i := 0; i < limit; i++ {
-		state.Primary = append(state.Primary, events[i].ID)
+
+	for _, evt := range events {
+		if excluded[evt.ID] {
+			continue
+		}
+		// Apply filter if provided
+		if !filter.IsEmpty() && !filter.Matches(evt) {
+			continue
+		}
+		if len(state.Primary) >= limit {
+			break
+		}
+		state.Primary = append(state.Primary, evt.ID)
 	}
-	if err := e.queues.Save(ctx, userID, state); err != nil {
-		return QueueState{}, err
+
+	if len(state.Primary) == 0 {
+		return QueueState{}, ErrQueueEmpty
+	}
+
+	// Only save state for non-filtered queues to preserve original behavior
+	if filter.IsEmpty() {
+		if err := e.queues.Save(ctx, userID, state); err != nil {
+			return QueueState{}, err
+		}
 	}
 	return state, nil
+}
+
+// getExcludedEvents returns event IDs user has already definitively actioned.
+// Uses optimized query if history repo supports ExcludedEventsProvider interface.
+func (e *Engine) getExcludedEvents(ctx context.Context, userID string) (map[string]bool, error) {
+	// Try optimized path first (PostgresHistoryRepository implements this)
+	if provider, ok := e.history.(ExcludedEventsProvider); ok {
+		return provider.GetExcludedEventIDs(ctx, userID)
+	}
+
+	// Fallback: load full history and filter
+	excluded := make(map[string]bool)
+	history, err := e.history.List(ctx, userID)
+	if err != nil {
+		return excluded, nil // Don't fail, just return empty
+	}
+	for _, entry := range history {
+		if entry.Action == ActionDislike || entry.Action == ActionLike || entry.Action == ActionBook {
+			excluded[entry.EventID] = true
+		}
+	}
+	return excluded, nil
 }
 
 func (e *Engine) markConflicts(ctx context.Context, state *QueueState, booked Event) ([]string, error) {
@@ -331,8 +439,25 @@ func (e *Engine) persist(ctx context.Context, userID string, state QueueState, e
 }
 
 func (e *Engine) lock(userID string) func() {
-	val, _ := e.locks.LoadOrStore(userID, &sync.Mutex{})
-	mu := val.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+	val, _ := e.locks.LoadOrStore(userID, &lockEntry{})
+	entry := val.(*lockEntry)
+	entry.mu.Lock()
+	entry.lastAccess = time.Now().UnixNano()
+	return entry.mu.Unlock
+}
+
+// CleanupStaleLocks removes lock entries not accessed for the given duration.
+// Call periodically (e.g., every hour) to prevent memory leaks.
+func (e *Engine) CleanupStaleLocks(maxAge time.Duration) int {
+	threshold := time.Now().Add(-maxAge).UnixNano()
+	removed := 0
+	e.locks.Range(func(key, value any) bool {
+		entry := value.(*lockEntry)
+		if entry.lastAccess < threshold {
+			e.locks.Delete(key)
+			removed++
+		}
+		return true
+	})
+	return removed
 }

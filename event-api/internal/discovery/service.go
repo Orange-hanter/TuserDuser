@@ -1,6 +1,9 @@
 package discovery
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Service exposes application-level operations for the discovery engine.
 type Service struct {
@@ -15,6 +18,11 @@ func NewService(engine *Engine) *Service {
 // NextEvent proxies to the underlying engine.
 func (s *Service) NextEvent(ctx context.Context, userID string) (NextEvent, error) {
 	return s.engine.NextEvent(ctx, userID)
+}
+
+// NextEventFiltered returns next event matching filter criteria.
+func (s *Service) NextEventFiltered(ctx context.Context, userID string, filter Filter) (NextEvent, error) {
+	return s.engine.NextEventFiltered(ctx, userID, filter)
 }
 
 // ApplyAction proxies action handling.
@@ -45,4 +53,19 @@ func (s *Service) ReplaceEvents(ctx context.Context, events []Event) error {
 // ResetQueue forces a queue rebuild on next request.
 func (s *Service) ResetQueue(ctx context.Context, userID string) error {
 	return s.engine.ResetUserQueue(ctx, userID)
+}
+
+// ResetAllQueues очищает очереди всех пользователей.
+func (s *Service) ResetAllQueues(ctx context.Context) error {
+	return s.engine.ResetAllQueues(ctx)
+}
+
+// RefreshCatalog atomically replaces events and resets all queues.
+func (s *Service) RefreshCatalog(ctx context.Context, events []Event) error {
+	return s.engine.RefreshCatalog(ctx, events)
+}
+
+// CleanupStaleLocks removes old lock entries to prevent memory leaks.
+func (s *Service) CleanupStaleLocks(maxAge time.Duration) int {
+	return s.engine.CleanupStaleLocks(maxAge)
 }

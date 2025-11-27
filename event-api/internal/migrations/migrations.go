@@ -75,6 +75,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createEventSubscriptions,
 			down: dropEventSubscriptions,
 		},
+		{
+			name: "008_create_discovery_actions",
+			up:   createDiscoveryActions,
+			down: dropDiscoveryActions,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -457,6 +462,46 @@ CREATE INDEX IF NOT EXISTS idx_event_subscriptions_event_id ON event_subscriptio
 // dropEventSubscriptions - SQL для удаления таблицы подписок на события.
 const dropEventSubscriptions = `
 DROP TABLE IF EXISTS event_subscriptions;
+`
+
+// createDiscoveryActions - SQL для создания таблицы discovery_actions (история свайпов).
+// Таблица оптимизирована для аналитики и быстрого поиска последнего действия.
+// FK на users не создаётся — это позволяет хранить историю для удалённых пользователей
+// и снижает связанность между модулями.
+const createDiscoveryActions = `
+CREATE TABLE IF NOT EXISTS discovery_actions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    action VARCHAR(20) NOT NULL CHECK (action IN ('like', 'dislike', 'neutral', 'book')),
+    context JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for fetching user's history (ordered by time)
+CREATE INDEX IF NOT EXISTS idx_discovery_actions_user_time ON discovery_actions(user_id, created_at DESC);
+
+-- Index for finding last action on specific event
+CREATE INDEX IF NOT EXISTS idx_discovery_actions_user_event ON discovery_actions(user_id, event_id, created_at DESC);
+
+-- Index for analytics: action distribution
+CREATE INDEX IF NOT EXISTS idx_discovery_actions_action ON discovery_actions(action);
+
+-- Index for analytics: event popularity
+CREATE INDEX IF NOT EXISTS idx_discovery_actions_event ON discovery_actions(event_id);
+
+-- Partial index for quick "excluded events" lookup (events user already actioned definitively)
+CREATE INDEX IF NOT EXISTS idx_discovery_actions_excluded ON discovery_actions(user_id, event_id)
+    WHERE action IN ('like', 'dislike', 'book');
+
+COMMENT ON TABLE discovery_actions IS 'Stores all user swipe actions for discovery queue. Used for queue filtering and analytics.';
+COMMENT ON COLUMN discovery_actions.action IS 'like=interested, dislike=not interested, neutral=skip for now, book=confirmed participation';
+COMMENT ON COLUMN discovery_actions.context IS 'Additional metadata: conflictedEventIds for book, source for external bookings, etc.';
+`
+
+// dropDiscoveryActions - SQL для удаления таблицы discovery_actions.
+const dropDiscoveryActions = `
+DROP TABLE IF EXISTS discovery_actions;
 `
 
 // Rollback откатывает все миграции (только для разработки!)
