@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +19,7 @@ import (
 	"event-api/internal/worker"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -636,13 +636,9 @@ func (s *AuthService) persistPendingUser(ctx context.Context, pending *pendingUs
 	return nil
 }
 
-// generateID генерирует уникальный ID.
+// generateID генерирует уникальный UUID.
 func generateID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("rand.Read: %w", err)
-	}
-	return hex.EncodeToString(b), nil
+	return uuid.New().String(), nil
 }
 
 // generateVerificationCode генерирует 6-значный код верификации.

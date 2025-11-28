@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -99,6 +100,11 @@ func (m *Migrator) RunMigrations() error {
 			name: "012_create_role_requests_table",
 			up:   createRoleRequestsTable,
 			down: dropRoleRequestsTable,
+		},
+		{
+			name: "013_migrate_user_id_to_uuid",
+			up:   migrateUserIdToUUID,
+			down: revertUserIdToText,
 		},
 	}
 
@@ -199,7 +205,7 @@ func (m *Migrator) runMigration(mig migration) error {
 // createUsersTable создает таблицу users.
 const createUsersTable = `
 CREATE TABLE IF NOT EXISTS users (
-	id TEXT PRIMARY KEY,
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	email VARCHAR(255) UNIQUE NOT NULL,
 	phone VARCHAR(20) NOT NULL,
 	password VARCHAR(255) NOT NULL,
@@ -386,7 +392,7 @@ ALTER TABLE users DROP COLUMN IF EXISTS role;
 const createTelegramNotifications = `
 CREATE TABLE IF NOT EXISTS telegram_binding_tokens (
 	nonce_hash TEXT PRIMARY KEY,
-	user_id TEXT NOT NULL,
+	user_id UUID NOT NULL,
 	expires_at TIMESTAMPTZ NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -395,7 +401,7 @@ CREATE INDEX IF NOT EXISTS idx_telegram_binding_tokens_expires_at
 ON telegram_binding_tokens (expires_at);
 
 CREATE TABLE IF NOT EXISTS telegram_bindings (
-	user_id TEXT PRIMARY KEY,
+	user_id UUID PRIMARY KEY,
 	chat_id BIGINT UNIQUE NOT NULL,
 	status TEXT NOT NULL CHECK (status IN ('active','blocked','pending','revoked')),
 	blocked_reason TEXT,
@@ -413,7 +419,7 @@ CREATE INDEX IF NOT EXISTS idx_telegram_bindings_chat_id ON telegram_bindings(ch
 
 CREATE TABLE IF NOT EXISTS telegram_delivery (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-	user_id TEXT NOT NULL,
+	user_id UUID NOT NULL,
 	chat_id BIGINT NOT NULL,
 	reminder_id TEXT NOT NULL,
 	payload JSONB NOT NULL,
@@ -463,7 +469,7 @@ DROP TABLE IF EXISTS telegram_binding_tokens;
 // createEventSubscriptions - SQL для создания таблицы подписок на события.
 const createEventSubscriptions = `
 CREATE TABLE IF NOT EXISTS event_subscriptions (
-    user_id TEXT NOT NULL,
+    user_id UUID NOT NULL,
     event_id UUID NOT NULL,
     status VARCHAR(50) NOT NULL,
     subscribed_at TIMESTAMPTZ DEFAULT NOW(),
@@ -491,8 +497,8 @@ DROP TABLE IF EXISTS event_subscriptions;
 const createDiscoveryActions = `
 CREATE TABLE IF NOT EXISTS discovery_actions (
     id BIGSERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    event_id TEXT NOT NULL,
+    user_id UUID NOT NULL,
+    event_id UUID NOT NULL,
     action VARCHAR(20) NOT NULL CHECK (action IN ('like', 'dislike', 'neutral', 'book')),
     context JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -785,12 +791,8 @@ func (m *Migrator) seedDefaultAdmin() error {
 		return fmt.Errorf("failed to hash default admin password: %w", err)
 	}
 
-	// Generate textual ID
-	idBytes := make([]byte, 16)
-	if _, err := rand.Read(idBytes); err != nil {
-		return fmt.Errorf("failed to generate admin id: %w", err)
-	}
-	adminID := hex.EncodeToString(idBytes)
+	// Generate UUID
+	adminID := uuid.New().String()
 
 	// Try to insert. If email conflicts but no admin exists, we'll attempt a fallback email once.
 	inserted, err := m.tryInsertAdmin(ctx, adminID, email, phone, string(hash))
@@ -845,7 +847,7 @@ DROP TABLE IF EXISTS event_registrations CASCADE;
 CREATE TABLE event_registrations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     public_name VARCHAR(255) NOT NULL,
     avatar_url TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
@@ -868,13 +870,13 @@ DROP TABLE IF EXISTS event_registrations CASCADE;
 const createRoleRequestsTable = `
 CREATE TABLE IF NOT EXISTS role_requests (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-	user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	requested_role VARCHAR(50) NOT NULL,
 	reason TEXT NOT NULL,
 	status VARCHAR(50) DEFAULT 'pending',
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+	reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
 	reviewed_at TIMESTAMP,
 	review_notes TEXT,
 	UNIQUE(user_id, requested_role)
@@ -888,4 +890,155 @@ CREATE INDEX idx_role_requests_created_at ON role_requests(created_at);
 
 const dropRoleRequestsTable = `
 DROP TABLE IF EXISTS role_requests CASCADE;
+`
+
+// migrateUserIdToUUID конвертирует users.id и все связанные колонки из TEXT в UUID.
+// Предполагается, что все ID уже являются валидными 32-символьными hex строками.
+const migrateUserIdToUUID = `
+-- Шаг 1: Удаляем ВСЕ FK перед изменениями
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS idx_event_registrations_unique;
+ALTER TABLE event_subscriptions DROP CONSTRAINT IF EXISTS event_subscriptions_user_id_fkey;
+ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_user_id_fkey;
+ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_reviewed_by_fkey;
+
+-- Шаг 2: Конвертируем 32-символьные hex ID в формат UUID с дефисами
+UPDATE users SET id =
+    SUBSTRING(id::text, 1, 8) || '-' ||
+    SUBSTRING(id::text, 9, 4) || '-' ||
+    SUBSTRING(id::text, 13, 4) || '-' ||
+    SUBSTRING(id::text, 17, 4) || '-' ||
+    SUBSTRING(id::text, 21, 12)
+WHERE LENGTH(id::text) = 32 AND id::text !~ '-';
+
+-- Аналогично для всех связанных таблиц
+UPDATE event_registrations SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+UPDATE event_subscriptions SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+UPDATE telegram_bindings SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+UPDATE telegram_binding_tokens SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+UPDATE telegram_delivery SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+UPDATE role_requests SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+UPDATE role_requests SET reviewed_by =
+    SUBSTRING(reviewed_by::text, 1, 8) || '-' ||
+    SUBSTRING(reviewed_by::text, 9, 4) || '-' ||
+    SUBSTRING(reviewed_by::text, 13, 4) || '-' ||
+    SUBSTRING(reviewed_by::text, 17, 4) || '-' ||
+    SUBSTRING(reviewed_by::text, 21, 12)
+WHERE reviewed_by IS NOT NULL AND LENGTH(reviewed_by::text) = 32 AND reviewed_by::text !~ '-';
+
+UPDATE discovery_actions SET user_id =
+    SUBSTRING(user_id::text, 1, 8) || '-' ||
+    SUBSTRING(user_id::text, 9, 4) || '-' ||
+    SUBSTRING(user_id::text, 13, 4) || '-' ||
+    SUBSTRING(user_id::text, 17, 4) || '-' ||
+    SUBSTRING(user_id::text, 21, 12)
+WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+
+-- Шаг 3: Меняем тип колонок на UUID
+ALTER TABLE users ALTER COLUMN id TYPE UUID USING id::uuid;
+
+ALTER TABLE event_registrations ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+ALTER TABLE event_subscriptions ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+ALTER TABLE telegram_bindings ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+ALTER TABLE telegram_binding_tokens ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+ALTER TABLE telegram_delivery ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+ALTER TABLE role_requests ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE UUID USING reviewed_by::uuid;
+ALTER TABLE discovery_actions ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+
+-- Шаг 4: Восстанавливаем FK
+ALTER TABLE event_registrations
+    ADD CONSTRAINT event_registrations_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE event_subscriptions
+    ADD CONSTRAINT event_subscriptions_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE role_requests
+    ADD CONSTRAINT role_requests_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE role_requests
+    ADD CONSTRAINT role_requests_reviewed_by_fkey
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL;
+`
+
+// revertUserIdToText откатывает миграцию UUID обратно в TEXT (не рекомендуется).
+const revertUserIdToText = `
+-- Удаляем FK
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+ALTER TABLE event_subscriptions DROP CONSTRAINT IF EXISTS event_subscriptions_user_id_fkey;
+ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_user_id_fkey;
+ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_reviewed_by_fkey;
+
+-- Меняем типы обратно на TEXT
+ALTER TABLE users ALTER COLUMN id TYPE TEXT USING id::text;
+ALTER TABLE event_registrations ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+ALTER TABLE event_subscriptions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+ALTER TABLE telegram_bindings ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+ALTER TABLE telegram_binding_tokens ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+ALTER TABLE telegram_delivery ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+ALTER TABLE role_requests ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE TEXT USING reviewed_by::text;
+ALTER TABLE discovery_actions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+
+-- Восстанавливаем FK
+ALTER TABLE event_registrations 
+    ADD CONSTRAINT event_registrations_user_id_fkey 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE event_subscriptions 
+    ADD CONSTRAINT event_subscriptions_user_id_fkey 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE role_requests 
+    ADD CONSTRAINT role_requests_user_id_fkey 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE role_requests 
+    ADD CONSTRAINT role_requests_reviewed_by_fkey 
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL;
 `
