@@ -93,4 +93,53 @@ export const requestEventRevision = async (eventId, comment) => {
   return response.data;
 };
 
+export const requestRole = async (role, reason) => {
+  const response = await api.post("/v1/api/users/request-role", {
+    role,
+    reason,
+  });
+  return response.data;
+};
+
+export const getRoleRequestStatus = async (role) => {
+  const response = await api.get("/v1/api/users/request-role/status", {
+    params: { role },
+  });
+  return response.data;
+};
+
+export const getAllRoleRequests = async () => {
+  const response = await api.get("/v1/api/users/request-role/all");
+  return response.data;
+};
+
+export const getPendingRoleRequests = async (limit = 20, offset = 0) => {
+  const response = await api.get("/v1/api/admin/role-requests/pending", {
+    params: { limit, offset },
+  });
+  return response.data;
+};
+
+export const approveRoleRequest = async (requestId, notes = "") => {
+  const response = await api.post(
+    `/v1/api/admin/role-requests/${requestId}/approve`,
+    {
+      request_id: requestId,
+      notes,
+    },
+  );
+  return response.data;
+};
+
+export const rejectRoleRequest = async (requestId, reason) => {
+  const response = await api.post(
+    `/v1/api/admin/role-requests/${requestId}/reject`,
+    {
+      request_id: requestId,
+      reason,
+    },
+  );
+  return response.data;
+};
+
 export default api;
