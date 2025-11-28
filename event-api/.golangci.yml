@@ -1,40 +1,184 @@
 version: "2"
 
-linters:
-  enable:
-    - errcheck
-    - ineffassign
-    - bodyclose
-    - noctx
-    - staticcheck
-    - unused
-    - unconvert
-    - revive
-    - gocritic
-    - govet
-    - misspell
-    - prealloc
-    - gosec
-
-formatters:
-  settings:
-    gofmt:
-      simplify: true
-
-    goimports:
-      local-prefixes:
-        - event-api
-
-issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
-output:
-  formats:
-    tab:
-      path: stdout
-
 run:
-  timeout: 5m
+  timeout: 0
   tests: false
   modules-download-mode: readonly
+  go: "1.25"
+  allow-parallel-runners: true
+  concurrency: 0
+
+linters:
+  default: none
+  enable:
+    # === Обнаружение ошибок ===
+    - errcheck # Необработанные ошибки
+    - gosec # Безопасность кода
+    - staticcheck # Статические ошибки и стиль
+    - nilerr # Возврат nil при ошибке
+    - nilnesserr # nil ошибка в других случаях
+
+    # === Качество кода ===
+    - govet # Встроенные проверки Go
+    - ineffassign # Неиспользованные присваивания
+    - unused # Неиспользованные переменные/функции
+    - unconvert # Ненужные преобразования типов
+    - bodyclose # Закрытие HTTP response body
+    - noctx # Отсутствие context
+    - prealloc # Предвыделение слайсов
+    - rowserrcheck # Проверка ошибок sql.Rows
+    - sqlclosecheck # Закрытие sql соединений
+
+    # === Именование и стиль (мягко) ===
+    - revive # Гибкий линтер (замена golint)
+    - gocritic # Критики стиля и практик
+    - misspell # Орфографические ошибки
+    - asciicheck # ASCII идентификаторы
+    - goprintffuncname # Именование printf функций
+
+    # === Документация ===
+    - godoclint # Проверка godoc комментариев
+    - godox # TODO/FIXME комментарии
+    - godot # Точки в конце комментариев
+
+    # === Обработка ошибок ===
+    - err113 # Проверка ошибок как типов
+    - errname # Именование ошибок (Err*, *Error)
+    - errorlint # Правильное оборачивание ошибок
+    - wrapcheck # Обертывание ошибок в функциях
+
+    # === Циклическая сложность ===
+    - gocyclo # Циклическая сложность
+    - cyclop # Циклическая + когнитивная сложность
+    - gocognit # Когнитивная сложность
+
+  settings:
+    # Errcheck: строгая проверка ошибок
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    # Staticcheck: все проверки
+    staticcheck:
+      checks:
+        - all
+
+    # Revive: мягкие, но полезные правила
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+          severity: warning
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: var-declaration
+        - name: var-naming
+
+    # Gosec: средняя строгость
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G101 # hardcoded password
+        - G601 # implicit memory aliasing
+
+    # Gocritic: диагностика и производительность
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - opinionated
+        - performance
+      disabled-checks:
+        - sloppyReassign
+        - hugeParam
+        - rangeValCopy
+
+    # Misspell: US английский
+    misspell:
+      locale: en-US
+
+    # Godoclint: проверка документации
+    godoclint:
+      capital: false
+      check-export: true
+      check-unexported: true
+
+    # Godox: отслеживание задач
+    godox:
+      keywords:
+        - TODO
+        - FIXME
+        - BUG
+
+    # Godot: точки в комментариях
+    godot:
+      capital: false
+
+    # Error handling
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
+    # Циклическая сложность: max 15
+    gocyclo:
+      min-complexity: 15
+
+    # Cyclop: циклическая + когнитивная
+    cyclop:
+      max-complexity: 15
+      package-average: 10.0
+      skip-tests: true
+
+    # Когнитивная сложность
+    gocognit:
+      min-complexity: 15
+
+    # Wrapcheck: проверка обертывания ошибок
+    wrapcheck:
+      ignore-sig-regexps:
+        - .*(Close|Write|Flush|Sync|Shutdown).*
+        - \.Unwrap\(\)
+      ignore-error-type-regexps:
+        - ^(fmt|context|errors|io|io/fs|sync|time)\.
+
+  exclusions:
+    rules:
+      # Исключения для тестов
+      - path: _test\.go$
+        linters:
+          - gosec
+          - gocyclo
+          - cyclop
+          - gocognit
+
+      # Исключения для mock файлов
+      - path: mock_.*\.go$
+        linters:
+          - "*"
+
+    # Автогенерированный код
+    generated: strict
+
+output:
+  text:
+    print-linter-name: true
+    print-issued-lines: true
+    colors: true

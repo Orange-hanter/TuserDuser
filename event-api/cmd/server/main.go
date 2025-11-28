@@ -1,63 +1,39 @@
+// Package main contains the entry point for the event-api server.
 // cmd/server/main.go
 package main
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"event-api/internal/config"
-	"event-api/internal/database"
-	"event-api/internal/discovery"
-	"event-api/internal/email"
-	"event-api/internal/handlers"
 	"event-api/internal/logger"
-	"event-api/internal/metrics"
-	"event-api/internal/middleware"
-	"event-api/internal/migrations"
-	"event-api/internal/models"
-	redisClient "event-api/internal/redis"
-	"event-api/internal/service"
-	"event-api/internal/sms"
-	"event-api/internal/telegram"
-	"event-api/internal/worker"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/rs/cors"
-	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 
 	_ "event-api/docs" // This is required for Swagger
 )
 
 // TODO: create cron (or smth like tasks manager) to manage events notification
-
 // TODO: configure NGINX to navigate telegramm webhooks
 
 // @title Event API
 // @version 1.0
 // @description API для управления событиями и аутентификации пользователей
 // @termsOfService http://swagger.io/terms/
-
 // @contact.name API Support
 // @contact.url http://www.swagger.io/support
 // @contact.email support@swagger.io
-
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-
 // @host api.tuserduser.online
 // @schemes https http
-
 // @host localhost:8080
 // @schemes http
-
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
@@ -68,223 +44,52 @@ func run(versionInfo VersionInfo) error {
 	defer syncLogger()
 
 	logVersionInfo(versionInfo)
+
+	// Create app context for background workers
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
+	// Load configuration
 	cfg := config.Load()
 	logConfig(cfg)
 
-	// Инициализируем подключение к БД
-	db, err := initDatabase(cfg)
+	// Initialize application container with all services and handlers
+	container, err := NewAppContainer(appCtx, cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize application container: %w", err)
 	}
-	defer closeDatabase(db)
-
-	// Запускаем миграции
-	migrator := migrations.NewMigrator(db.DB, logger.Log)
-	if err := migrator.RunMigrations(); err != nil {
-		return fmt.Errorf("migration execution failed: %w", err)
-	}
-
-	fmt.Println(logger.FormatSuccess(
-		"Database Initialized Successfully",
-		"Host: "+cfg.DBHost,
-		"Database: "+cfg.DBName,
-		"Migrations: Applied",
-	))
-
-	// Инициализируем подключение к Redis
-	redis, err := initRedis(cfg)
-	if err != nil {
-		return err
-	}
-	defer closeRedis(redis)
-
-	// Инициализируем Prometheus метрики
-	var redisMetrics *metrics.RedisMetrics
-	if redis != nil {
-		redisMetrics = metrics.NewRedisMetrics()
-		logger.Log.Info("✅ Prometheus metrics initialized")
-		_ = redisMetrics // TODO: Pass to services for recording metrics
-	} else {
-		logger.Log.Warn("⚠️  Redis not available, metrics disabled")
-	}
-
-	// Инициализируем SMS сервис
-	smsService, err := initSMSService(cfg)
-	if err != nil {
-		return err
-	}
-
-	// Инициализируем Email сервис
-	emailService, err := initEmailService(cfg)
-	if err != nil {
-		return err
-	}
-
-	logger.Log.Info("✅ Email service initialized",
-		zap.String("provider", cfg.EmailProvider),
-		zap.String("from", cfg.EmailFrom),
-	)
-
-	// Инициализируем worker pool
-	workerPool := worker.NewPool(5, 100, logger.Log)
-	workerPool.Start()
-
-	// Инициализируем сервисы
-	authService := service.NewAuthService(cfg, db.DB, redis, smsService, emailService, workerPool, logger.Log)
-	eventService := service.NewEventService(db.DB, logger.Log)
-
-	// Discovery engine with optional Redis for queue and history
-	var discoveryHistoryRepo discovery.HistoryRepository
-	discoveryHistoryRepo = discovery.NewPostgresHistoryRepository(db.DB)
-	var discoveryQueueRepo discovery.QueueRepository
-
-	// Try to use Redis for queues if available
-	if redis != nil {
-		queueTTL := time.Duration(cfg.DiscoveryQueueTTL) * time.Second
-		discoveryQueueRepo = discovery.NewRedisQueueRepository(redis.GetClient(), queueTTL)
-		logger.Log.Info("✅ Redis queue repository initialized", zap.Int("ttl_seconds", cfg.DiscoveryQueueTTL))
-
-		// Also use Redis for hot history data
-		historyTTL := time.Duration(cfg.DiscoveryHistoryTTL) * time.Second
-		discoveryHistoryRepo = discovery.NewRedisHistoryRepository(redis.GetClient(), historyTTL, 100)
-		logger.Log.Info("✅ Redis history repository initialized", zap.Int("ttl_seconds", cfg.DiscoveryHistoryTTL))
-	} else {
-		// Fallback to in-memory
-		discoveryQueueRepo = discovery.NewInMemoryQueueRepository()
-		logger.Log.Warn("⚠️  Redis not available, using in-memory queue repository")
-	}
-
-	discoveryEngine := discovery.NewEngine(
-		discovery.NewInMemoryEventRepository(nil),
-		discoveryQueueRepo,
-		discoveryHistoryRepo,
-		discovery.EngineConfig{},
-	)
-	discoveryService := discovery.NewService(discoveryEngine)
-	userService := service.NewUserService(db.DB, logger.Log, discoveryService)
-
-	if err := bootstrapDiscovery(appCtx, eventService, discoveryService); err != nil {
-		logger.Log.Warn("failed to seed discovery engine", zap.Error(err))
-	}
-
-	// Start periodic lock cleanup to prevent memory leaks (every hour, remove locks unused for 24h)
-	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-appCtx.Done():
-				return
-			case <-ticker.C:
-				removed := discoveryService.CleanupStaleLocks(24 * time.Hour)
-				if removed > 0 {
-					logger.Log.Info("discovery locks cleaned up", zap.Int("removed", removed))
-				}
-			}
+	defer func() {
+		if err := container.Close(); err != nil {
+			logger.Log.Error("failed to close container", zap.Error(err))
 		}
 	}()
 
-	startDiscoveryUpdateWorker(appCtx, cfg, redis, eventService, discoveryService)
+	// Start discovery-related background workers
+	container.StartDiscoveryWorkers(appCtx)
 
-	// Инициализируем handlers
-	authHandler := handlers.NewAuthHandler(authService, nil) // telegram store created below if enabled
-	var discoveryNotifier func(context.Context, string)
-	if cfg.DiscoveryUpdatesEnabled {
-		if redis != nil {
-			channel := cfg.DiscoveryUpdatesChannel
-			discoveryNotifier = func(_ context.Context, eventID string) {
-				notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				publishDiscoveryUpdate(notifyCtx, redis, channel, eventID)
-			}
-		} else {
-			logger.Log.Warn("discovery updates enabled but Redis is not configured")
-		}
-	}
-	eventHandler := handlers.NewEventHandler(eventService, discoveryNotifier)
-	discoveryHandler := handlers.NewDiscoveryHandler(discoveryService, userService)
-	userHandler := handlers.NewUserHandler(userService)
-	creatorService := service.NewCreatorService(db.DB, logger.Log)
-	creatorHandler := handlers.NewCreatorHandler(creatorService, logger.Log)
+	// Build HTTP router
+	httpRouter := container.BuildHTTPRouter(versionInfo)
 
-	// Инициализируем Telegram
-	var telegramHandler *handlers.TelegramHandler
-	if cfg.TelegramEnabled {
-		teleSettings := telegram.NewSettingsFrom(cfg)
-		telStore := telegram.NewStore(db.DB)
-		telClient := telegram.NewHTTPClient(teleSettings.BotToken, teleSettings.APIBaseURL)
-		telService := telegram.NewService(telStore, teleSettings, logger.Log)
-		telegramHandler = handlers.NewTelegramHandler(telService, telStore, teleSettings, telClient, logger.Log)
-		logger.Log.Info("telegram handler enabled", zap.String("bot", teleSettings.BotUsername))
-	} else {
-		logger.Log.Info("telegram handler disabled")
-	}
+	// Create HTTP server
+	container.CreateHTTPServer(httpRouter)
 
-	handler := buildHTTPHandler(cfg, authHandler, eventHandler, discoveryHandler, userHandler, authService, telegramHandler, creatorHandler, versionInfo)
+	// Setup graceful shutdown
+	shutdownSignal := WaitForShutdownSignal()
+	PrintStartupMessage(cfg.Port, cfg.Env, len(cfg.CORSAllowedOrigins), cfg.ShutdownTimeout)
 
-	// Создаем HTTP сервер с явными настройками
-	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
-	// Канал для сигналов graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	fmt.Println(logger.FormatSuccess(
-		"Server Started Successfully",
-		"Port: "+cfg.Port,
-		"Environment: "+cfg.Env,
-		"CORS: "+fmt.Sprintf("%d origins", len(cfg.CORSAllowedOrigins)),
-		"Shutdown Timeout: "+fmt.Sprintf("%d seconds", cfg.ShutdownTimeout),
-	))
-
-	// Запуск сервера в горутине
+	// Start server in goroutine
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := container.HTTPServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Log.Error("server failed", zap.Error(err))
 		}
 	}()
 
-	// Ожидание сигнала для graceful shutdown
-	<-quit
-	fmt.Println(logger.FormatInfo(
-		"Server Shutdown Initiated",
-		"Graceful shutdown started",
-		"Timeout: "+fmt.Sprintf("%d seconds", cfg.ShutdownTimeout),
-	))
+	// Wait for shutdown signal
+	<-shutdownSignal
 
-	// Cancel app context to stop background workers (discovery updater, etc.)
-	appCancel()
-
-	// Создаем контекст с таймаутом для shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.ShutdownTimeout)*time.Second)
-	defer cancel()
-
-	// Останавливаем worker pool
-	workerPool.Shutdown()
-
-	// Graceful shutdown сервера
-	if err := srv.Shutdown(ctx); err != nil {
-		logger.Log.Error("Server Shutdown Failed", zap.Error(err))
-		return err
-	}
-
-	fmt.Println(logger.FormatSuccess(
-		"Server Shutdown Complete",
-		"All connections closed gracefully",
-		"Resources cleaned up",
-	))
-
-	return nil
+	// Execute graceful shutdown
+	shutdownConfig := GracefulShutdownConfig{TimeoutSeconds: cfg.ShutdownTimeout}
+	return ExecuteGracefulShutdown(appCtx, appCancel, container.HTTPServer, container, shutdownConfig)
 }
 
 func main() {
@@ -307,18 +112,6 @@ func parseVersionFlag() bool {
 	flag.BoolVar(showVersion, "v", false, "Print version information and exit")
 	flag.Parse()
 	return *showVersion
-}
-
-func versionHandler(info VersionInfo) http.HandlerFunc {
-	response := info
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Log.Error("failed to write version response", zap.Error(err))
-			http.Error(w, "failed to render version info", http.StatusInternalServerError)
-			return
-		}
-	}
 }
 
 func logVersionInfo(info VersionInfo) {
@@ -359,308 +152,4 @@ func syncLogger() {
 	if err := logger.Sync(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
 	}
-}
-
-func initDatabase(cfg *config.Config) (*database.Database, error) {
-	config := &database.Config{
-		Host:     cfg.DBHost,
-		Port:     cfg.DBPort,
-		User:     cfg.DBUser,
-		Password: cfg.DBPassword,
-		DBName:   cfg.DBName,
-		SSLMode:  cfg.DBSSLMode,
-		MaxConn:  cfg.DBMaxConn,
-		MinConn:  cfg.DBMinConn,
-	}
-
-	db, err := database.NewDatabase(config, logger.Log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database (host=%s, port=%s, db=%s): %w",
-			cfg.DBHost, cfg.DBPort, cfg.DBName, err)
-	}
-	return db, nil
-}
-
-func closeDatabase(db *database.Database) {
-	if db == nil {
-		return
-	}
-	if err := db.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
-	}
-}
-
-func initRedis(cfg *config.Config) (*redisClient.Client, error) {
-	config := &redisClient.Config{
-		Host:     cfg.RedisHost,
-		Port:     cfg.RedisPort,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
-	}
-
-	client, err := redisClient.NewClient(config, logger.Log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis (host=%s, port=%s): %w",
-			cfg.RedisHost, cfg.RedisPort, err)
-	}
-	return client, nil
-}
-
-func closeRedis(client *redisClient.Client) {
-	if client == nil {
-		return
-	}
-	if err := client.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to close redis: %v\n", err)
-	}
-}
-
-func initSMSService(cfg *config.Config) (*sms.Service, error) {
-	config := &sms.Config{
-		Provider: cfg.SMSProvider,
-		APIKey:   cfg.SMSAPIKey,
-		APIToken: cfg.SMSAPIToken,
-		From:     cfg.SMSFrom,
-	}
-
-	service, err := sms.NewService(config, logger.Log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize SMS service (provider=%s): %w", cfg.SMSProvider, err)
-	}
-	return service, nil
-}
-
-func initEmailService(cfg *config.Config) (*email.Service, error) {
-	config := &email.Config{
-		Provider:     cfg.EmailProvider,
-		APIKey:       cfg.EmailAPIKey,
-		SMTPHost:     cfg.SMTPHost,
-		SMTPPort:     cfg.SMTPPort,
-		SMTPUsername: cfg.SMTPUsername,
-		SMTPPassword: cfg.SMTPPassword,
-		UseSSL:       cfg.SMTPUseSSL,
-		From:         cfg.EmailFrom,
-		FromName:     cfg.EmailFromName,
-	}
-
-	service, err := email.NewService(config, logger.Log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize email service (provider=%s): %w", cfg.EmailProvider, err)
-	}
-	return service, nil
-}
-
-func bootstrapDiscovery(ctx context.Context, eventService *service.EventService, discoveryService *discovery.Service) error {
-	return refreshDiscoveryState(ctx, eventService, discoveryService)
-}
-
-func refreshDiscoveryState(ctx context.Context, eventService *service.EventService, discoveryService *discovery.Service) error {
-	events, err := eventService.GetApprovedEvents(ctx)
-	if err != nil {
-		return fmt.Errorf("load approved events: %w", err)
-	}
-	converted := toDiscoveryEvents(time.Now(), events)
-	// Use atomic RefreshCatalog to prevent race conditions
-	if err := discoveryService.RefreshCatalog(ctx, converted); err != nil {
-		return fmt.Errorf("refresh discovery catalog: %w", err)
-	}
-	return nil
-}
-
-func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
-	result := make([]discovery.Event, 0, len(src))
-	for _, evt := range src {
-		if evt == nil {
-			continue
-		}
-		if evt.EndTime.Before(now) {
-			continue
-		}
-		metadata := map[string]interface{}{
-			"type":             evt.Type,
-			"place":            evt.Place,
-			"priceType":        evt.PriceType,
-			"needRegistration": evt.NeedRegistration,
-		}
-		for k, v := range evt.Details {
-			metadata[k] = v
-		}
-		result = append(result, discovery.Event{
-			ID:          evt.ID,
-			Title:       evt.Type,
-			Description: fmt.Sprintf("%s @ %s", evt.Type, evt.Place),
-			Slot: discovery.TimeSlot{
-				Start: evt.StartTime,
-				End:   evt.EndTime,
-			},
-			Metadata: metadata,
-		})
-	}
-	return result
-}
-
-func publishDiscoveryUpdate(ctx context.Context, redisClient *redisClient.Client, channel, eventID string) {
-	if redisClient == nil || channel == "" || eventID == "" {
-		return
-	}
-	msg := discovery.UpdateMessage{
-		Action:      discovery.UpdateActionEventApproved,
-		EventID:     eventID,
-		TriggeredAt: time.Now().UTC(),
-	}
-	if err := discovery.PublishUpdate(ctx, redisClient.GetClient(), channel, msg); err != nil {
-		logger.Log.Warn("failed to publish discovery update", zap.Error(err), zap.String("event_id", eventID))
-	}
-}
-
-func startDiscoveryUpdateWorker(ctx context.Context, cfg *config.Config, redisClient *redisClient.Client, eventService *service.EventService, discoveryService *discovery.Service) {
-	if !cfg.DiscoveryUpdatesEnabled {
-		logger.Log.Info("discovery updates disabled")
-		return
-	}
-	if redisClient == nil {
-		logger.Log.Warn("discovery updates enabled but Redis client is nil")
-		return
-	}
-	channel := cfg.DiscoveryUpdatesChannel
-	if channel == "" {
-		logger.Log.Warn("discovery updates channel is empty")
-		return
-	}
-	go func() {
-		backoff := 5 * time.Second
-		for {
-			if err := runDiscoveryUpdateLoop(ctx, redisClient, channel, eventService, discoveryService); err != nil {
-				logger.Log.Error("discovery update worker exited", zap.Error(err))
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(backoff):
-			}
-		}
-	}()
-}
-
-func runDiscoveryUpdateLoop(ctx context.Context, redisClient *redisClient.Client, channel string, eventService *service.EventService, discoveryService *discovery.Service) error {
-	sub := redisClient.GetClient().Subscribe(ctx, channel)
-	defer func() {
-		if err := sub.Close(); err != nil {
-			logger.Log.Warn("failed to close redis subscription", zap.Error(err))
-		}
-	}()
-	logger.Log.Info("discovery update worker subscribed", zap.String("channel", channel))
-	ch := sub.Channel()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case msg, ok := <-ch:
-			if !ok {
-				return fmt.Errorf("redis pubsub channel closed")
-			}
-			update, err := discovery.DecodeUpdateMessage(msg.Payload)
-			if err != nil {
-				logger.Log.Warn("invalid discovery update message", zap.Error(err))
-				continue
-			}
-			refreshCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			err = refreshDiscoveryState(refreshCtx, eventService, discoveryService)
-			cancel()
-			if err != nil {
-				logger.Log.Error("failed to refresh discovery state", zap.Error(err))
-				continue
-			}
-			logger.Log.Info("discovery state refreshed", zap.String("action", string(update.Action)), zap.String("event_id", update.EventID))
-		}
-	}
-}
-
-func buildHTTPHandler(cfg *config.Config, authHandler *handlers.AuthHandler, eventHandler *handlers.EventHandler, discoveryHandler *handlers.DiscoveryHandler, userHandler *handlers.UserHandler, authService *service.AuthService, telegramHandler *handlers.TelegramHandler, creatorHandler *handlers.CreatorHandler, versionInfo VersionInfo) http.Handler {
-	r := chi.NewRouter()
-	r.Use(middleware.SecurityHeaders)
-	r.Get("/health", handlers.HealthCheck)
-	r.Get("/version", versionHandler(versionInfo))
-	r.Handle("/metrics", handlers.MetricsHandler)
-
-	if telegramHandler != nil {
-		r.Route("/webhooks/telegram", func(r chi.Router) {
-			r.Post("/{botAlias}", telegramHandler.Webhook)
-		})
-	}
-
-	r.Route("/v1", func(r chi.Router) {
-		// Public auth endpoints
-		r.Post("/api/auth/register", authHandler.Register)
-		r.Post("/api/auth/verify", authHandler.Verify)
-		r.Post("/api/auth/login", authHandler.Login)
-		r.Post("/api/auth/logout", authHandler.Logout)
-
-		// Public event endpoints (read-only, no auth required)
-		r.Get("/api/events", eventHandler.GetApprovedEvents)
-		r.Get("/api/events/approved", eventHandler.GetApprovedEvents)
-		r.Get("/api/events/{id}", eventHandler.GetEventByID)
-		r.Get("/api/events/{event_id}/participants", userHandler.GetEventParticipants)
-
-		// Authenticated user endpoints
-		authenticated := r.With(middleware.AuthMiddleware(authService))
-		authenticated.Get("/api/auth/me", authHandler.GetMe)
-
-		// User profile and events
-		authenticated.Get("/api/users/me", userHandler.GetMe)
-		authenticated.Get("/api/users/me/events/upcoming", userHandler.GetUpcomingEvents)
-		authenticated.Get("/api/users/me/events/history", userHandler.GetEventHistory)
-		authenticated.Post("/api/users/me/events/{event_id}/subscribe", userHandler.Subscribe)
-
-		if telegramHandler != nil {
-			authenticated.Route("/api/notifications/telegram", func(r chi.Router) {
-				r.Post("/link", telegramHandler.IssueLink)
-				r.Get("/status", telegramHandler.BindingStatus)
-			})
-		}
-		authenticated.Route("/api/discovery", func(r chi.Router) {
-			r.Get("/next", discoveryHandler.Next)
-			r.Post("/action", discoveryHandler.Action)
-			r.Post("/book", discoveryHandler.Book)
-			r.Get("/history", discoveryHandler.History)
-		})
-
-		// Creator/Admin: Create events (requires creator or admin role)
-		creatorOrAdmin := authenticated.With(middleware.RequireCreatorOrAdmin)
-		creatorOrAdmin.Post("/api/events", eventHandler.CreateEvent)
-		creatorOrAdmin.Delete("/api/events/{id}", eventHandler.DeleteEvent)
-
-		// Creator: My events management
-		creatorOrAdmin.Get("/api/creator/events", creatorHandler.GetMyEvents)
-		creatorOrAdmin.Get("/api/creator/events/blocked", creatorHandler.GetBlockedEvents)
-		creatorOrAdmin.Get("/api/creator/events/{eventId}/comments", creatorHandler.GetEventComments)
-		creatorOrAdmin.Post("/api/creator/events/{eventId}/comments", creatorHandler.AddComment)
-
-		// Admin only: Event moderation endpoints
-		adminOnly := authenticated.With(middleware.RequireAdmin)
-		adminOnly.Get("/api/events/pending", eventHandler.GetPendingEvents)
-		adminOnly.Post("/api/events/{id}/review", eventHandler.ReviewPendingEvent)
-		adminOnly.Get("/api/admin/events/{eventId}/comments", creatorHandler.GetEventCommentsAsAdmin)
-		adminOnly.Post("/api/admin/events/{eventId}/request-revision", creatorHandler.RequestRevision)
-		adminOnly.Post("/api/admin/events/{eventId}/block", creatorHandler.BlockEvent)
-
-		// Admin only: User management
-		adminOnly.Get("/api/admin/users", authHandler.GetAllUsers)
-		adminOnly.Put("/api/admin/users/role", authHandler.UpdateUserRole)
-	})
-
-	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"),
-	))
-
-	c := cors.New(cors.Options{
-		AllowedOrigins:   cfg.CORSAllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
-		ExposedHeaders:   []string{"Content-Length", "X-JSON-Response"},
-		AllowCredentials: true,
-		MaxAge:           3600,
-	})
-
-	return c.Handler(r)
 }

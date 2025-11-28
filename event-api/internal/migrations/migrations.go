@@ -835,23 +835,25 @@ func (m *Migrator) tryInsertAdmin(ctx context.Context, id, email, phone, passwor
 }
 
 const createEventRegistrations = `
-CREATE TABLE IF NOT EXISTS event_registrations (
+DROP TABLE IF EXISTS event_registrations CASCADE;
+
+CREATE TABLE event_registrations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
     public_name VARCHAR(255) NOT NULL,
     avatar_url TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
     registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(event_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_event_registrations_event_id ON event_registrations(event_id);
-CREATE INDEX IF NOT EXISTS idx_event_registrations_user_id ON event_registrations(user_id);
-CREATE INDEX IF NOT EXISTS idx_event_registrations_status ON event_registrations(status);
-CREATE INDEX IF NOT EXISTS idx_event_registrations_event_status ON event_registrations(event_id, status);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_event_registrations_unique ON event_registrations(event_id, user_id);
+CREATE INDEX idx_event_registrations_event_id ON event_registrations(event_id);
+CREATE INDEX idx_event_registrations_user_id ON event_registrations(user_id);
+CREATE INDEX idx_event_registrations_status ON event_registrations(status);
+CREATE INDEX idx_event_registrations_event_status ON event_registrations(event_id, status);
 `
 
 const dropEventRegistrations = `
