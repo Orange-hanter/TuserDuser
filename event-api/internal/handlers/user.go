@@ -220,3 +220,126 @@ func (h *UserHandler) GetEventParticipants(w http.ResponseWriter, r *http.Reques
 
 	respondWithJSON(w, http.StatusOK, participants)
 }
+
+// RequestRole godoc
+// @Summary Request role upgrade
+// @Description User requests a role upgrade (creator, support, etc.) with a reason.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.RoleRequest true "Role request"
+// @Success 200 {object} models.RoleRequestResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 401 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /api/users/request-role [post]
+func (h *UserHandler) RequestRole(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", "User ID not found")
+		return
+	}
+
+	var req models.RoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+
+	// Validate request
+	if req.Role == "" || req.Reason == "" {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Role and reason are required")
+		return
+	}
+
+	if len(req.Reason) < 10 || len(req.Reason) > 500 {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Reason must be between 10 and 500 characters")
+		return
+	}
+
+	// Only allow requesting creator or support roles
+	if req.Role != models.RoleCreator && req.Role != models.RoleSupport {
+		respondWithError(w, http.StatusBadRequest, "invalid_role", "Can only request creator or support role")
+		return
+	}
+
+	resp, err := h.userService.RequestRole(r.Context(), userID, req.Role, req.Reason)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, resp)
+}
+
+// GetRoleRequestStatus godoc
+// @Summary Get role request status
+// @Description Get the status of a specific role request.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param role query string true "Role"
+// @Success 200 {object} models.RoleRequestStatus
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 401 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /api/users/request-role/status [get]
+func (h *UserHandler) GetRoleRequestStatus(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", "User ID not found")
+		return
+	}
+
+	role := r.URL.Query().Get("role")
+	if role == "" {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "Role parameter is required")
+		return
+	}
+
+	status, err := h.userService.GetRoleRequestStatus(r.Context(), userID, role)
+	if err != nil {
+		if err.Error() == "role request not found" {
+			respondWithError(w, http.StatusNotFound, "not_found", "Role request not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, status)
+}
+
+// GetAllRoleRequests godoc
+// @Summary Get all role requests
+// @Description Get all role requests for the current user.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} models.RoleRequestStatus
+// @Failure 401 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /api/users/request-role/all [get]
+func (h *UserHandler) GetAllRoleRequests(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", "User ID not found")
+		return
+	}
+
+	requests, err := h.userService.GetRoleRequests(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+
+	if requests == nil {
+		requests = []models.RoleRequestStatus{}
+	}
+
+	respondWithJSON(w, http.StatusOK, requests)
+}

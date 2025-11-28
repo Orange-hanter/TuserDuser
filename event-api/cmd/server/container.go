@@ -46,12 +46,13 @@ type AppContainer struct {
 	DiscoveryService *discovery.Service
 
 	// Handlers
-	AuthHandler      *handlers.AuthHandler
-	EventHandler     *handlers.EventHandler
-	DiscoveryHandler *handlers.DiscoveryHandler
-	UserHandler      *handlers.UserHandler
-	CreatorHandler   *handlers.CreatorHandler
-	TelegramHandler  *handlers.TelegramHandler
+	AuthHandler             *handlers.AuthHandler
+	EventHandler            *handlers.EventHandler
+	DiscoveryHandler        *handlers.DiscoveryHandler
+	UserHandler             *handlers.UserHandler
+	CreatorHandler          *handlers.CreatorHandler
+	TelegramHandler         *handlers.TelegramHandler
+	AdminRoleRequestHandler *handlers.AdminRoleRequestHandler
 
 	// HTTP components
 	HTTPServer *http.Server
@@ -185,6 +186,9 @@ func (c *AppContainer) initHandlers() {
 	// Creator handler
 	c.CreatorHandler = handlers.NewCreatorHandler(c.CreatorService, logger.Log)
 
+	// Admin role request handler
+	c.AdminRoleRequestHandler = handlers.NewAdminRoleRequestHandler(c.UserService, logger.Log)
+
 	// Telegram handler (if enabled)
 	if c.Config.TelegramEnabled {
 		teleSettings := telegram.NewSettingsFrom(c.Config)
@@ -209,6 +213,7 @@ func (c *AppContainer) BuildHTTPRouter(versionInfo VersionInfo) http.Handler {
 		c.AuthService,
 		c.TelegramHandler,
 		c.CreatorHandler,
+		c.AdminRoleRequestHandler,
 		versionInfo,
 	)
 }

@@ -26,6 +26,7 @@ func buildHTTPHandler(
 	authService *service.AuthService,
 	telegramHandler *handlers.TelegramHandler,
 	creatorHandler *handlers.CreatorHandler,
+	adminRoleRequestHandler *handlers.AdminRoleRequestHandler,
 	versionInfo VersionInfo,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -65,7 +66,7 @@ func buildHTTPHandler(
 
 		// Admin-only endpoints
 		adminOnly := authenticated.With(middleware.RequireAdmin)
-		registerAdminRoutes(adminOnly, eventHandler, creatorHandler, authHandler)
+		registerAdminRoutes(adminOnly, eventHandler, creatorHandler, authHandler, adminRoleRequestHandler)
 	})
 
 	// Swagger documentation
@@ -110,6 +111,11 @@ func registerAuthenticatedUserRoutes(
 	r.Get("/api/users/me/events/upcoming", userHandler.GetUpcomingEvents)
 	r.Get("/api/users/me/events/history", userHandler.GetEventHistory)
 	r.Post("/api/users/me/events/{event_id}/subscribe", userHandler.Subscribe)
+
+	// Role request endpoints
+	r.Post("/api/users/request-role", userHandler.RequestRole)
+	r.Get("/api/users/request-role/status", userHandler.GetRoleRequestStatus)
+	r.Get("/api/users/request-role/all", userHandler.GetAllRoleRequests)
 }
 
 // registerDiscoveryRoutes registers discovery-related endpoints.
@@ -158,6 +164,7 @@ func registerAdminRoutes(
 	eventHandler *handlers.EventHandler,
 	creatorHandler *handlers.CreatorHandler,
 	authHandler *handlers.AuthHandler,
+	adminRoleRequestHandler *handlers.AdminRoleRequestHandler,
 ) {
 	// Event moderation
 	r.Get("/api/events/pending", eventHandler.GetPendingEvents)
@@ -171,6 +178,11 @@ func registerAdminRoutes(
 	// User management
 	r.Get("/api/admin/users", authHandler.GetAllUsers)
 	r.Put("/api/admin/users/role", authHandler.UpdateUserRole)
+
+	// Role request management (admin only)
+	r.Get("/api/admin/role-requests/pending", adminRoleRequestHandler.GetPendingRoleRequests)
+	r.Post("/api/admin/role-requests/{requestId}/approve", adminRoleRequestHandler.ApproveRoleRequest)
+	r.Post("/api/admin/role-requests/{requestId}/reject", adminRoleRequestHandler.RejectRoleRequest)
 }
 
 // wrapWithCORS applies CORS configuration to the router.

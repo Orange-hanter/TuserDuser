@@ -95,6 +95,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createEventRegistrations,
 			down: dropEventRegistrations,
 		},
+		{
+			name: "012_create_role_requests_table",
+			up:   createRoleRequestsTable,
+			down: dropRoleRequestsTable,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -858,4 +863,29 @@ CREATE INDEX idx_event_registrations_event_status ON event_registrations(event_i
 
 const dropEventRegistrations = `
 DROP TABLE IF EXISTS event_registrations CASCADE;
+`
+
+const createRoleRequestsTable = `
+CREATE TABLE IF NOT EXISTS role_requests (
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	requested_role VARCHAR(50) NOT NULL,
+	reason TEXT NOT NULL,
+	status VARCHAR(50) DEFAULT 'pending',
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+	reviewed_at TIMESTAMP,
+	review_notes TEXT,
+	UNIQUE(user_id, requested_role)
+);
+
+CREATE INDEX idx_role_requests_user_id ON role_requests(user_id);
+CREATE INDEX idx_role_requests_status ON role_requests(status);
+CREATE INDEX idx_role_requests_requested_role ON role_requests(requested_role);
+CREATE INDEX idx_role_requests_created_at ON role_requests(created_at);
+`
+
+const dropRoleRequestsTable = `
+DROP TABLE IF EXISTS role_requests CASCADE;
 `

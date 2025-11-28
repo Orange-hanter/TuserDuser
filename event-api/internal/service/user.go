@@ -327,3 +327,241 @@ func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) 
 
 	return participants, nil
 }
+
+// RequestRole handles a user's request to upgrade their role.
+func (s *UserService) RequestRole(ctx context.Context, userID, role, reason string) (*models.RoleRequestResponse, error) {
+	// Check if user already has the requested role
+	var currentRole string
+	err := s.db.QueryRowContext(ctx, "SELECT role FROM users WHERE id = $1", userID).Scan(&currentRole)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	// Check if user already has the requested role
+	if currentRole == models.RoleCreator && role == models.RoleCreator {
+		return &models.RoleRequestResponse{
+			Message: "You already have the creator role",
+			Status:  "already_granted",
+		}, nil
+	}
+
+	// Save the role request to database
+	query := `
+		INSERT INTO role_requests (user_id, requested_role, reason, status, created_at, updated_at)
+		VALUES ($1, $2, $3, 'pending', NOW(), NOW())
+		ON CONFLICT (user_id, requested_role) DO UPDATE 
+		SET reason = $3, status = 'pending', updated_at = NOW()
+	`
+
+	_, err = s.db.ExecContext(ctx, query, userID, role, reason)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save role request: %w", err)
+	}
+
+	s.logger.Info("Role request created", zap.String("user_id", userID), zap.String("role", role))
+
+	return &models.RoleRequestResponse{
+		Message: "Role request submitted successfully. Admins will review your request.",
+		Status:  "pending",
+	}, nil
+}
+
+// GetRoleRequests retrieves all role requests for a user.
+func (s *UserService) GetRoleRequests(ctx context.Context, userID string) ([]models.RoleRequestStatus, error) {
+	query := `
+		SELECT id, requested_role, status, reason, review_notes, created_at, updated_at, reviewed_at, reviewed_by
+		FROM role_requests
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch role requests: %w", err)
+	}
+	defer rows.Close()
+
+	var requests []models.RoleRequestStatus
+	for rows.Next() {
+		var req models.RoleRequestStatus
+		if err := rows.Scan(
+			&req.ID,
+			&req.RequestedRole,
+			&req.CurrentStatus,
+			&req.Reason,
+			&req.ReviewNotes,
+			&req.CreatedAt,
+			&req.UpdatedAt,
+			&req.ReviewedAt,
+			&req.ReviewedBy,
+		); err != nil {
+			s.logger.Error("failed to scan role request", zap.Error(err))
+			continue
+		}
+		requests = append(requests, req)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating role requests: %w", err)
+	}
+
+	return requests, nil
+}
+
+// GetRoleRequestStatus retrieves a specific role request status.
+func (s *UserService) GetRoleRequestStatus(ctx context.Context, userID, requestedRole string) (*models.RoleRequestStatus, error) {
+	query := `
+		SELECT id, requested_role, status, reason, review_notes, created_at, updated_at, reviewed_at, reviewed_by
+		FROM role_requests
+		WHERE user_id = $1 AND requested_role = $2
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+
+	var req models.RoleRequestStatus
+	err := s.db.QueryRowContext(ctx, query, userID, requestedRole).Scan(
+		&req.ID,
+		&req.RequestedRole,
+		&req.CurrentStatus,
+		&req.Reason,
+		&req.ReviewNotes,
+		&req.CreatedAt,
+		&req.UpdatedAt,
+		&req.ReviewedAt,
+		&req.ReviewedBy,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("role request not found")
+		}
+		return nil, fmt.Errorf("failed to fetch role request: %w", err)
+	}
+
+	return &req, nil
+}
+
+// GetPendingRoleRequests retrieves all pending role requests for admin review.
+func (s *UserService) GetPendingRoleRequests(ctx context.Context, limit, offset int) ([]models.RoleRequestStatus, int, error) {
+	// Get total count
+	var total int
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM role_requests WHERE status = 'pending'").Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count role requests: %w", err)
+	}
+
+	// Get paginated results
+	query := `
+		SELECT id, requested_role, status, reason, review_notes, created_at, updated_at, reviewed_at, reviewed_by
+		FROM role_requests
+		WHERE status = 'pending'
+		ORDER BY created_at ASC
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to fetch pending role requests: %w", err)
+	}
+	defer rows.Close()
+
+	var requests []models.RoleRequestStatus
+	for rows.Next() {
+		var req models.RoleRequestStatus
+		if err := rows.Scan(
+			&req.ID,
+			&req.RequestedRole,
+			&req.CurrentStatus,
+			&req.Reason,
+			&req.ReviewNotes,
+			&req.CreatedAt,
+			&req.UpdatedAt,
+			&req.ReviewedAt,
+			&req.ReviewedBy,
+		); err != nil {
+			s.logger.Error("failed to scan role request", zap.Error(err))
+			continue
+		}
+		requests = append(requests, req)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("error iterating role requests: %w", err)
+	}
+
+	return requests, total, nil
+}
+
+// ApproveRoleRequest approves a pending role request and updates user role.
+func (s *UserService) ApproveRoleRequest(ctx context.Context, requestID, adminID, notes string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Get the role request
+	var userID, requestedRole string
+	err = tx.QueryRowContext(ctx, `
+		SELECT user_id, requested_role FROM role_requests WHERE id = $1 AND status = 'pending'
+	`, requestID).Scan(&userID, &requestedRole)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("role request not found")
+		}
+		return fmt.Errorf("failed to fetch role request: %w", err)
+	}
+
+	// Update role request status
+	_, err = tx.ExecContext(ctx, `
+		UPDATE role_requests
+		SET status = 'approved', reviewed_by = $1, reviewed_at = NOW(), review_notes = $2, updated_at = NOW()
+		WHERE id = $3
+	`, adminID, notes, requestID)
+	if err != nil {
+		return fmt.Errorf("failed to update role request: %w", err)
+	}
+
+	// Update user role
+	_, err = tx.ExecContext(ctx, `
+		UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2
+	`, requestedRole, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update user role: %w", err)
+	}
+
+	s.logger.Info("Role request approved",
+		zap.String("request_id", requestID),
+		zap.String("user_id", userID),
+		zap.String("role", requestedRole),
+		zap.String("admin_id", adminID),
+	)
+
+	return tx.Commit()
+}
+
+// RejectRoleRequest rejects a pending role request.
+func (s *UserService) RejectRoleRequest(ctx context.Context, requestID, adminID, reason string) error {
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE role_requests
+		SET status = 'rejected', reviewed_by = $1, reviewed_at = NOW(), review_notes = $2, updated_at = NOW()
+		WHERE id = $3 AND status = 'pending'
+	`, adminID, reason, requestID)
+	if err != nil {
+		return fmt.Errorf("failed to update role request: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil || rows == 0 {
+		return errors.New("role request not found")
+	}
+
+	s.logger.Info("Role request rejected",
+		zap.String("request_id", requestID),
+		zap.String("admin_id", adminID),
+	)
+
+	return nil
+}
