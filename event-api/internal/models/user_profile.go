@@ -7,6 +7,7 @@ type UserProfile struct {
 	ID                 string        `json:"id" example:"usr_abc"`
 	Email              string        `json:"email" example:"user@example.com"`
 	Name               string        `json:"name" example:"Иван Петров"`
+	CellPhone          string        `json:"phone" example:"+1234567890"`
 	CreatedAt          time.Time     `json:"created_at" example:"2025-01-10T08:30:00Z"`
 	TelegramRegistered bool          `json:"telegram_registered" example:"true"`
 	TelegramInfo       *TelegramInfo `json:"telegram_info,omitempty"`

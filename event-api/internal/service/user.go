@@ -35,10 +35,10 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*model
 	// Fetch user details
 	var user models.UserProfile
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, email, created_at 
+		SELECT id, email, created_at, phone
 		FROM users 
 		WHERE id = $1
-	`, userID).Scan(&user.ID, &user.Email, &user.CreatedAt)
+	`, userID).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.CellPhone)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("user not found")
