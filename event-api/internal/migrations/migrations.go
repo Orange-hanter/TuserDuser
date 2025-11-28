@@ -868,13 +868,13 @@ DROP TABLE IF EXISTS event_registrations CASCADE;
 const createRoleRequestsTable = `
 CREATE TABLE IF NOT EXISTS role_requests (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	requested_role VARCHAR(50) NOT NULL,
 	reason TEXT NOT NULL,
 	status VARCHAR(50) DEFAULT 'pending',
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+	reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
 	reviewed_at TIMESTAMP,
 	review_notes TEXT,
 	UNIQUE(user_id, requested_role)
