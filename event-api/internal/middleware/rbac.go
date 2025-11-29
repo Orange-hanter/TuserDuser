@@ -33,7 +33,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 			}
 
 			if !hasRole {
-				logger.Log.Warn("User lacks required role",
+				logger.Log.Info("User lacks required role",
 					zap.String("user_role", userRole),
 					zap.Strings("required_roles", roles),
 				)
