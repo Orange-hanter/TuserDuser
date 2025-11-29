@@ -893,117 +893,132 @@ DROP TABLE IF EXISTS role_requests CASCADE;
 `
 
 // migrateUserIdToUUID конвертирует users.id и все связанные колонки из TEXT в UUID.
-// Предполагается, что все ID уже являются валидными 32-символьными hex строками.
+// Миграция идемпотентна — безопасна для повторного применения.
 const migrateUserIdToUUID = `
--- Шаг 1: Удаляем ВСЕ FK перед изменениями
-ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
-ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS idx_event_registrations_unique;
-ALTER TABLE event_subscriptions DROP CONSTRAINT IF EXISTS event_subscriptions_user_id_fkey;
-ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_user_id_fkey;
-ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_reviewed_by_fkey;
+DO $$
+DECLARE
+    users_id_type text;
+BEGIN
+    -- Проверяем текущий тип колонки users.id
+    SELECT data_type INTO users_id_type
+    FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'id';
 
--- Шаг 2: Конвертируем 32-символьные hex ID в формат UUID с дефисами
-UPDATE users SET id =
-    SUBSTRING(id::text, 1, 8) || '-' ||
-    SUBSTRING(id::text, 9, 4) || '-' ||
-    SUBSTRING(id::text, 13, 4) || '-' ||
-    SUBSTRING(id::text, 17, 4) || '-' ||
-    SUBSTRING(id::text, 21, 12)
-WHERE LENGTH(id::text) = 32 AND id::text !~ '-';
+    -- Если уже UUID — ничего не делаем
+    IF users_id_type = 'uuid' THEN
+        RAISE NOTICE 'users.id is already UUID, skipping migration';
+        RETURN;
+    END IF;
 
--- Аналогично для всех связанных таблиц
-UPDATE event_registrations SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    -- Шаг 1: Удаляем ВСЕ FK перед изменениями
+    ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+    ALTER TABLE event_subscriptions DROP CONSTRAINT IF EXISTS event_subscriptions_user_id_fkey;
+    ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_user_id_fkey;
+    ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_reviewed_by_fkey;
 
-UPDATE event_subscriptions SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    -- Шаг 2: Конвертируем 32-символьные hex ID в формат UUID с дефисами
+    UPDATE users SET id =
+        SUBSTRING(id::text, 1, 8) || '-' ||
+        SUBSTRING(id::text, 9, 4) || '-' ||
+        SUBSTRING(id::text, 13, 4) || '-' ||
+        SUBSTRING(id::text, 17, 4) || '-' ||
+        SUBSTRING(id::text, 21, 12)
+    WHERE LENGTH(id::text) = 32 AND id::text !~ '-';
 
-UPDATE telegram_bindings SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    UPDATE event_registrations SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
-UPDATE telegram_binding_tokens SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    UPDATE event_subscriptions SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
-UPDATE telegram_delivery SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    UPDATE telegram_bindings SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
-UPDATE role_requests SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    UPDATE telegram_binding_tokens SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
-UPDATE role_requests SET reviewed_by =
-    SUBSTRING(reviewed_by::text, 1, 8) || '-' ||
-    SUBSTRING(reviewed_by::text, 9, 4) || '-' ||
-    SUBSTRING(reviewed_by::text, 13, 4) || '-' ||
-    SUBSTRING(reviewed_by::text, 17, 4) || '-' ||
-    SUBSTRING(reviewed_by::text, 21, 12)
-WHERE reviewed_by IS NOT NULL AND LENGTH(reviewed_by::text) = 32 AND reviewed_by::text !~ '-';
+    UPDATE telegram_delivery SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
-UPDATE discovery_actions SET user_id =
-    SUBSTRING(user_id::text, 1, 8) || '-' ||
-    SUBSTRING(user_id::text, 9, 4) || '-' ||
-    SUBSTRING(user_id::text, 13, 4) || '-' ||
-    SUBSTRING(user_id::text, 17, 4) || '-' ||
-    SUBSTRING(user_id::text, 21, 12)
-WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
+    UPDATE role_requests SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
--- Шаг 3: Меняем тип колонок на UUID
-ALTER TABLE users ALTER COLUMN id TYPE UUID USING id::uuid;
+    UPDATE role_requests SET reviewed_by =
+        SUBSTRING(reviewed_by::text, 1, 8) || '-' ||
+        SUBSTRING(reviewed_by::text, 9, 4) || '-' ||
+        SUBSTRING(reviewed_by::text, 13, 4) || '-' ||
+        SUBSTRING(reviewed_by::text, 17, 4) || '-' ||
+        SUBSTRING(reviewed_by::text, 21, 12)
+    WHERE reviewed_by IS NOT NULL AND LENGTH(reviewed_by::text) = 32 AND reviewed_by::text !~ '-';
 
-ALTER TABLE event_registrations ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
-ALTER TABLE event_subscriptions ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
-ALTER TABLE telegram_bindings ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
-ALTER TABLE telegram_binding_tokens ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
-ALTER TABLE telegram_delivery ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
-ALTER TABLE role_requests ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
-ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE UUID USING reviewed_by::uuid;
-ALTER TABLE discovery_actions ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    UPDATE discovery_actions SET user_id =
+        SUBSTRING(user_id::text, 1, 8) || '-' ||
+        SUBSTRING(user_id::text, 9, 4) || '-' ||
+        SUBSTRING(user_id::text, 13, 4) || '-' ||
+        SUBSTRING(user_id::text, 17, 4) || '-' ||
+        SUBSTRING(user_id::text, 21, 12)
+    WHERE LENGTH(user_id::text) = 32 AND user_id::text !~ '-';
 
--- Шаг 4: Восстанавливаем FK
-ALTER TABLE event_registrations
-    ADD CONSTRAINT event_registrations_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    -- Шаг 3: Меняем тип колонок на UUID
+    ALTER TABLE users ALTER COLUMN id TYPE UUID USING id::uuid;
+    ALTER TABLE event_registrations ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    ALTER TABLE event_subscriptions ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    ALTER TABLE telegram_bindings ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    ALTER TABLE telegram_binding_tokens ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    ALTER TABLE telegram_delivery ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    ALTER TABLE role_requests ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
+    ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE UUID USING reviewed_by::uuid;
+    ALTER TABLE discovery_actions ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
 
-ALTER TABLE event_subscriptions
-    ADD CONSTRAINT event_subscriptions_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    -- Шаг 4: Восстанавливаем FK
+    ALTER TABLE event_registrations
+        ADD CONSTRAINT event_registrations_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE role_requests
-    ADD CONSTRAINT role_requests_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE event_subscriptions
+        ADD CONSTRAINT event_subscriptions_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE role_requests
-    ADD CONSTRAINT role_requests_reviewed_by_fkey
-    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE role_requests
+        ADD CONSTRAINT role_requests_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+    ALTER TABLE role_requests
+        ADD CONSTRAINT role_requests_reviewed_by_fkey
+        FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL;
+
+    RAISE NOTICE 'Migration completed: users.id converted to UUID';
+END $$;
 `
 
 // revertUserIdToText откатывает миграцию UUID обратно в TEXT (не рекомендуется).
