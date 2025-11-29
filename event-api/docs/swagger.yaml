@@ -340,6 +340,22 @@ definitions:
       token:
         type: string
     type: object
+  models.Participant:
+    properties:
+      avatar_url:
+        example: https://example.com/avatar.jpg
+        type: string
+      public_name:
+        example: Иван Петров
+        type: string
+      status:
+        description: '"confirmed", "waitlisted", "cancelled"'
+        example: confirmed
+        type: string
+      user_id:
+        example: 941b955e-ea57-dee3-565f-5684f81c4f14
+        type: string
+    type: object
   models.PendingEvent:
     properties:
       details:
@@ -410,6 +426,91 @@ definitions:
         type: string
     required:
     - action
+    type: object
+  models.RoleRequest:
+    properties:
+      reason:
+        maxLength: 500
+        minLength: 10
+        type: string
+      role:
+        enum:
+        - creator
+        - support
+        type: string
+    required:
+    - reason
+    - role
+    type: object
+  models.RoleRequestApprovalRequest:
+    properties:
+      notes:
+        maxLength: 500
+        type: string
+      request_id:
+        type: string
+    required:
+    - request_id
+    type: object
+  models.RoleRequestRejectionRequest:
+    properties:
+      reason:
+        maxLength: 500
+        minLength: 10
+        type: string
+      request_id:
+        type: string
+    required:
+    - reason
+    - request_id
+    type: object
+  models.RoleRequestResponse:
+    properties:
+      message:
+        type: string
+      status:
+        description: '"pending", "approved", "rejected"'
+        type: string
+    type: object
+  models.RoleRequestStatus:
+    properties:
+      created_at:
+        example: "2025-11-20T15:30:00Z"
+        type: string
+      id:
+        example: req_123
+        type: string
+      reason:
+        example: Хочу создавать события
+        type: string
+      requested_role:
+        example: creator
+        type: string
+      review_notes:
+        example: Approved
+        type: string
+      reviewed_at:
+        example: "2025-11-21T10:30:00Z"
+        type: string
+      reviewed_by:
+        example: admin_user_id
+        type: string
+      status:
+        description: '"pending", "approved", "rejected"'
+        example: pending
+        type: string
+      updated_at:
+        example: "2025-11-21T10:30:00Z"
+        type: string
+    type: object
+  models.RoleRequestsListResponse:
+    properties:
+      requests:
+        items:
+          $ref: '#/definitions/models.RoleRequestStatus'
+        type: array
+      total:
+        type: integer
     type: object
   models.SubscribeRequest:
     properties:
@@ -483,6 +584,9 @@ definitions:
       name:
         example: Иван Петров
         type: string
+      phone:
+        example: "+1234567890"
+        type: string
       telegram_info:
         $ref: '#/definitions/models.TelegramInfo'
       telegram_registered:
@@ -513,6 +617,175 @@ info:
   title: Event API
   version: "1.0"
 paths:
+  /api/admin/role-requests/{requestId}/approve:
+    post:
+      consumes:
+      - application/json
+      description: Approve a pending role request (admin only).
+      parameters:
+      - description: Approval request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RoleRequestApprovalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message and status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Approve role request
+      tags:
+      - admin
+  /api/admin/role-requests/{requestId}/reject:
+    post:
+      consumes:
+      - application/json
+      description: Reject a pending role request (admin only).
+      parameters:
+      - description: Rejection request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RoleRequestRejectionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message and status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reject role request
+      tags:
+      - admin
+  /api/admin/role-requests/pending:
+    get:
+      consumes:
+      - application/json
+      description: Get all pending role requests (admin only).
+      parameters:
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoleRequestsListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get pending role requests
+      tags:
+      - admin
+  /api/events/{event_id}/participants:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of confirmed participants for a specific event.
+      parameters:
+      - description: Event ID
+        in: path
+        name: event_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Participant'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get event participants
+      tags:
+      - events
   /api/users/me:
     get:
       consumes:
@@ -659,6 +932,108 @@ paths:
       summary: Get upcoming events
       tags:
       - users
+  /api/users/request-role:
+    post:
+      consumes:
+      - application/json
+      description: User requests a role upgrade (creator, support, etc.) with a reason.
+      parameters:
+      - description: Role request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoleRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Request role upgrade
+      tags:
+      - users
+  /api/users/request-role/all:
+    get:
+      consumes:
+      - application/json
+      description: Get all role requests for the current user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RoleRequestStatus'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all role requests
+      tags:
+      - users
+  /api/users/request-role/status:
+    get:
+      consumes:
+      - application/json
+      description: Get the status of a specific role request.
+      parameters:
+      - description: Role
+        in: query
+        name: role
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RoleRequestStatus'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get role request status
+      tags:
+      - users
   /health:
     get:
       description: Возвращает статус OK если сервис работает
@@ -717,6 +1092,42 @@ paths:
       security:
       - BearerAuth: []
       summary: Заблокировать событие
+      tags:
+      - admin
+  /v1/api/admin/events/{eventId}/comments:
+    get:
+      description: Возвращает историю комментариев модерации для указанного события
+        без проверки владельца
+      parameters:
+      - description: ID события
+        in: path
+        name: eventId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ReviewComment'
+            type: array
+        "401":
+          description: Нет авторизации
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Событие не найдено
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получить комментарии к событию (админ)
       tags:
       - admin
   /v1/api/admin/events/{eventId}/request-revision:

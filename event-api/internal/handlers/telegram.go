@@ -55,6 +55,18 @@ func (h *TelegramHandler) IssueLink(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, link)
 }
 
+// @Summary Issue Telegram binding deep link
+// @Description Issues a short-lived deep-link token that the client app can open to bind a Telegram chat to the current user. Requires authentication (X-User-ID / Bearer token via middleware).
+// @Tags notifications, telegram
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} telegram.BindingLink "Returns the token and deeplink"
+// @Failure 401 {object} map[string]interface{} "Unauthorized or missing user id"
+// @Failure 404 {object} map[string]interface{} "Telegram integration disabled"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /v1/api/notifications/telegram/link [post]
+
 // BindingStatus returns binding info for authenticated user.
 func (h *TelegramHandler) BindingStatus(w http.ResponseWriter, r *http.Request) {
 	if !h.settings.Enabled {
@@ -84,6 +96,17 @@ func (h *TelegramHandler) BindingStatus(w http.ResponseWriter, r *http.Request) 
 	}
 	respondWithJSON(w, http.StatusOK, resp)
 }
+
+// @Summary Get Telegram binding status
+// @Description Returns the current Telegram binding status for the authenticated user (status, chat_id, username, updated_at).
+// @Tags notifications, telegram
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]interface{} "status, chat_id, username, updated_at"
+// @Failure 401 {object} map[string]interface{} "Unauthorized or missing user id"
+// @Failure 404 {object} map[string]interface{} "Telegram not bound or integration disabled"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /v1/api/notifications/telegram/status [get]
 
 // Webhook handles Telegram webhook callbacks.
 func (h *TelegramHandler) Webhook(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +148,18 @@ func (h *TelegramHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
+
+// @Summary Telegram webhook endpoint
+// @Description Receives updates from Telegram Bot API for the configured bot alias. Validates optional secret header `X-Telegram-Bot-Api-Secret-Token` when configured. Persists raw payload for auditing and triggers handling of `/start`, `/unsubscribe`, `/status` commands.
+// @Tags webhooks, telegram
+// @Accept json
+// @Produce json
+// @Param botAlias path string true "Bot alias (path segment)"
+// @Param X-Telegram-Bot-Api-Secret-Token header string false "Secret token for webhook verification"
+// @Success 200 {string} string "ok"
+// @Failure 400 {object} map[string]interface{} "Bad request / invalid payload"
+// @Failure 403 {object} map[string]interface{} "Invalid secret token"
+// @Router /webhooks/telegram/{botAlias} [post]
 
 func (h *TelegramHandler) handleMessage(ctx context.Context, msg *telegramMessage) {
 	text := strings.TrimSpace(msg.Text)

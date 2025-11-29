@@ -79,7 +79,7 @@ func (h *AdminRoleRequestHandler) GetPendingRoleRequests(w http.ResponseWriter, 
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.RoleRequestApprovalRequest true "Approval request"
-// @Success 200 {object} models.SuccessResponse
+// @Success 200 {object} map[string]string "message and status"
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 401 {object} models.ErrorResponse
 // @Failure 403 {object} models.ErrorResponse
@@ -129,7 +129,7 @@ func (h *AdminRoleRequestHandler) ApproveRoleRequest(w http.ResponseWriter, r *h
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.RoleRequestRejectionRequest true "Rejection request"
-// @Success 200 {object} models.SuccessResponse
+// @Success 200 {object} map[string]string "message and status"
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 401 {object} models.ErrorResponse
 // @Failure 403 {object} models.ErrorResponse
