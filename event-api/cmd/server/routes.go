@@ -9,6 +9,7 @@ import (
 	"event-api/internal/logger"
 	"event-api/internal/middleware"
 	"event-api/internal/service"
+	"event-api/internal/telemetry"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/cors"
@@ -33,6 +34,7 @@ func buildHTTPHandler(
 
 	// Global middleware
 	r.Use(middleware.SecurityHeaders)
+	r.Use(telemetry.HTTPMiddleware) // OpenTelemetry tracing
 
 	// Health & diagnostics
 	r.Get("/health", handlers.HealthCheck)

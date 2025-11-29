@@ -1,55 +1,216 @@
 {
   "dashboard": {
+    "id": null,
+    "uid": "event-api-logs",
     "title": "Event API - Logs",
-    "tags": ["event-api", "logs"],
+    "description": "Centralized logging dashboard with Tempo trace correlation",
+    "tags": ["event-api", "logs", "loki"],
     "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "loki_datasource",
+          "type": "datasource",
+          "query": "loki",
+          "current": {
+            "selected": true,
+            "text": "Loki",
+            "value": "Loki"
+          }
+        },
+        {
+          "name": "level",
+          "type": "custom",
+          "query": "debug,info,warn,error",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
     "panels": [
       {
-        "title": "Application Logs",
+        "id": 1,
+        "title": "Log Volume by Level",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+        "datasource": { "type": "loki", "uid": "loki" },
         "targets": [
           {
-            "expr": "{job=\"event-api\"}",
-            "refId": "A"
+            "expr": "sum by (level) (count_over_time({job=\"event-api\"} | json | level != \"\" [$__interval]))",
+            "legendFormat": "{{level}}"
           }
         ],
-        "type": "logs",
-        "gridPos": {
-          "h": 12,
-          "w": 24,
-          "x": 0,
-          "y": 0
+        "options": {
+          "legend": { "displayMode": "list", "placement": "right" }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars",
+              "stacking": { "mode": "normal" },
+              "fillOpacity": 80
+            }
+          },
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "debug" },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "blue", "mode": "fixed" }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "info" },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "green", "mode": "fixed" }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "warn" },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "yellow", "mode": "fixed" }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "error" },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "red", "mode": "fixed" }
+                }
+              ]
+            }
+          ]
         }
       },
       {
+        "id": 2,
+        "title": "Application Logs (click trace_id to view trace)",
+        "type": "logs",
+        "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
+        "datasource": { "type": "loki", "uid": "loki" },
+        "targets": [
+          {
+            "expr": "{job=\"event-api\"} | json",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "prettifyLogMessage": true,
+          "enableLogDetails": true,
+          "dedupStrategy": "none",
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 3,
         "title": "Error Logs",
+        "type": "logs",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
+        "datasource": { "type": "loki", "uid": "loki" },
         "targets": [
           {
-            "expr": "{job=\"event-api\"} |= \"error\" or |= \"ERROR\"",
+            "expr": "{job=\"event-api\"} | json | level = \"error\"",
             "refId": "A"
           }
         ],
-        "type": "logs",
-        "gridPos": {
-          "h": 12,
-          "w": 24,
-          "x": 0,
-          "y": 12
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "wrapLogMessage": true,
+          "prettifyLogMessage": true,
+          "enableLogDetails": true,
+          "sortOrder": "Descending"
         }
       },
       {
-        "title": "System Logs",
+        "id": 4,
+        "title": "Logs with Trace ID (for correlation)",
+        "type": "logs",
+        "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
+        "datasource": { "type": "loki", "uid": "loki" },
         "targets": [
           {
-            "expr": "{job=\"system\"}",
+            "expr": "{job=\"event-api\"} | json | trace_id != \"\"",
             "refId": "A"
           }
         ],
-        "type": "logs",
-        "gridPos": {
-          "h": 12,
-          "w": 24,
-          "x": 0,
-          "y": 24
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "wrapLogMessage": true,
+          "enableLogDetails": true,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Top Error Messages",
+        "type": "table",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 38 },
+        "datasource": { "type": "loki", "uid": "loki" },
+        "targets": [
+          {
+            "expr": "topk(10, sum by (msg) (count_over_time({job=\"event-api\"} | json | level = \"error\" [1h])))",
+            "legendFormat": "{{msg}}",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "sortBy",
+            "options": { "sort": [{ "field": "Value", "desc": true }] }
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Log Rate Over Time",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 38 },
+        "datasource": { "type": "loki", "uid": "loki" },
+        "targets": [
+          {
+            "expr": "sum(rate({job=\"event-api\"}[1m]))",
+            "legendFormat": "Logs/sec"
+          }
+        ],
+        "options": {
+          "legend": { "displayMode": "list", "placement": "bottom" }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20
+            },
+            "unit": "logs/s"
+          }
         }
       }
     ]

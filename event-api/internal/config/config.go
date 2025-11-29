@@ -77,6 +77,11 @@ type Config struct {
 	// Discovery Redis config
 	DiscoveryHistoryTTL int
 	DiscoveryQueueTTL   int
+
+	// OpenTelemetry config
+	OTelEnabled     bool
+	OTelEndpoint    string
+	OTelServiceName string
 }
 
 // Load загружает конфигурацию из переменных окружения.
@@ -149,6 +154,11 @@ func Load() *Config {
 		// Discovery Redis TTL config (in seconds)
 		DiscoveryHistoryTTL: getEnvAsInt("DISCOVERY_HISTORY_TTL", 7*24*3600), // 7 days
 		DiscoveryQueueTTL:   getEnvAsInt("DISCOVERY_QUEUE_TTL", 30*24*3600),  // 30 days
+
+		// OpenTelemetry config
+		OTelEnabled:     getEnvAsBool("OTEL_ENABLED", true),
+		OTelEndpoint:    getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
+		OTelServiceName: getEnv("OTEL_SERVICE_NAME", "event-api"),
 	}
 }
 

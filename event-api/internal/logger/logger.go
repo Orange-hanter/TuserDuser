@@ -2,10 +2,12 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -92,6 +94,44 @@ func GetLogger() *zap.Logger {
 		Init()
 	}
 	return Log
+}
+
+// WithContext returns a logger with trace_id and span_id from the context.
+// This enables log correlation with traces in Grafana.
+func WithContext(ctx context.Context) *zap.Logger {
+	if Log == nil {
+		Init()
+	}
+
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().IsValid() {
+		return Log
+	}
+
+	return Log.With(
+		zap.String("trace_id", span.SpanContext().TraceID().String()),
+		zap.String("span_id", span.SpanContext().SpanID().String()),
+	)
+}
+
+// InfoCtx logs an info message with trace context.
+func InfoCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	WithContext(ctx).Info(msg, fields...)
+}
+
+// ErrorCtx logs an error message with trace context.
+func ErrorCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	WithContext(ctx).Error(msg, fields...)
+}
+
+// WarnCtx logs a warning message with trace context.
+func WarnCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	WithContext(ctx).Warn(msg, fields...)
+}
+
+// DebugCtx logs a debug message with trace context.
+func DebugCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	WithContext(ctx).Debug(msg, fields...)
 }
 
 // FormatError форматирует ошибку с красивым выводом.

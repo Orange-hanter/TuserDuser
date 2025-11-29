@@ -14,6 +14,7 @@ import (
 	"event-api/internal/service"
 	"event-api/internal/sms"
 	"event-api/internal/telegram"
+	"event-api/internal/telemetry"
 	"event-api/internal/worker"
 	"time"
 
@@ -57,12 +58,20 @@ type AppContainer struct {
 	// HTTP components
 	HTTPServer *http.Server
 	HTTPRouter http.Handler
+
+	// Telemetry
+	Telemetry *telemetry.Provider
 }
 
 // NewAppContainer initializes and returns a fully configured AppContainer.
 func NewAppContainer(ctx context.Context, cfg *config.Config) (*AppContainer, error) {
 	container := &AppContainer{
 		Config: cfg,
+	}
+
+	// Initialize telemetry (OpenTelemetry)
+	if err := container.initTelemetry(ctx); err != nil {
+		logger.Log.Warn("Telemetry initialization failed, continuing without it", zap.Error(err))
 	}
 
 	// Initialize infrastructure
@@ -232,6 +241,13 @@ func (c *AppContainer) CreateHTTPServer(handler http.Handler) {
 
 // Close gracefully closes all resources in the container.
 func (c *AppContainer) Close() error {
+	// Shutdown telemetry first
+	if c.Telemetry != nil {
+		if err := c.Telemetry.Shutdown(context.Background()); err != nil {
+			logger.Log.Error("failed to shutdown telemetry", zap.Error(err))
+		}
+	}
+
 	if c.WorkerPool != nil {
 		c.WorkerPool.Shutdown()
 	}
@@ -247,6 +263,31 @@ func (c *AppContainer) Close() error {
 			logger.Log.Error("failed to close database", zap.Error(err))
 		}
 	}
+
+	return nil
+}
+
+// initTelemetry initializes OpenTelemetry tracing.
+func (c *AppContainer) initTelemetry(ctx context.Context) error {
+	cfg := telemetry.Config{
+		ServiceName:    c.Config.OTelServiceName,
+		ServiceVersion: "1.0.0",
+		Environment:    c.Config.Env,
+		OTLPEndpoint:   c.Config.OTelEndpoint,
+		Enabled:        c.Config.OTelEnabled,
+	}
+
+	provider, err := telemetry.Init(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	c.Telemetry = provider
+	logger.Log.Info("✅ OpenTelemetry initialized",
+		zap.Bool("enabled", cfg.Enabled),
+		zap.String("endpoint", cfg.OTLPEndpoint),
+		zap.String("service", cfg.ServiceName),
+	)
 
 	return nil
 }

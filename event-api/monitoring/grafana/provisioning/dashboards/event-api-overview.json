@@ -1,0 +1,403 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "event-api-overview",
+    "title": "Event API - Overview",
+    "description": "Main dashboard for Event API service monitoring",
+    "tags": ["event-api", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "selected": true,
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Status",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "up{job=\"event-api\"}",
+            "legendFormat": "Status"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "justifyMode": "center",
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "type": "value",
+                "options": { "0": { "text": "DOWN", "color": "red" } }
+              },
+              {
+                "type": "value",
+                "options": { "1": { "text": "UP", "color": "green" } }
+              }
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "green", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate (RPS)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"event-api\"}[1m]))",
+            "legendFormat": "RPS"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "center"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{ "color": "green", "value": null }]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"event-api\",http_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{job=\"event-api\"}[5m])) * 100",
+            "legendFormat": "Error Rate"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 5 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Avg Response Time (p95)",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"event-api\"}[5m])) by (le))",
+            "legendFormat": "p95 Latency"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.5 },
+                { "color": "red", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "HTTP Requests by Endpoint",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"event-api\"}[1m]))",
+            "legendFormat": "{{http_route}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "calcs": ["mean", "max"]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20,
+              "pointSize": 5,
+              "stacking": { "mode": "none" }
+            },
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Response Time by Endpoint (p95)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum by (http_route, le) (rate(http_server_request_duration_seconds_bucket{job=\"event-api\"}[5m])))",
+            "legendFormat": "{{http_route}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "calcs": ["mean", "max"]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10
+            },
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "HTTP Status Codes",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum by (http_status_code) (rate(http_server_request_duration_seconds_count{job=\"event-api\"}[1m]))",
+            "legendFormat": "{{http_status_code}}"
+          }
+        ],
+        "options": {
+          "legend": { "displayMode": "list", "placement": "bottom" }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars",
+              "stacking": { "mode": "normal" },
+              "fillOpacity": 80
+            },
+            "unit": "reqps"
+          },
+          "overrides": [
+            {
+              "matcher": { "id": "byRegexp", "options": "2.." },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "green", "mode": "fixed" }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byRegexp", "options": "3.." },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "blue", "mode": "fixed" }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byRegexp", "options": "4.." },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "yellow", "mode": "fixed" }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byRegexp", "options": "5.." },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": { "fixedColor": "red", "mode": "fixed" }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 8,
+        "title": "HTTP Methods Distribution",
+        "type": "piechart",
+        "gridPos": { "h": 8, "w": 6, "x": 12, "y": 12 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "sum by (http_method) (increase(http_server_request_duration_seconds_count{job=\"event-api\"}[1h]))",
+            "legendFormat": "{{http_method}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["percent"]
+          },
+          "pieType": "pie"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Active Connections",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 12 },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "targets": [
+          {
+            "expr": "redis_connections_active",
+            "legendFormat": "Redis"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{ "color": "green", "value": null }]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Redis Memory",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "redis_memory_usage_bytes",
+            "legendFormat": "Memory"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 104857600 },
+                { "color": "red", "value": 524288000 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Response Time Heatmap",
+        "type": "heatmap",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "sum by (le) (increase(http_server_request_duration_seconds_bucket{job=\"event-api\"}[$__rate_interval]))",
+            "format": "heatmap",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "options": {
+          "calculate": false,
+          "color": {
+            "scheme": "Spectral",
+            "reverse": true
+          },
+          "yAxis": {
+            "unit": "s"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

@@ -69,18 +69,21 @@ services:
     networks:
       - event_api_network
 
+  # ============================================
+  # MONITORING STACK (OpenTelemetry + Grafana)
+  # ============================================
+
   # Prometheus - Metrics Collection
   prometheus:
     image: prom/prometheus:latest
     container_name: event_api_prometheus
-    restart: unless-stopped
+    restart: always
 
     ports:
       - "9090:9090"
 
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
 
     command:
@@ -91,52 +94,72 @@ services:
       - event_api_network
 
     depends_on:
-      - postgres
-      - redis
+      - otel-collector
 
   # Loki - Log Storage
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:2.9.0
     container_name: event_api_loki
-    restart: unless-stopped
+    restart: always
 
     ports:
       - "3100:3100"
 
     volumes:
-      - ./monitoring/loki-config.yml:/etc/loki/local-config.yml:ro
+      - ./monitoring/loki/loki-config.yml:/etc/loki/config.yml:ro
       - loki_data:/loki
 
-    command: -config.file=/etc/loki/local-config.yml
+    command: -config.file=/etc/loki/config.yml
 
     networks:
       - event_api_network
 
-  # Promtail - Log Collector
-  promtail:
-    image: grafana/promtail:latest
-    container_name: event_api_promtail
-    restart: unless-stopped
+  # Tempo - Distributed Tracing
+  tempo:
+    image: grafana/tempo:latest
+    container_name: event_api_tempo
+    restart: always
+
+    ports:
+      - "3200:3200"
 
     volumes:
-      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/log:/var/log:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
 
-    command: -config.file=/etc/promtail/config.yml
+    command: -config.file=/etc/tempo.yml
+
+    networks:
+      - event_api_network
+
+  # OpenTelemetry Collector - Central Telemetry Hub
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: event_api_otel_collector
+    restart: always
+
+    command: ["--config=/etc/otel-collector.yml"]
+
+    ports:
+      - "4317:4317" # gRPC OTLP
+      - "4318:4318" # HTTP OTLP
+      - "8889:8889" # Prometheus exporter
+
+    volumes:
+      - ./monitoring/otel/otel-collector.yml:/etc/otel-collector.yml:ro
 
     networks:
       - event_api_network
 
     depends_on:
       - loki
+      - tempo
 
   # Grafana - Visualization & Dashboards
   grafana:
     image: grafana/grafana:latest
     container_name: event_api_grafana
-    restart: unless-stopped
+    restart: always
 
     ports:
       - "3000:3000"
@@ -157,6 +180,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
 
 volumes:
   postgres_data:
@@ -164,6 +188,7 @@ volumes:
     driver: local
   prometheus_data:
   loki_data:
+  tempo_data:
   grafana_data:
 
 networks:
