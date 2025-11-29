@@ -698,6 +698,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/metrics": {
+            "get": {
+                "description": "Exposes Prometheus metrics in the text-based OpenMetrics format. Intended for Prometheus scraping.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "monitoring"
+                ],
+                "summary": "Prometheus metrics",
+                "responses": {
+                    "200": {
+                        "description": "Prometheus metrics payload",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/api/admin/events/{eventId}/block": {
             "post": {
                 "security": [

@@ -1047,6 +1047,20 @@ paths:
       summary: Проверка здоровья сервиса
       tags:
       - health
+  /metrics:
+    get:
+      description: Exposes Prometheus metrics in the text-based OpenMetrics format.
+        Intended for Prometheus scraping.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Prometheus metrics payload
+          schema:
+            type: string
+      summary: Prometheus metrics
+      tags:
+      - monitoring
   /v1/api/admin/events/{eventId}/block:
     post:
       consumes:

@@ -39,7 +39,7 @@ func buildHTTPHandler(
 	// Health & diagnostics
 	r.Get("/health", handlers.HealthCheck)
 	r.Get("/version", versionHandler(versionInfo))
-	r.Handle("/metrics", handlers.MetricsHandler)
+	r.Handle("/metrics", http.HandlerFunc(handlers.MetricsEndpoint))
 
 	// Telegram webhooks
 	if telegramHandler != nil {
