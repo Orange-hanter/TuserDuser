@@ -203,6 +203,12 @@ func wrapWithCORS(r chi.Router, cfg *config.Config) http.Handler {
 
 // versionHandler returns an HTTP handler that serves version information.
 func versionHandler(info VersionInfo) http.HandlerFunc {
+	// @Summary Service version
+	// @Description Returns build and runtime version information for the service
+	// @Tags monitoring
+	// @Produce json
+	// @Success 200 {object} VersionInfo
+	// @Router /version [get]
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(info); err != nil {
