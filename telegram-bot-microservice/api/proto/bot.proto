@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package bot;
+
+service TelegramBot {
+    rpc ProcessMessage (MessageRequest) returns (MessageResponse);
+    rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+}
+
+message MessageRequest {
+    string user_id = 1;
+    string text = 2;
+}
+
+message MessageResponse {
+    string response_text = 1;
+}
+
+message SendMessageRequest {
+    string user_id = 1;
+    string text = 2;
+}
+
+message SendMessageResponse {
+    bool success = 1;
+    string error_message = 2;
+}

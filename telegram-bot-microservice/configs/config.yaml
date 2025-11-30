@@ -1,0 +1,18 @@
+database:
+  host: localhost
+  port: 5432
+  user: your_username
+  password: your_password
+  name: telegram_bot_db
+
+telegram:
+  bot_token: your_bot_token
+  webhook_url: https://yourdomain.com/webhook
+
+server:
+  port: 8080
+  grpc_port: 50051
+
+logging:
+  level: info
+  format: json
