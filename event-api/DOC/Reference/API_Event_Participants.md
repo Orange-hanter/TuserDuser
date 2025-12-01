@@ -1,5 +1,7 @@
 # Event Participants API
 
+[← Вернуться к документации](./INDEX.md)
+
 ## Endpoint: GET /api/events/{event_id}/participants
 
 ### Overview

@@ -17,6 +17,7 @@ folder.
 - [Overview](Overview/INDEX.md) — High-level project overview and visual guide; links to architecture and logging notes.
 - [Quickstart](QUICKSTART/INDEX.md) — Hands-on getting-started steps: run the server, example requests, Docker and DB quickstarts, and RBAC quickstart.
 - [Architecture](Architecture/INDEX.md) — System architecture, component responsibilities and the discovery engine design.
+- [Discovery-модуль](DISCOVERY_MODULE.md) — Руководство по работе с модулем персонализированного подбора мероприятий.
 - [CI / CD](CI-CD/INDEX.md) — CI/CD pipeline docs, checklists and GitHub secrets setup for deployments.
 - [Operations](Operations/INDEX.md) — Production runbook: deployment, logging, CORS and Redis operational notes.
 - [Integrations](Integrations/INDEX.md) — Integration guides for Telegram, SMS service and Redis usage.
