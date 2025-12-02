@@ -111,6 +111,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   dropEventRegistrationsConsolidation,
 			down: recreateEventRegistrations,
 		},
+		{
+			name: "015_add_public_profile_fields",
+			up:   addPublicProfileFields,
+			down: dropPublicProfileFields,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -1110,4 +1115,56 @@ CREATE INDEX idx_event_registrations_event_id ON event_registrations(event_id);
 CREATE INDEX idx_event_registrations_user_id ON event_registrations(user_id);
 CREATE INDEX idx_event_registrations_status ON event_registrations(status);
 CREATE INDEX idx_event_registrations_event_status ON event_registrations(event_id, status);
+`
+
+// Migration 015: Add public profile fields to users table
+// Adds fields for public profile display without exposing sensitive data.
+
+const addPublicProfileFields = `
+-- Add public profile fields to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(64) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS country CHAR(2);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS public_social JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_profile_public BOOLEAN DEFAULT TRUE;
+
+-- Index for username lookup (already UNIQUE, but add explicit index for clarity)
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
+-- Index for public profile filtering
+CREATE INDEX IF NOT EXISTS idx_users_is_profile_public ON users(is_profile_public);
+
+-- Index for verified users (for discovery/search features)
+CREATE INDEX IF NOT EXISTS idx_users_is_verified ON users(is_verified);
+
+COMMENT ON COLUMN users.username IS 'Unique public username/handle';
+COMMENT ON COLUMN users.display_name IS 'Public display name shown in profile';
+COMMENT ON COLUMN users.avatar_url IS 'URL to user avatar image';
+COMMENT ON COLUMN users.bio IS 'Short public bio/description';
+COMMENT ON COLUMN users.city IS 'City name for public location display';
+COMMENT ON COLUMN users.country IS 'ISO 3166-1 alpha-2 country code';
+COMMENT ON COLUMN users.is_verified IS 'Whether the user profile is verified';
+COMMENT ON COLUMN users.public_social IS 'JSONB map of public social links (e.g. {"twitter": "https://..."})';
+COMMENT ON COLUMN users.is_profile_public IS 'Whether the profile is publicly visible';
+`
+
+const dropPublicProfileFields = `
+-- Remove public profile fields from users table
+DROP INDEX IF EXISTS idx_users_username;
+DROP INDEX IF EXISTS idx_users_is_profile_public;
+DROP INDEX IF EXISTS idx_users_is_verified;
+
+ALTER TABLE users DROP COLUMN IF EXISTS username;
+ALTER TABLE users DROP COLUMN IF EXISTS display_name;
+ALTER TABLE users DROP COLUMN IF EXISTS avatar_url;
+ALTER TABLE users DROP COLUMN IF EXISTS bio;
+ALTER TABLE users DROP COLUMN IF EXISTS city;
+ALTER TABLE users DROP COLUMN IF EXISTS country;
+ALTER TABLE users DROP COLUMN IF EXISTS is_verified;
+ALTER TABLE users DROP COLUMN IF EXISTS public_social;
+ALTER TABLE users DROP COLUMN IF EXISTS is_profile_public;
 `

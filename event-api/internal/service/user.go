@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 
 	"event-api/internal/discovery"
 	"event-api/internal/models"
+	"event-api/internal/redis"
 
 	"go.uber.org/zap"
 )
@@ -19,6 +22,7 @@ type UserService struct {
 	db        *sql.DB
 	logger    *zap.Logger
 	discovery *discovery.Service
+	redis     *redis.Client
 }
 
 // NewUserService creates a new UserService.
@@ -28,6 +32,158 @@ func NewUserService(db *sql.DB, logger *zap.Logger, discovery *discovery.Service
 		logger:    logger,
 		discovery: discovery,
 	}
+}
+
+// NewUserServiceWithRedis creates a new UserService with Redis caching support.
+func NewUserServiceWithRedis(db *sql.DB, logger *zap.Logger, disc *discovery.Service, redisClient *redis.Client) *UserService {
+	return &UserService{
+		db:        db,
+		logger:    logger,
+		discovery: disc,
+		redis:     redisClient,
+	}
+}
+
+// SetRedisClient sets the Redis client for caching.
+func (s *UserService) SetRedisClient(redisClient *redis.Client) {
+	s.redis = redisClient
+}
+
+// Constants for public profile caching.
+const (
+	publicProfileCacheTTL    = 5 * time.Minute
+	publicProfileCachePrefix = "public_profile:"
+)
+
+// GetPublicProfile retrieves the public profile for a user by ID.
+// Returns only publicly visible information. Supports Redis caching.
+// Returns PublicProfileNotFoundError if user not found or profile is private.
+func (s *UserService) GetPublicProfile(ctx context.Context, userID string) (*models.PublicUserProfile, string, error) {
+	cacheKey := publicProfileCachePrefix + userID
+
+	// Try to get from cache first
+	if s.redis != nil {
+		cached, err := s.redis.Get(ctx, cacheKey)
+		if err == nil && cached != "" {
+			var profile models.PublicUserProfile
+			if err := json.Unmarshal([]byte(cached), &profile); err == nil {
+				// Generate ETag from cached data
+				etag := generateETag([]byte(cached))
+				s.logger.Debug("cache hit for public profile", zap.String("user_id", userID))
+				return &profile, etag, nil
+			}
+		}
+	}
+
+	// Query database for public profile data
+	var profile models.PublicUserProfile
+	var username, displayName, avatarURL, bio, city, country sql.NullString
+	var publicSocialJSON []byte
+	var isProfilePublic bool
+
+	query := `
+		SELECT
+			u.id,
+			u.username,
+			u.display_name,
+			u.avatar_url,
+			u.bio,
+			u.city,
+			u.country,
+			COALESCE(u.is_verified, false) as is_verified,
+			COALESCE(u.public_social, '{}'::jsonb) as public_social,
+			COALESCE(u.is_profile_public, true) as is_profile_public,
+			u.created_at,
+			u.updated_at,
+			(SELECT COUNT(*) FROM events WHERE creator_id = u.id) as public_events_count
+		FROM users u
+		WHERE u.id = $1
+	`
+
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(
+		&profile.ID,
+		&username,
+		&displayName,
+		&avatarURL,
+		&bio,
+		&city,
+		&country,
+		&profile.IsVerified,
+		&publicSocialJSON,
+		&isProfilePublic,
+		&profile.CreatedAt,
+		&profile.UpdatedAt,
+		&profile.PublicEventsCount,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, "", &models.PublicProfileNotFoundError{UserID: userID}
+		}
+		return nil, "", fmt.Errorf("failed to fetch public profile: %w", err)
+	}
+
+	// Check if profile is public - return 404 to not reveal private account existence
+	if !isProfilePublic {
+		return nil, "", &models.PublicProfileNotFoundError{UserID: userID}
+	}
+
+	// Map nullable fields
+	if username.Valid {
+		profile.Username = &username.String
+	}
+	if displayName.Valid && displayName.String != "" {
+		profile.DisplayName = displayName.String
+	} else {
+		// Fallback to "User" if no display name set
+		profile.DisplayName = "User"
+	}
+	if avatarURL.Valid {
+		profile.AvatarURL = &avatarURL.String
+	}
+	if bio.Valid {
+		profile.Bio = &bio.String
+	}
+	if city.Valid {
+		profile.City = &city.String
+	}
+	if country.Valid {
+		profile.Country = &country.String
+	}
+
+	// Parse social links
+	profile.SocialLinks = models.ParseSocialLinks(publicSocialJSON)
+
+	// Cache the profile
+	if s.redis != nil {
+		profileJSON, err := json.Marshal(profile)
+		if err == nil {
+			if err := s.redis.Set(ctx, cacheKey, string(profileJSON), publicProfileCacheTTL); err != nil {
+				s.logger.Warn("failed to cache public profile", zap.Error(err), zap.String("user_id", userID))
+			}
+		}
+	}
+
+	// Generate ETag
+	profileJSON, _ := json.Marshal(profile)
+	etag := generateETag(profileJSON)
+
+	return &profile, etag, nil
+}
+
+// InvalidatePublicProfileCache removes the cached public profile for a user.
+func (s *UserService) InvalidatePublicProfileCache(ctx context.Context, userID string) error {
+	if s.redis == nil {
+		return nil
+	}
+	cacheKey := publicProfileCachePrefix + userID
+	return s.redis.Del(ctx, cacheKey)
+}
+
+// generateETag creates an ETag from content using MD5 hash.
+func generateETag(content []byte) string {
+	hash := md5.Sum(content)
+	return `"` + hex.EncodeToString(hash[:]) + `"`
 }
 
 // GetUserProfile retrieves the full profile for a user, including Telegram binding info.

@@ -100,6 +100,9 @@ func registerPublicEventRoutes(
 	r.Get("/api/events/approved", eventHandler.GetApprovedEvents)
 	r.Get("/api/events/{id}", eventHandler.GetEventByID)
 	r.Get("/api/events/{event_id}/participants", userHandler.GetEventParticipants)
+
+	// Public user profile endpoint - no authentication required
+	r.Get("/api/users/public/{userId}", userHandler.GetPublicProfile)
 }
 
 // registerAuthenticatedUserRoutes registers endpoints for authenticated users.

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"event-api/internal/models"
 	"event-api/internal/service"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // UserHandler handles user-related HTTP requests.
@@ -50,6 +52,63 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(profile)
+}
+
+// GetPublicProfile godoc
+// @Summary Get public user profile
+// @Description Returns public information about a user by their UUID. Does not require authentication.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param userId path string true "User ID (UUID format)" format(uuid)
+// @Success 200 {object} models.PublicUserProfile "Public user profile"
+// @Success 304 "Not Modified - resource unchanged since last request"
+// @Failure 400 {object} models.ErrorResponse "Invalid UUID format"
+// @Failure 404 {object} models.ErrorResponse "User not found or profile is private"
+// @Failure 429 {object} models.ErrorResponse "Rate limit exceeded"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/users/public/{userId} [get]
+func (h *UserHandler) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+
+	// Validate UUID format
+	if _, err := uuid.Parse(userID); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid_request", "userId must be a valid UUID")
+		return
+	}
+
+	// Get public profile from service
+	profile, etag, err := h.userService.GetPublicProfile(r.Context(), userID)
+	if err != nil {
+		// Check if it's a not found error
+		var notFoundErr *models.PublicProfileNotFoundError
+		if errors.As(err, &notFoundErr) {
+			respondWithError(w, http.StatusNotFound, "not_found", "User not found")
+			return
+		}
+		// Log internal error but don't expose details
+		respondWithError(w, http.StatusInternalServerError, "server_error", "Internal server error")
+		return
+	}
+
+	// Check If-None-Match for caching
+	clientETag := r.Header.Get("If-None-Match")
+	if clientETag != "" && strings.TrimSpace(clientETag) == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	// Set caching headers
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=300, s-maxage=600")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Last-Modified", profile.UpdatedAt.UTC().Format(http.TimeFormat))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if err := json.NewEncoder(w).Encode(profile); err != nil {
+		// Can't send error response as headers are already sent
+		return
+	}
 }
 
 // GetUpcomingEvents godoc
