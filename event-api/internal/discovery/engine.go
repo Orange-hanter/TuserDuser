@@ -144,13 +144,10 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 	}
 	state.EnsureConflictRegistry()
 	switch action {
-	case ActionLike:
-		state.DropCurrent()
-		delete(state.ConflictRegistry, eventID)
 	case ActionDislike:
 		state.DropCurrent()
 		delete(state.ConflictRegistry, eventID)
-	case ActionNeutral:
+	case ActionLike, ActionNeutral:
 		conflict := state.CurrentIsConflict
 		if !conflict {
 			if flag, ok := state.ConflictFlagFor(eventID); ok && flag.Active {
