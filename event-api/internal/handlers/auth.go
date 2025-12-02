@@ -63,6 +63,7 @@ type AuthService interface {
 	GetUserByID(userID string) (*models.User, error)
 	UpdateUserRole(userID, role string) error
 	GetAllUsers() ([]*models.User, error)
+	CheckUserExists(email, phone string) (emailExists, phoneExists bool, err error)
 }
 
 // AuthHandler управляет всеми auth endpoints.
@@ -199,6 +200,64 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		"user":        user,
 		"verify_code": verifyCode, // В development режиме возвращаем код для тестирования
 	})
+}
+
+// CheckUserExists проверяет существование пользователя по email и/или телефону
+//
+// @Summary Проверка существования пользователя
+// @Description Проверяет, существует ли пользователь с указанным email и/или телефоном. Используется на этапе регистрации для предотвращения дублирования.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body models.CheckUserExistsRequest true "Email и/или телефон для проверки"
+// @Success 200 {object} models.CheckUserExistsResponse "Результат проверки"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Router /v1/api/auth/check-user [post]
+func (h *AuthHandler) CheckUserExists(w http.ResponseWriter, r *http.Request) {
+	var req models.CheckUserExistsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге CheckUserExistsRequest", zap.Error(err))
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
+		return
+	}
+
+	// Валидация: должен быть указан хотя бы email или phone
+	if req.Email == "" && req.Phone == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Необходимо указать email или телефон")
+		return
+	}
+
+	// Игнорируем "0" в телефоне (маркер отсутствия номера)
+	phone := req.Phone
+	if phone == "0" {
+		phone = ""
+	}
+
+	emailExists, phoneExists, err := h.authService.CheckUserExists(req.Email, phone)
+	if err != nil {
+		logger.Log.Error("Ошибка при проверке существования пользователя", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Не удалось проверить существование пользователя")
+		return
+	}
+
+	response := models.CheckUserExistsResponse{
+		Exists: emailExists || phoneExists,
+	}
+
+	if emailExists && phoneExists {
+		response.ConflictType = "both"
+		response.Message = "Пользователь с таким email и телефоном уже существует"
+	} else if emailExists {
+		response.ConflictType = "email"
+		response.Message = "Пользователь с таким email уже существует"
+	} else if phoneExists {
+		response.ConflictType = "phone"
+		response.Message = "Пользователь с таким телефоном уже существует"
+	} else {
+		response.Message = "Пользователь не найден"
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
 }
 
 // Verify проверяет код верификации

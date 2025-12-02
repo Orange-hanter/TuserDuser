@@ -458,6 +458,40 @@ func (s *AuthService) GetAllUsers() ([]*models.User, error) {
 	return users, nil
 }
 
+// CheckUserExists проверяет существование пользователя по email и/или телефону.
+// Возвращает emailExists=true если найден пользователь с таким email,
+// phoneExists=true если найден пользователь с таким телефоном (игнорируя "0").
+func (s *AuthService) CheckUserExists(email, phone string) (emailExists, phoneExists bool, err error) {
+	ctx := context.Background()
+
+	// Проверка email
+	if email != "" {
+		normalizedEmail := normalizeEmail(email)
+		var existingUserID string
+		err := s.db.QueryRowContext(ctx, "SELECT id FROM users WHERE email = $1", normalizedEmail).Scan(&existingUserID)
+		if err == nil {
+			emailExists = true
+		} else if err != sql.ErrNoRows {
+			s.logger.Error("Ошибка при проверке существования email", zap.Error(err))
+			return false, false, fmt.Errorf("ошибка при проверке email: %w", err)
+		}
+	}
+
+	// Проверка телефона (игнорируем "0" и пустые строки)
+	if phone != "" && phone != "0" {
+		var existingUserID string
+		err := s.db.QueryRowContext(ctx, "SELECT id FROM users WHERE phone = $1", phone).Scan(&existingUserID)
+		if err == nil {
+			phoneExists = true
+		} else if err != sql.ErrNoRows {
+			s.logger.Error("Ошибка при проверке существования телефона", zap.Error(err))
+			return false, false, fmt.Errorf("ошибка при проверке телефона: %w", err)
+		}
+	}
+
+	return emailExists, phoneExists, nil
+}
+
 // GenerateJWT генерирует JWT токен.
 func (s *AuthService) GenerateJWT(user *models.User) (string, time.Time, error) {
 	expiresAt := time.Now().Add(time.Duration(s.cfg.JWTExpiration) * time.Second)

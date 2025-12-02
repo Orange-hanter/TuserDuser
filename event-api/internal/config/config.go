@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -100,8 +101,8 @@ func Load() *Config {
 		Env:                getEnv("ENV", "development"),
 		CORSAllowedOrigins: origins,
 		JWTSecret:          getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-		JWTExpiration:      3600,                                // 1 час
-		ShutdownTimeout:    getEnvAsInt("SHUTDOWN_TIMEOUT", 30), // 30 секунд
+		JWTExpiration:      getEnvAsDuration("JWT_EXPIRATION", 24*time.Hour), // по умолчанию 24 часа
+		ShutdownTimeout:    getEnvAsInt("SHUTDOWN_TIMEOUT", 30),              // 30 секунд
 
 		// Database config
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -188,4 +189,18 @@ func getEnvAsBool(key string, fallback bool) bool {
 		}
 	}
 	return fallback
+}
+
+func getEnvAsDuration(key string, fallback time.Duration) int64 {
+	if value := os.Getenv(key); value != "" {
+		// Пробуем распарсить как duration (например, "24h", "720h")
+		if duration, err := time.ParseDuration(value); err == nil {
+			return int64(duration.Seconds())
+		}
+		// Если не получилось, пробуем как число секунд
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return intVal
+		}
+	}
+	return int64(fallback.Seconds())
 }

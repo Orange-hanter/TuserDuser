@@ -3,7 +3,7 @@ package models
 
 import "time"
 
-// Роли пользователей в системе
+// Роли пользователей в системе.
 const (
 	RoleUser    = "user"    // Обычный пользователь - может просматривать события
 	RoleCreator = "creator" // Создатель - может создавать события
@@ -41,6 +41,19 @@ type VerifyRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
+}
+
+// CheckUserExistsRequest - запрос для проверки существования пользователя.
+type CheckUserExistsRequest struct {
+	Email string `json:"email,omitempty"`
+	Phone string `json:"phone,omitempty"`
+}
+
+// CheckUserExistsResponse - ответ на проверку существования пользователя.
+type CheckUserExistsResponse struct {
+	Exists       bool   `json:"exists"`
+	ConflictType string `json:"conflict_type,omitempty"` // "email", "phone", "both"
+	Message      string `json:"message"`
 }
 
 // AuthResponse - ответ с JWT токеном.
