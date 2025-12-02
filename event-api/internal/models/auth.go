@@ -76,6 +76,20 @@ type LogoutRequest struct {
 	Token string `json:"token,omitempty"`
 }
 
+// ResendCodeRequest - запрос для повторной отправки кода верификации.
+type ResendCodeRequest struct {
+	Email            string `json:"email" binding:"required,email"`
+	VerificationType string `json:"verification_type" binding:"required"` // "email", "telegram", "sms"
+}
+
+// ResendCodeResponse - ответ на повторную отправку кода верификации.
+type ResendCodeResponse struct {
+	Message    string `json:"message"`
+	ExpiresIn  int    `json:"expires_in"`            // Время действия кода в секундах
+	VerifyCode string `json:"verify_code,omitempty"` // Только в dev режиме
+	RetryAfter int    `json:"retry_after,omitempty"` // Для rate limit ошибок
+}
+
 // ErrorResponse - стандартный ответ об ошибке.
 type ErrorResponse struct {
 	Error   string `json:"error"`

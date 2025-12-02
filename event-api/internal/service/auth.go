@@ -492,6 +492,140 @@ func (s *AuthService) CheckUserExists(email, phone string) (emailExists, phoneEx
 	return emailExists, phoneExists, nil
 }
 
+// ResendCode повторно генерирует и отправляет код верификации пользователю.
+// Возвращает код (для dev режима), время действия в секундах и ошибку.
+func (s *AuthService) ResendCode(email, verificationType string) (string, int, error) {
+	const (
+		maxAttempts     = 3
+		rateLimitWindow = 60 * time.Second
+		codeExpiryTime  = 5 * 60 // 5 минут в секундах
+	)
+
+	if s.redis == nil {
+		return "", 0, fmt.Errorf("redis клиент не инициализирован")
+	}
+
+	normalizedEmail := normalizeEmail(email)
+	if normalizedEmail == "" {
+		return "", 0, errors.New(errEmailRequired)
+	}
+
+	// Валидация типа верификации
+	if verificationType != "email" && verificationType != "telegram" && verificationType != "sms" {
+		return "", 0, fmt.Errorf("неподдерживаемый тип верификации: %s", verificationType)
+	}
+
+	ctx := context.Background()
+
+	// Проверка существования пользователя и его статуса
+	pending, err := s.loadPendingUser(ctx, normalizedEmail)
+	if err != nil {
+		if err == errPendingUserNotFound {
+			// Проверяем, может пользователь уже верифицирован
+			var verified bool
+			checkErr := s.db.QueryRowContext(ctx, "SELECT verified FROM users WHERE email = $1", normalizedEmail).Scan(&verified)
+			if checkErr == sql.ErrNoRows {
+				return "", 0, fmt.Errorf("пользователь не найден")
+			}
+			if checkErr != nil {
+				return "", 0, fmt.Errorf("ошибка при проверке пользователя: %w", checkErr)
+			}
+			if verified {
+				return "", 0, fmt.Errorf("пользователь уже верифицирован")
+			}
+			return "", 0, fmt.Errorf("пользователь не найден или уже верифицирован")
+		}
+		return "", 0, fmt.Errorf("ошибка при проверке статуса регистрации: %w", err)
+	}
+
+	// Rate limiting: проверяем количество попыток
+	rateLimitKey := fmt.Sprintf("resend_rate:%s", normalizedEmail)
+	attempts, err := s.redis.Get(ctx, rateLimitKey)
+	if err == nil {
+		// Ключ существует, проверяем количество попыток
+		var count int
+		if _, parseErr := fmt.Sscanf(attempts, "%d", &count); parseErr == nil && count >= maxAttempts {
+			ttl, _ := s.redis.TTL(ctx, rateLimitKey)
+			retryAfter := int(ttl.Seconds())
+			if retryAfter <= 0 {
+				retryAfter = 60
+			}
+			return "", 0, fmt.Errorf("превышен лимит запросов. Повторите через %d секунд", retryAfter)
+		}
+	}
+
+	// Генерируем новый код верификации
+	code, err := generateVerificationCode()
+	if err != nil {
+		return "", 0, fmt.Errorf("не удалось сгенерировать код верификации: %w", err)
+	}
+
+	// Обновляем код в pending user
+	pending.VerificationCode = code
+	pending.OriginalUpdatedAt = time.Now()
+
+	// Сохраняем обновленные данные
+	if err := s.savePendingUser(ctx, pending); err != nil {
+		return "", 0, fmt.Errorf("не удалось сохранить новый код: %w", err)
+	}
+
+	// Увеличиваем счетчик попыток
+	if attempts == "" {
+		// Первая попытка, создаем счетчик
+		if err := s.redis.Set(ctx, rateLimitKey, "1", rateLimitWindow); err != nil {
+			s.logger.Warn("Не удалось установить rate limit счетчик", zap.Error(err))
+		}
+	} else {
+		// Инкрементируем счетчик
+		var count int
+		fmt.Sscanf(attempts, "%d", &count)
+		count++
+		ttl, _ := s.redis.TTL(ctx, rateLimitKey)
+		if ttl > 0 {
+			if err := s.redis.Set(ctx, rateLimitKey, fmt.Sprintf("%d", count), ttl); err != nil {
+				s.logger.Warn("Не удалось обновить rate limit счетчик", zap.Error(err))
+			}
+		}
+	}
+
+	// Отправляем код через выбранный канал
+	phone := pending.Phone
+	if phone == "" {
+		phone = "0" // Маркер отсутствия номера
+	}
+
+	switch verificationType {
+	case "email":
+		if err := s.workerPool.Submit(func(ctx context.Context) error {
+			return s.sendEmailVerificationCode(ctx, normalizedEmail, code)
+		}); err != nil {
+			s.logger.Error("Не удалось добавить задачу отправки email кода", zap.Error(err))
+			return "", 0, fmt.Errorf("не удалось отправить код верификации")
+		}
+	case "telegram":
+		s.logger.Warn("Отправка кода через Telegram пока не реализована", zap.String("email", normalizedEmail))
+		// TODO: Реализовать отправку через Telegram Bot API
+		return "", 0, fmt.Errorf("отправка через Telegram временно недоступна")
+	case "sms":
+		if phone == "0" || phone == "" {
+			return "", 0, fmt.Errorf("номер телефона не указан")
+		}
+		if err := s.workerPool.Submit(func(ctx context.Context) error {
+			return s.sendSMSVerificationCode(ctx, phone, code)
+		}); err != nil {
+			s.logger.Error("Не удалось добавить задачу отправки SMS кода", zap.Error(err))
+			return "", 0, fmt.Errorf("не удалось отправить код верификации")
+		}
+	}
+
+	s.logger.Info("Код верификации повторно отправлен",
+		zap.String("email", normalizedEmail),
+		zap.String("verification_type", verificationType),
+	)
+
+	return code, codeExpiryTime, nil
+}
+
 // GenerateJWT генерирует JWT токен.
 func (s *AuthService) GenerateJWT(user *models.User) (string, time.Time, error) {
 	expiresAt := time.Now().Add(time.Duration(s.cfg.JWTExpiration) * time.Second)

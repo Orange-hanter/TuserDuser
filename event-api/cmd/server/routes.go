@@ -85,6 +85,7 @@ func registerPublicAuthRoutes(r chi.Router, authHandler *handlers.AuthHandler) {
 	r.Post("/api/auth/check-user", authHandler.CheckUserExists)
 	r.Post("/api/auth/register", authHandler.Register)
 	r.Post("/api/auth/verify", authHandler.Verify)
+	r.Post("/api/auth/resend-code", authHandler.ResendCode)
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
 }
