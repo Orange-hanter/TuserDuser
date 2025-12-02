@@ -106,6 +106,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   migrateUserIdToUUID,
 			down: revertUserIdToText,
 		},
+		{
+			name: "014_drop_event_registrations",
+			up:   dropEventRegistrationsConsolidation,
+			down: recreateEventRegistrations,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -1022,28 +1027,38 @@ END $$;
 `
 
 // revertUserIdToText откатывает миграцию UUID обратно в TEXT (не рекомендуется).
+// Note: event_registrations may not exist if migration 014 was applied.
 const revertUserIdToText = `
--- Удаляем FK
-ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+-- Удаляем FK (IF EXISTS for tables that may be dropped)
+ALTER TABLE IF EXISTS event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
 ALTER TABLE event_subscriptions DROP CONSTRAINT IF EXISTS event_subscriptions_user_id_fkey;
 ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_user_id_fkey;
 ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_reviewed_by_fkey;
 
 -- Меняем типы обратно на TEXT
 ALTER TABLE users ALTER COLUMN id TYPE TEXT USING id::text;
-ALTER TABLE event_registrations ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+-- event_registrations may not exist after migration 014
+DO $$ BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'event_registrations') THEN
+        ALTER TABLE event_registrations ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+    END IF;
+END $$;
 ALTER TABLE event_subscriptions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE telegram_bindings ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE telegram_binding_tokens ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE telegram_delivery ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE role_requests ALTER COLUMN user_id TYPE TEXT USING user_id::text;
-ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE TEXT USING reviewed_by::text;
+ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE TEXT USING user_id::text;
 ALTER TABLE discovery_actions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 
--- Восстанавливаем FK
-ALTER TABLE event_registrations 
-    ADD CONSTRAINT event_registrations_user_id_fkey 
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+-- Восстанавливаем FK (only if table exists)
+DO $$ BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'event_registrations') THEN
+        ALTER TABLE event_registrations 
+            ADD CONSTRAINT event_registrations_user_id_fkey 
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 
 ALTER TABLE event_subscriptions 
     ADD CONSTRAINT event_subscriptions_user_id_fkey 
@@ -1056,4 +1071,43 @@ ALTER TABLE role_requests
 ALTER TABLE role_requests 
     ADD CONSTRAINT role_requests_reviewed_by_fkey 
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL;
+`
+
+// Migration 014: Drop event_registrations table (consolidation to event_subscriptions)
+// The event_registrations table is no longer used after consolidation.
+// All participant data now comes from event_subscriptions + telegram_bindings/users JOINs.
+
+const dropEventRegistrationsConsolidation = `
+-- Drop event_registrations table (consolidated to event_subscriptions)
+-- Remove FK references from other migrations first
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_event_id_fkey;
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+
+DROP INDEX IF EXISTS idx_event_registrations_event_id;
+DROP INDEX IF EXISTS idx_event_registrations_user_id;
+DROP INDEX IF EXISTS idx_event_registrations_status;
+DROP INDEX IF EXISTS idx_event_registrations_event_status;
+
+DROP TABLE IF EXISTS event_registrations CASCADE;
+`
+
+const recreateEventRegistrations = `
+-- Recreate event_registrations table (rollback migration)
+CREATE TABLE IF NOT EXISTS event_registrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    public_name VARCHAR(255) NOT NULL,
+    avatar_url TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
+    registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(event_id, user_id)
+);
+
+CREATE INDEX idx_event_registrations_event_id ON event_registrations(event_id);
+CREATE INDEX idx_event_registrations_user_id ON event_registrations(user_id);
+CREATE INDEX idx_event_registrations_status ON event_registrations(status);
+CREATE INDEX idx_event_registrations_event_status ON event_registrations(event_id, status);
 `

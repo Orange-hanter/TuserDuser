@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 
 // Use localhost for iOS/Web and 10.0.2.2 for Android Emulator
 const BASE_URL =
-  Platform.OS === "android"
+  Platform.OS === "android" || Platform.OS === "ios"
     ? "https://api.tuserduser.online"
     : "http://localhost:8080";
 

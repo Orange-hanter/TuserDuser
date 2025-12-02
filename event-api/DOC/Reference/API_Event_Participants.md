@@ -87,7 +87,7 @@ Authorization: Bearer <token> (optional, не требуется для этог
 ### Notes
 
 - Возвращает только участников со статусом `confirmed` (подтвержденные)
-- Результаты отсортированы по времени регистрации (ascending)
+- Результаты отсортированы по времени подписки (ascending)
 - API является публичным и не требует аутентификации
 - Если событие не существует, возвращается пустой список
 
@@ -104,32 +104,54 @@ type Participant struct {
 }
 ```
 
-**Database Table**: `event_registrations`
+**Database Table**: `event_subscriptions` (consolidated)
+
+> **Note**: С миграции 014 таблица `event_registrations` удалена. Все данные об участниках теперь читаются из `event_subscriptions` с JOIN на `telegram_bindings` и `users` для получения публичного имени.
 
 ```sql
-CREATE TABLE IF NOT EXISTS event_registrations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+-- Primary table for subscriptions
+CREATE TABLE IF NOT EXISTS event_subscriptions (
     user_id UUID NOT NULL,
-    public_name VARCHAR(255) NOT NULL,
-    avatar_url TEXT,
-    status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
-    registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    event_id UUID NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    subscribed_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, event_id)
 );
 
-CREATE INDEX idx_event_registrations_event_id ON event_registrations(event_id);
-CREATE INDEX idx_event_registrations_user_id ON event_registrations(user_id);
-CREATE INDEX idx_event_registrations_event_status ON event_registrations(event_id, status);
-CREATE UNIQUE INDEX idx_event_registrations_unique ON event_registrations(event_id, user_id);
+-- Public name is derived from telegram_bindings or users.email
+-- via JOIN in the service query
 ```
 
 **Service Method**: `UserService.GetEventParticipants()`
 
-- Выполняет запрос к БД с фильтром по `event_id` и статусу `confirmed`
-- Сортирует результаты по `registered_at` в порядке возрастания
+- Выполняет запрос к `event_subscriptions` с JOIN на `telegram_bindings` и `users`
+- Фильтрует по `event_id` и статусу `confirmed`
+- Публичное имя берётся из Telegram (first_name + last_name), username или email
+- Сортирует результаты по `subscribed_at` в порядке возрастания
 - Возвращает `[]models.Participant`
+
+**SQL Query**:
+
+```sql
+SELECT
+    es.user_id,
+    COALESCE(
+        NULLIF(TRIM(CONCAT(tb.telegram_first_name, ' ', tb.telegram_last_name)), ''),
+        tb.telegram_username,
+        u.email,
+        'Anonymous'
+    ) AS public_name,
+    NULL::text AS avatar_url,
+    es.status
+FROM event_subscriptions es
+LEFT JOIN telegram_bindings tb ON tb.user_id = es.user_id
+LEFT JOIN users u ON u.id = es.user_id
+WHERE es.event_id = $1 AND es.status = 'confirmed'
+ORDER BY es.subscribed_at ASC
+```
 
 **Handler**: `UserHandler.GetEventParticipants()`
 
@@ -152,7 +174,8 @@ r.Get("/api/events/{event_id}/participants", userHandler.GetEventParticipants)
 
 ### Performance Considerations
 
-- Используется индекс `idx_event_registrations_event_status(event_id, status)` для быстрого поиска
+- Используется составной индекс на `event_subscriptions(event_id)` для быстрого поиска
+- JOIN на `telegram_bindings` и `users` оптимизирован (LEFT JOIN, nullable)
 - Результаты отсортированы в БД (не в приложении)
 - Рекомендуется добавить пагинацию для больших событий (100+ участников)
 
@@ -163,6 +186,7 @@ r.Get("/api/events/{event_id}/participants", userHandler.GetEventParticipants)
 3. **Сортировка**: Опции сортировки (по имени, дате регистрации)
 4. **Кэширование**: Redis кэш списка участников для популярных событий
 5. **WebSocket**: Real-time обновления при добавлении новых участников
+6. **Avatar URL**: Добавить поле avatar_url в telegram_bindings для отображения аватаров
 
 ### Related Endpoints
 

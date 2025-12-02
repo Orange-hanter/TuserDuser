@@ -298,15 +298,30 @@ func (s *UserService) SubscribeToEvent(ctx context.Context, userID, eventID stri
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
 func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) ([]models.Participant, error) {
+	// Consolidated query: read from event_subscriptions (single source of truth)
+	// and JOIN telegram_bindings/users for public_name display.
 	query := `
-		SELECT user_id, public_name, avatar_url, status
-		FROM event_registrations
-		WHERE event_id = $1 AND status = 'confirmed'
-		ORDER BY registered_at ASC
+		SELECT 
+			es.user_id,
+			COALESCE(
+				NULLIF(TRIM(CONCAT(tb.telegram_first_name, ' ', tb.telegram_last_name)), ''),
+				tb.telegram_username,
+				u.email,
+				'Anonymous'
+			) AS public_name,
+			NULL::text AS avatar_url,
+			es.status
+		FROM event_subscriptions es
+		LEFT JOIN telegram_bindings tb ON tb.user_id = es.user_id::text
+		LEFT JOIN users u ON u.id = es.user_id
+		WHERE es.event_id::text = $1::text AND es.status = 'confirmed'
+		ORDER BY es.subscribed_at ASC
 	`
 
+	s.logger.Debug("executing participants query", zap.String("query", query), zap.String("event_id", eventID))
 	rows, err := s.db.QueryContext(ctx, query, eventID)
 	if err != nil {
+		s.logger.Error("failed to query participants", zap.Error(err), zap.String("event_id", eventID))
 		return nil, fmt.Errorf("failed to fetch participants: %w", err)
 	}
 	defer rows.Close()
@@ -322,6 +337,7 @@ func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) 
 	}
 
 	if err := rows.Err(); err != nil {
+		s.logger.Error("error iterating participant rows", zap.Error(err), zap.String("event_id", eventID))
 		return nil, fmt.Errorf("error iterating participants: %w", err)
 	}
 
