@@ -26,7 +26,7 @@ type User struct {
 // RegisterRequest - запрос для регистрации.
 type RegisterRequest struct {
 	Email            string `json:"email" binding:"required,email"`
-	Phone            string `json:"phone" binding:"required"`
+	Phone            string `json:"phone"` // Опционально, если не указан - отправляем нуль
 	Password         string `json:"password" binding:"required,min=8"`
 	VerificationType string `json:"verification_type,omitempty"` // "email", "sms", "both" (default: "both")
 }

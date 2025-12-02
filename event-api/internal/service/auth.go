@@ -181,7 +181,8 @@ func (s *AuthService) dispatchVerificationTasks(email, phone, verificationType, 
 			s.logger.Error("Не удалось добавить задачу отправки email кода в очередь", zap.Error(err))
 		}
 	}
-	if verificationType == "sms" || verificationType == "both" {
+	// Отправляем SMS только если указан номер телефона (не "0")
+	if (verificationType == "sms" || verificationType == "both") && phone != "0" {
 		if err := s.workerPool.Submit(func(ctx context.Context) error {
 			return s.sendSMSVerificationCode(ctx, phone, code)
 		}); err != nil {
@@ -539,6 +540,14 @@ func (s *AuthService) sendEmailVerificationCode(ctx context.Context, emailAddr, 
 
 // sendSMSVerificationCode отправляет код верификации по SMS.
 func (s *AuthService) sendSMSVerificationCode(ctx context.Context, phone, code string) error {
+	// Если номер "0", это означает что пользователь не предоставил телефон
+	if phone == "0" {
+		s.logger.Info("Пропускаем отправку SMS - номер телефона не предоставлен",
+			zap.String("phone", phone),
+		)
+		return nil
+	}
+
 	s.logger.Info("Отправка кода верификации по SMS (асинхронно)",
 		zap.String("phone", phone),
 		zap.String("code", code),

@@ -168,14 +168,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Валидация
-	if req.Email == "" || req.Password == "" || req.Phone == "" {
-		respondWithError(w, http.StatusBadRequest, "validation_error", "Email, password и phone обязательны")
+	if req.Email == "" || req.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Email и пароль обязательны")
 		return
 	}
 
 	if len(req.Password) < 8 {
 		respondWithError(w, http.StatusBadRequest, "validation_error", "Пароль должен быть минимум 8 символов")
 		return
+	}
+
+	// Если телефон не указан, устанавливаем его в "0"
+	if req.Phone == "" {
+		req.Phone = "0"
 	}
 
 	user, verifyCode, err := h.authService.Register(&req)
