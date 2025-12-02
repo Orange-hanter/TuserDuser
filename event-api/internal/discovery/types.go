@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"event-api/internal/models"
 )
 
 // UserAction represents every supported user intent the engine can process.
@@ -64,6 +66,12 @@ type NextEvent struct {
 	ConflictFlag       *ConflictFlag `json:"conflictFlag,omitempty"`
 	RemainingPrimary   int           `json:"remainingPrimary"`
 	RemainingConflicts int           `json:"remainingConflicts"`
+}
+
+// NextEventWithAuthor расширяет NextEvent данными об авторе события для Swagger.
+type NextEventWithAuthor struct {
+	NextEvent
+	Author *models.PublicUserProfile `json:"author,omitempty"`
 }
 
 // BookingResult reports deterministic booking outcome.

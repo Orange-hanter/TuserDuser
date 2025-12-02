@@ -69,7 +69,7 @@ func NewDiscoveryHandler(service *discovery.Service, userService *service.UserSe
 // @Param places query string false "Места проведения (поиск по подстроке)" example("Коворкинг")
 // @Param dateFrom query string false "Начало диапазона дат (RFC3339)" example("2025-01-01T00:00:00Z")
 // @Param dateTo query string false "Конец диапазона дат (RFC3339)" example("2025-12-31T23:59:59Z")
-// @Success 200 {object} discovery.NextEvent
+// @Success 200 {object} discovery.NextEventWithAuthor
 // @Failure 401 {object} models.ErrorResponse "Нет авторизации"
 // @Failure 404 {object} models.ErrorResponse "Очередь пуста"
 // @Failure 409 {object} models.ErrorResponse "Конфликт действий"
@@ -93,7 +93,30 @@ func (h *DiscoveryHandler) Next(w http.ResponseWriter, r *http.Request) {
 		h.handleDomainError(w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, result)
+
+	// Enrich response with event author public profile when available
+	type nextResponse struct {
+		discovery.NextEvent
+		Author *models.PublicUserProfile `json:"author,omitempty"`
+	}
+
+	var author *models.PublicUserProfile
+	if h.userService != nil && result.Event.Metadata != nil {
+		// Try both possible keys for creator ID
+		var creatorID string
+		if v, ok := result.Event.Metadata["creator_id"].(string); ok && v != "" {
+			creatorID = v
+		} else if v, ok := result.Event.Metadata["creatorId"].(string); ok && v != "" {
+			creatorID = v
+		}
+		if creatorID != "" {
+			if profile, _, err := h.userService.GetPublicProfile(r.Context(), creatorID); err == nil && profile != nil {
+				author = profile
+			}
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, nextResponse{NextEvent: result, Author: author})
 }
 
 // parseFilterFromQuery extracts discovery filter from query parameters.
