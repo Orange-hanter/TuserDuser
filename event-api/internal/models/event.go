@@ -13,6 +13,7 @@ type Event struct {
 	Type             string                 `json:"type" db:"type"`
 	Place            string                 `json:"place" db:"place"`
 	PriceType        string                 `json:"priceType" db:"price_type"`
+	CreatorID        *string                `json:"creatorId,omitempty" db:"creator_id"`
 	Duration         int                    `json:"duration" db:"duration"`
 	NeedRegistration bool                   `json:"needReg" db:"need_registration"`
 }

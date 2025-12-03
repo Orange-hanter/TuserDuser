@@ -48,8 +48,10 @@ definitions:
       userId:
         type: string
     type: object
-  discovery.NextEvent:
+  discovery.NextEventWithAuthor:
     properties:
+      author:
+        $ref: '#/definitions/models.PublicUserProfile'
       conflict:
         type: boolean
       conflictFlag:
@@ -1863,7 +1865,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/discovery.NextEvent'
+            $ref: '#/definitions/discovery.NextEventWithAuthor'
         "401":
           description: Нет авторизации
           schema:

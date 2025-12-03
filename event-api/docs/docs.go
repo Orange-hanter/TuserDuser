@@ -1818,7 +1818,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/discovery.NextEvent"
+                            "$ref": "#/definitions/discovery.NextEventWithAuthor"
                         }
                     },
                     "401": {
@@ -2179,9 +2179,12 @@ const docTemplate = `{
                 }
             }
         },
-        "discovery.NextEvent": {
+        "discovery.NextEventWithAuthor": {
             "type": "object",
             "properties": {
+                "author": {
+                    "$ref": "#/definitions/models.PublicUserProfile"
+                },
                 "conflict": {
                     "type": "boolean"
                 },

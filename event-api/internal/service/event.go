@@ -31,7 +31,7 @@ func NewEventService(db *sql.DB, logger *zap.Logger) *EventService {
 func (s *EventService) GetApprovedEvents(ctx context.Context) ([]*models.Event, error) {
 	query := `
 		SELECT id, type, start_time, end_time, duration, place, 
-		       price_type, need_registration, details, created_at, updated_at
+		       price_type, need_registration, details, created_at, updated_at, creator_id
 		FROM events
 		ORDER BY start_time DESC
 	`
@@ -64,6 +64,7 @@ func (s *EventService) GetApprovedEvents(ctx context.Context) ([]*models.Event, 
 			&detailsJSON,
 			&event.CreatedAt,
 			&event.UpdatedAt,
+			&event.CreatorID,
 		)
 		if err != nil {
 			s.logger.Error("Failed to scan event", zap.Error(err))
