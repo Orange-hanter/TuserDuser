@@ -1,15 +1,10 @@
-// Package handlers содержит HTTP-обработчики, которые выступают тонким
-// транспортным слоем поверх бизнес-логики. Handlers принимают HTTP-запросы,
-// выполняют базовую валидацию/парсинг, переводят ошибки бизнес-логики в
-// читабельные JSON-ответы и управляют HTTP статус-кодами.
-//
-// Этот файл содержит обработчики для discovery-движка — механизма, который
-// предоставляет пользователю последовательность событий (time-slot discovery),
-// позволяет отдавать реакции (like/dislike), а также бронировать события.
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -40,8 +35,8 @@ type DiscoveryHandler struct {
 //   - `service` — реализация discovery-логики, отвечающая за получение событий,
 //     применение действий пользователя и бронирования.
 //   - `userService` — сервис для управления подписками на события (опционально).
-func NewDiscoveryHandler(service *discovery.Service, userService *service.UserService) *DiscoveryHandler {
-	return &DiscoveryHandler{service: service, userService: userService}
+func NewDiscoveryHandler(discoverySvc *discovery.Service, userService *service.UserService) *DiscoveryHandler {
+	return &DiscoveryHandler{service: discoverySvc, userService: userService}
 }
 
 // Next возвращает следующее событие в очереди для текущего пользователя.
@@ -69,7 +64,7 @@ func NewDiscoveryHandler(service *discovery.Service, userService *service.UserSe
 // @Param places query string false "Места проведения (поиск по подстроке)" example("Коворкинг")
 // @Param dateFrom query string false "Начало диапазона дат (RFC3339)" example("2025-01-01T00:00:00Z")
 // @Param dateTo query string false "Конец диапазона дат (RFC3339)" example("2025-12-31T23:59:59Z")
-// @Success 200 {object} discovery.NextEvent
+// @Success 200 {object} discovery.NextEventWithAuthor
 // @Failure 401 {object} models.ErrorResponse "Нет авторизации"
 // @Failure 404 {object} models.ErrorResponse "Очередь пуста"
 // @Failure 409 {object} models.ErrorResponse "Конфликт действий"
@@ -93,7 +88,44 @@ func (h *DiscoveryHandler) Next(w http.ResponseWriter, r *http.Request) {
 		h.handleDomainError(w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, result)
+
+	// Enrich response with event author public profile when available
+	type nextResponse struct {
+		discovery.NextEvent
+		Author *models.PublicUserProfile `json:"author,omitempty"`
+	}
+
+	author := h.lookupEventAuthor(r.Context(), result.Event.Metadata)
+	respondWithJSON(w, http.StatusOK, nextResponse{NextEvent: result, Author: author})
+}
+
+// lookupEventAuthor retrieves the public profile of the event creator if available.
+func (h *DiscoveryHandler) lookupEventAuthor(ctx context.Context, metadata map[string]any) *models.PublicUserProfile {
+	if h.userService == nil || metadata == nil {
+		return nil
+	}
+
+	creatorID := extractCreatorID(metadata)
+	if creatorID == "" {
+		return nil
+	}
+
+	profile, _, err := h.userService.GetPublicProfile(ctx, creatorID)
+	if err != nil || profile == nil {
+		return nil
+	}
+	return profile
+}
+
+// extractCreatorID extracts creator ID from event metadata, checking both naming conventions.
+func extractCreatorID(metadata map[string]any) string {
+	if v, ok := metadata["creator_id"].(string); ok && v != "" {
+		return v
+	}
+	if v, ok := metadata["creatorId"].(string); ok && v != "" {
+		return v
+	}
+	return ""
 }
 
 // parseFilterFromQuery extracts discovery filter from query parameters.
@@ -112,18 +144,17 @@ func parseFilterFromQuery(r *http.Request) (discovery.Filter, error) {
 		filter.Places = splitAndTrim(places)
 	}
 
-	// Parse date filters
 	if dateFrom := q.Get("dateFrom"); dateFrom != "" {
 		t, err := time.Parse(time.RFC3339, dateFrom)
 		if err != nil {
-			return filter, err
+			return filter, fmt.Errorf("parse dateFrom: %w", err)
 		}
 		filter.DateFrom = &t
 	}
 	if dateTo := q.Get("dateTo"); dateTo != "" {
 		t, err := time.Parse(time.RFC3339, dateTo)
 		if err != nil {
-			return filter, err
+			return filter, fmt.Errorf("parse dateTo: %w", err)
 		}
 		filter.DateTo = &t
 	}
@@ -286,16 +317,15 @@ func (h *DiscoveryHandler) History(w http.ResponseWriter, r *http.Request) {
 	}
 	respondWithJSON(w, http.StatusOK, entries)
 }
-
 func (h *DiscoveryHandler) handleDomainError(w http.ResponseWriter, err error) {
-	switch err {
-	case discovery.ErrQueueEmpty:
+	switch {
+	case errors.Is(err, discovery.ErrQueueEmpty):
 		respondWithError(w, http.StatusNotFound, "queue_empty", "События для окна не найдены")
-	case discovery.ErrInvalidAction:
+	case errors.Is(err, discovery.ErrInvalidAction):
 		respondWithError(w, http.StatusBadRequest, "invalid_action", err.Error())
-	case discovery.ErrOutOfOrderAction, discovery.ErrNoActiveEvent:
+	case errors.Is(err, discovery.ErrOutOfOrderAction), errors.Is(err, discovery.ErrNoActiveEvent):
 		respondWithError(w, http.StatusConflict, "queue_conflict", err.Error())
-	case discovery.ErrEventNotFound:
+	case errors.Is(err, discovery.ErrEventNotFound):
 		respondWithError(w, http.StatusNotFound, "not_found", err.Error())
 	default:
 		logger.Log.Error("discovery handler error", zap.Error(err))

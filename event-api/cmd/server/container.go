@@ -155,14 +155,18 @@ func (c *AppContainer) initServices(ctx context.Context) error {
 	}
 	c.DiscoveryService = discoveryService
 
-	// Bootstrap discovery with approved events
-	logger.Log.Info("🔄 Refreshing discovery state...")
-	refreshCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	if err := refreshDiscoveryState(refreshCtx, c.EventService, c.DiscoveryService); err != nil {
-		logger.Log.Warn("failed to seed discovery engine", zap.Error(err))
-	}
-	cancel()
-	logger.Log.Info("✅ Discovery state refreshed")
+	// Bootstrap discovery with approved events.
+	// Run asynchronously to avoid blocking server startup on potentially
+	// long-running Redis SCAN/refresh operations.
+	go func() {
+		seedCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := refreshDiscoveryState(seedCtx, c.EventService, c.DiscoveryService); err != nil {
+			logger.Log.Warn("failed to seed discovery engine (async)", zap.Error(err))
+		} else {
+			logger.Log.Info("discovery engine seeded (async)")
+		}
+	}()
 
 	// User service
 	c.UserService = service.NewUserService(c.DB.DB, logger.Log, c.DiscoveryService)

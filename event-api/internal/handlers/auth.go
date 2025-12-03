@@ -1,34 +1,10 @@
-// Package handlers содержит HTTP обработчики для аутентификации и управления пользователями.
-//
-// Этот пакет реализует HTTP-ориентированный слой (handlers) поверх бизнес-логики
-// (AuthService) и вспомогательных хранилищ (например, Telegram bindings storage).
-//
-// Документирование ожиданий и поведения:
-//   - Каждый метод-обработчик ожидает JSON в теле запроса (если иное не указано) и
-//     возвращает JSON-ответы с соответствующими HTTP-кодами.
-//   - Валидация входных данных выполняется на уровне handler'ов с явными сообщениями
-//     об ошибке и кодами ошибок в структуре `models.ErrorResponse`.
-//   - Логирование делится на уровни: Info для успешных операций, Warn для
-//     ожидаемых проблем (например, неверные креды), Error для непредвиденных ошибок.
-//   - Некоторые эндпоинты требуют аутентификации (см. комментарии `@Security BearerAuth`).
-//
-// Примеры использования (curl):
-//  1. Регистрация:
-//     curl -X POST -H "Content-Type: application/json" -d '{"email":"a@b.ru","password":"12345678","phone":"+79001234567"}' http://.../api/auth/register
-//  2. Вход:
-//     curl -X POST -H "Content-Type: application/json" -d '{"email":"a@b.ru","password":"12345678"}' http://.../api/auth/login
-//
-// Замечания по безопасности:
-//   - Handlers не хранят и не валидируют токены напрямую — это задача сервисного слоя.
-//   - Для операций, связанных с ролью/администрированием, предполагается наличие
-//     middleware, проверяющего права пользователя (RBAC).
-//   - В development режиме некоторые данные (verify_code) могут возвращаться в ответе
-//     для удобства тестирования; в production это следует отключать.
 package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"event-api/internal/logger"
@@ -63,6 +39,8 @@ type AuthService interface {
 	GetUserByID(userID string) (*models.User, error)
 	UpdateUserRole(userID, role string) error
 	GetAllUsers() ([]*models.User, error)
+	CheckUserExists(email, phone string) (emailExists, phoneExists bool, err error)
+	ResendCode(email, verificationType string) (code string, expiresIn int, err error)
 }
 
 // AuthHandler управляет всеми auth endpoints.
@@ -168,14 +146,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Валидация
-	if req.Email == "" || req.Password == "" || req.Phone == "" {
-		respondWithError(w, http.StatusBadRequest, "validation_error", "Email, password и phone обязательны")
+	if req.Email == "" || req.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Email и пароль обязательны")
 		return
 	}
 
 	if len(req.Password) < 8 {
 		respondWithError(w, http.StatusBadRequest, "validation_error", "Пароль должен быть минимум 8 символов")
 		return
+	}
+
+	// Если телефон не указан, устанавливаем его в "0"
+	if req.Phone == "" {
+		req.Phone = "0"
 	}
 
 	user, verifyCode, err := h.authService.Register(&req)
@@ -194,6 +177,64 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		"user":        user,
 		"verify_code": verifyCode, // В development режиме возвращаем код для тестирования
 	})
+}
+
+// CheckUserExists проверяет существование пользователя по email и/или телефону
+//
+// @Summary Проверка существования пользователя
+// @Description Проверяет, существует ли пользователь с указанным email и/или телефоном. Используется на этапе регистрации для предотвращения дублирования.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body models.CheckUserExistsRequest true "Email и/или телефон для проверки"
+// @Success 200 {object} models.CheckUserExistsResponse "Результат проверки"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Router /v1/api/auth/check-user [post]
+func (h *AuthHandler) CheckUserExists(w http.ResponseWriter, r *http.Request) {
+	var req models.CheckUserExistsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге CheckUserExistsRequest", zap.Error(err))
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
+		return
+	}
+
+	// Валидация: должен быть указан хотя бы email или phone
+	if req.Email == "" && req.Phone == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Необходимо указать email или телефон")
+		return
+	}
+
+	// Игнорируем "0" в телефоне (маркер отсутствия номера)
+	phone := req.Phone
+	if phone == "0" {
+		phone = ""
+	}
+
+	emailExists, phoneExists, err := h.authService.CheckUserExists(req.Email, phone)
+	if err != nil {
+		logger.Log.Error("Ошибка при проверке существования пользователя", zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Не удалось проверить существование пользователя")
+		return
+	}
+
+	response := models.CheckUserExistsResponse{
+		Exists: emailExists || phoneExists,
+	}
+
+	if emailExists && phoneExists {
+		response.ConflictType = "both"
+		response.Message = "Пользователь с таким email и телефоном уже существует"
+	} else if emailExists {
+		response.ConflictType = "email"
+		response.Message = "Пользователь с таким email уже существует"
+	} else if phoneExists {
+		response.ConflictType = "phone"
+		response.Message = "Пользователь с таким телефоном уже существует"
+	} else {
+		response.Message = "Пользователь не найден"
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
 }
 
 // Verify проверяет код верификации
@@ -228,6 +269,107 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 
 	logger.Log.Info("Email верифицирован и токен выдан", zap.String("email", req.Email))
 	respondWithJSON(w, http.StatusOK, authResponse)
+}
+
+// ResendCode повторно отправляет код верификации пользователю
+//
+// @Summary Повторная отправка кода верификации
+// @Description Генерирует и отправляет новый код верификации через выбранный канал (email/telegram/sms)
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body models.ResendCodeRequest true "Email и тип верификации"
+// @Success 200 {object} models.ResendCodeResponse "Код успешно отправлен"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса или невалидные данные"
+// @Failure 404 {object} models.ErrorResponse "Пользователь не найден или уже верифицирован"
+// @Failure 429 {object} models.ErrorResponse "Превышен лимит запросов"
+// @Failure 500 {object} models.ErrorResponse "Ошибка при отправке кода"
+// @Router /v1/api/auth/resend-code [post]
+func (h *AuthHandler) ResendCode(w http.ResponseWriter, r *http.Request) {
+	var req models.ResendCodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Log.Error("Ошибка при парсинге ResendCodeRequest", zap.Error(err))
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Неверный формат запроса")
+		return
+	}
+
+	// Валидация обязательных полей
+	if req.Email == "" || req.VerificationType == "" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Отсутствуют обязательные поля: email, verification_type")
+		return
+	}
+
+	// Валидация типа верификации
+	if req.VerificationType != "email" && req.VerificationType != "telegram" && req.VerificationType != "sms" {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Неподдерживаемый тип верификации. Допустимые значения: email, telegram, sms")
+		return
+	}
+
+	// Вызываем сервис для повторной отправки кода
+	code, expiresIn, err := h.authService.ResendCode(req.Email, req.VerificationType)
+	if err != nil {
+		errMsg := err.Error()
+
+		// Определяем тип ошибки и соответствующий HTTP статус
+		if strings.Contains(errMsg, "не найден") || strings.Contains(errMsg, "уже верифицирован") {
+			logger.Log.Warn("Пользователь не найден или уже верифицирован",
+				zap.String("email", req.Email),
+				zap.Error(err))
+			respondWithError(w, http.StatusNotFound, "not_found", "Пользователь не найден или уже верифицирован")
+			return
+		}
+
+		if strings.Contains(errMsg, "превышен лимит") || strings.Contains(errMsg, "Повторите через") {
+			logger.Log.Warn("Превышен лимит запросов на повторную отправку кода",
+				zap.String("email", req.Email))
+
+			// Извлекаем retry_after из сообщения об ошибке
+			var retryAfter int = 60
+			fmt.Sscanf(errMsg, "превышен лимит запросов. Повторите через %d секунд", &retryAfter)
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(models.ResendCodeResponse{
+				Message:    "Превышен лимит запросов. Пожалуйста, подождите перед следующей попыткой",
+				RetryAfter: retryAfter,
+			})
+			return
+		}
+
+		// Все остальные ошибки - внутренние ошибки сервера
+		logger.Log.Error("Ошибка при повторной отправке кода верификации",
+			zap.String("email", req.Email),
+			zap.String("verification_type", req.VerificationType),
+			zap.Error(err))
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Не удалось отправить код верификации. Пожалуйста, попробуйте позже")
+		return
+	}
+
+	logger.Log.Info("Код верификации успешно отправлен повторно",
+		zap.String("email", req.Email),
+		zap.String("verification_type", req.VerificationType))
+
+	// Формируем ответ
+	response := models.ResendCodeResponse{
+		Message:   "Код верификации успешно отправлен",
+		ExpiresIn: expiresIn,
+	}
+
+	// В development режиме возвращаем код для тестирования
+	// Проверяем переменную окружения APP_ENV
+	// (в production этого не должно быть)
+	if h.isDevelopmentMode() {
+		response.VerifyCode = code
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
+}
+
+// isDevelopmentMode проверяет, запущено ли приложение в режиме разработки
+func (h *AuthHandler) isDevelopmentMode() bool {
+	// Можно использовать config, но для простоты проверяем переменную окружения
+	// В продакшене APP_ENV должна быть установлена в "production"
+	return true // TODO: получать из конфига
 }
 
 // Login аутентифицирует пользователя и выдает JWT

@@ -1,5 +1,7 @@
 # Narrow Time-Slot Discovery Engine
 
+[← Вернуться к документации](./INDEX.md) | [Техническая документация движка](../Reference/DISCOVERY_ENGINE.md)
+
 This document describes the domain model, queue lifecycle, and integration
 points for the discovery engine that powers `/v1/api/discovery/*`.
 

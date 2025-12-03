@@ -48,8 +48,10 @@ definitions:
       userId:
         type: string
     type: object
-  discovery.NextEvent:
+  discovery.NextEventWithAuthor:
     properties:
+      author:
+        $ref: '#/definitions/models.PublicUserProfile'
       conflict:
         type: boolean
       conflictFlag:
@@ -145,6 +147,23 @@ definitions:
       type:
         type: string
       updatedAt:
+        type: string
+    type: object
+  models.CheckUserExistsRequest:
+    properties:
+      email:
+        type: string
+      phone:
+        type: string
+    type: object
+  models.CheckUserExistsResponse:
+    properties:
+      conflict_type:
+        description: '"email", "phone", "both"'
+        type: string
+      exists:
+        type: boolean
+      message:
         type: string
     type: object
   models.CreateEventRequest:
@@ -386,6 +405,49 @@ definitions:
       type:
         type: string
     type: object
+  models.PublicUserProfile:
+    properties:
+      avatarUrl:
+        example: https://cdn.example.com/avatars/941b...jpg
+        type: string
+      bio:
+        example: Организатор мероприятий, спикер
+        type: string
+      city:
+        example: Москва
+        type: string
+      country:
+        example: RU
+        type: string
+      createdAt:
+        example: "2024-05-02T15:23:45Z"
+        type: string
+      displayName:
+        example: Иван Иванов
+        type: string
+      id:
+        example: 941b955e-ea57-dee3-565f-5684f81c4f14
+        type: string
+      isVerified:
+        example: true
+        type: boolean
+      publicEventsCount:
+        example: 12
+        type: integer
+      socialLinks:
+        additionalProperties:
+          type: string
+        example:
+          telegram: https://t.me/ivan
+          twitter: https://twitter.com/ivan
+        type: object
+      updatedAt:
+        example: "2025-11-01T12:10:00Z"
+        type: string
+      username:
+        example: ivanivanov
+        type: string
+    type: object
   models.RegisterRequest:
     properties:
       email:
@@ -394,6 +456,7 @@ definitions:
         minLength: 8
         type: string
       phone:
+        description: Опционально, если не указан - отправляем нуль
         type: string
       verification_type:
         description: '"email", "sms", "both" (default: "both")'
@@ -401,7 +464,31 @@ definitions:
     required:
     - email
     - password
-    - phone
+    type: object
+  models.ResendCodeRequest:
+    properties:
+      email:
+        type: string
+      verification_type:
+        description: '"email", "telegram", "sms"'
+        type: string
+    required:
+    - email
+    - verification_type
+    type: object
+  models.ResendCodeResponse:
+    properties:
+      expires_in:
+        description: Время действия кода в секундах
+        type: integer
+      message:
+        type: string
+      retry_after:
+        description: Для rate limit ошибок
+        type: integer
+      verify_code:
+        description: Только в dev режиме
+        type: string
     type: object
   models.ReviewComment:
     properties:
@@ -932,6 +1019,47 @@ paths:
       summary: Get upcoming events
       tags:
       - users
+  /api/users/public/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Returns public information about a user by their UUID. Does not
+        require authentication.
+      parameters:
+      - description: User ID (UUID format)
+        format: uuid
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public user profile
+          schema:
+            $ref: '#/definitions/models.PublicUserProfile'
+        "304":
+          description: Not Modified - resource unchanged since last request
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: User not found or profile is private
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get public user profile
+      tags:
+      - users
   /api/users/request-role:
     post:
       consumes:
@@ -1253,6 +1381,33 @@ paths:
       summary: Обновить роль пользователя
       tags:
       - admin
+  /v1/api/auth/check-user:
+    post:
+      consumes:
+      - application/json
+      description: Проверяет, существует ли пользователь с указанным email и/или телефоном.
+        Используется на этапе регистрации для предотвращения дублирования.
+      parameters:
+      - description: Email и/или телефон для проверки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CheckUserExistsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Результат проверки
+          schema:
+            $ref: '#/definitions/models.CheckUserExistsResponse'
+        "400":
+          description: Неверный формат запроса
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Проверка существования пользователя
+      tags:
+      - auth
   /v1/api/auth/login:
     post:
       consumes:
@@ -1366,6 +1521,45 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       summary: Регистрация нового пользователя
+      tags:
+      - auth
+  /v1/api/auth/resend-code:
+    post:
+      consumes:
+      - application/json
+      description: Генерирует и отправляет новый код верификации через выбранный канал
+        (email/telegram/sms)
+      parameters:
+      - description: Email и тип верификации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ResendCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Код успешно отправлен
+          schema:
+            $ref: '#/definitions/models.ResendCodeResponse'
+        "400":
+          description: Неверный формат запроса или невалидные данные
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Пользователь не найден или уже верифицирован
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "429":
+          description: Превышен лимит запросов
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Ошибка при отправке кода
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Повторная отправка кода верификации
       tags:
       - auth
   /v1/api/auth/verify:
@@ -1671,7 +1865,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/discovery.NextEvent'
+            $ref: '#/definitions/discovery.NextEventWithAuthor'
         "401":
           description: Нет авторизации
           schema:

@@ -3,8 +3,12 @@ import { Platform } from "react-native";
 
 // Use localhost for iOS/Web and 10.0.2.2 for Android Emulator
 const BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:8080" : "http://localhost:8080";
+  Platform.OS === "android" || Platform.OS === "ios"
+    ? "https://api.tuserduser.online"
+    : "http://localhost:8080";
 
+// Log selected API on startup
+console.info(`API base URL: ${BASE_URL} (Platform: ${Platform.OS})`);
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {

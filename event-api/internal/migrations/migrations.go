@@ -106,6 +106,16 @@ func (m *Migrator) RunMigrations() error {
 			up:   migrateUserIdToUUID,
 			down: revertUserIdToText,
 		},
+		{
+			name: "014_drop_event_registrations",
+			up:   dropEventRegistrationsConsolidation,
+			down: recreateEventRegistrations,
+		},
+		{
+			name: "015_add_public_profile_fields",
+			up:   addPublicProfileFields,
+			down: dropPublicProfileFields,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -207,7 +217,7 @@ const createUsersTable = `
 CREATE TABLE IF NOT EXISTS users (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	email VARCHAR(255) UNIQUE NOT NULL,
-	phone VARCHAR(20) NOT NULL,
+	phone VARCHAR(20),
 	password VARCHAR(255) NOT NULL,
 	verified BOOLEAN DEFAULT FALSE,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1022,28 +1032,38 @@ END $$;
 `
 
 // revertUserIdToText откатывает миграцию UUID обратно в TEXT (не рекомендуется).
+// Note: event_registrations may not exist if migration 014 was applied.
 const revertUserIdToText = `
--- Удаляем FK
-ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+-- Удаляем FK (IF EXISTS for tables that may be dropped)
+ALTER TABLE IF EXISTS event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
 ALTER TABLE event_subscriptions DROP CONSTRAINT IF EXISTS event_subscriptions_user_id_fkey;
 ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_user_id_fkey;
 ALTER TABLE role_requests DROP CONSTRAINT IF EXISTS role_requests_reviewed_by_fkey;
 
 -- Меняем типы обратно на TEXT
 ALTER TABLE users ALTER COLUMN id TYPE TEXT USING id::text;
-ALTER TABLE event_registrations ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+-- event_registrations may not exist after migration 014
+DO $$ BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'event_registrations') THEN
+        ALTER TABLE event_registrations ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+    END IF;
+END $$;
 ALTER TABLE event_subscriptions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE telegram_bindings ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE telegram_binding_tokens ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE telegram_delivery ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 ALTER TABLE role_requests ALTER COLUMN user_id TYPE TEXT USING user_id::text;
-ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE TEXT USING reviewed_by::text;
+ALTER TABLE role_requests ALTER COLUMN reviewed_by TYPE TEXT USING user_id::text;
 ALTER TABLE discovery_actions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
 
--- Восстанавливаем FK
-ALTER TABLE event_registrations 
-    ADD CONSTRAINT event_registrations_user_id_fkey 
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+-- Восстанавливаем FK (only if table exists)
+DO $$ BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'event_registrations') THEN
+        ALTER TABLE event_registrations 
+            ADD CONSTRAINT event_registrations_user_id_fkey 
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 
 ALTER TABLE event_subscriptions 
     ADD CONSTRAINT event_subscriptions_user_id_fkey 
@@ -1056,4 +1076,95 @@ ALTER TABLE role_requests
 ALTER TABLE role_requests 
     ADD CONSTRAINT role_requests_reviewed_by_fkey 
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL;
+`
+
+// Migration 014: Drop event_registrations table (consolidation to event_subscriptions)
+// The event_registrations table is no longer used after consolidation.
+// All participant data now comes from event_subscriptions + telegram_bindings/users JOINs.
+
+const dropEventRegistrationsConsolidation = `
+-- Drop event_registrations table (consolidated to event_subscriptions)
+-- Remove FK references from other migrations first
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_event_id_fkey;
+ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_user_id_fkey;
+
+DROP INDEX IF EXISTS idx_event_registrations_event_id;
+DROP INDEX IF EXISTS idx_event_registrations_user_id;
+DROP INDEX IF EXISTS idx_event_registrations_status;
+DROP INDEX IF EXISTS idx_event_registrations_event_status;
+
+DROP TABLE IF EXISTS event_registrations CASCADE;
+`
+
+const recreateEventRegistrations = `
+-- Recreate event_registrations table (rollback migration)
+CREATE TABLE IF NOT EXISTS event_registrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    public_name VARCHAR(255) NOT NULL,
+    avatar_url TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'confirmed',
+    registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(event_id, user_id)
+);
+
+CREATE INDEX idx_event_registrations_event_id ON event_registrations(event_id);
+CREATE INDEX idx_event_registrations_user_id ON event_registrations(user_id);
+CREATE INDEX idx_event_registrations_status ON event_registrations(status);
+CREATE INDEX idx_event_registrations_event_status ON event_registrations(event_id, status);
+`
+
+// Migration 015: Add public profile fields to users table
+// Adds fields for public profile display without exposing sensitive data.
+
+const addPublicProfileFields = `
+-- Add public profile fields to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(64) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS country CHAR(2);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS public_social JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_profile_public BOOLEAN DEFAULT TRUE;
+
+-- Index for username lookup (already UNIQUE, but add explicit index for clarity)
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
+-- Index for public profile filtering
+CREATE INDEX IF NOT EXISTS idx_users_is_profile_public ON users(is_profile_public);
+
+-- Index for verified users (for discovery/search features)
+CREATE INDEX IF NOT EXISTS idx_users_is_verified ON users(is_verified);
+
+COMMENT ON COLUMN users.username IS 'Unique public username/handle';
+COMMENT ON COLUMN users.display_name IS 'Public display name shown in profile';
+COMMENT ON COLUMN users.avatar_url IS 'URL to user avatar image';
+COMMENT ON COLUMN users.bio IS 'Short public bio/description';
+COMMENT ON COLUMN users.city IS 'City name for public location display';
+COMMENT ON COLUMN users.country IS 'ISO 3166-1 alpha-2 country code';
+COMMENT ON COLUMN users.is_verified IS 'Whether the user profile is verified';
+COMMENT ON COLUMN users.public_social IS 'JSONB map of public social links (e.g. {"twitter": "https://..."})';
+COMMENT ON COLUMN users.is_profile_public IS 'Whether the profile is publicly visible';
+`
+
+const dropPublicProfileFields = `
+-- Remove public profile fields from users table
+DROP INDEX IF EXISTS idx_users_username;
+DROP INDEX IF EXISTS idx_users_is_profile_public;
+DROP INDEX IF EXISTS idx_users_is_verified;
+
+ALTER TABLE users DROP COLUMN IF EXISTS username;
+ALTER TABLE users DROP COLUMN IF EXISTS display_name;
+ALTER TABLE users DROP COLUMN IF EXISTS avatar_url;
+ALTER TABLE users DROP COLUMN IF EXISTS bio;
+ALTER TABLE users DROP COLUMN IF EXISTS city;
+ALTER TABLE users DROP COLUMN IF EXISTS country;
+ALTER TABLE users DROP COLUMN IF EXISTS is_verified;
+ALTER TABLE users DROP COLUMN IF EXISTS public_social;
+ALTER TABLE users DROP COLUMN IF EXISTS is_profile_public;
 `

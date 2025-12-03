@@ -78,8 +78,10 @@ func buildHTTPHandler(
 
 // registerPublicAuthRoutes registers auth endpoints that don't require authentication.
 func registerPublicAuthRoutes(r chi.Router, authHandler *handlers.AuthHandler) {
+	r.Post("/api/auth/check-user", authHandler.CheckUserExists)
 	r.Post("/api/auth/register", authHandler.Register)
 	r.Post("/api/auth/verify", authHandler.Verify)
+	r.Post("/api/auth/resend-code", authHandler.ResendCode)
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
 }
@@ -94,6 +96,9 @@ func registerPublicEventRoutes(
 	r.Get("/api/events/approved", eventHandler.GetApprovedEvents)
 	r.Get("/api/events/{id}", eventHandler.GetEventByID)
 	r.Get("/api/events/{event_id}/participants", userHandler.GetEventParticipants)
+
+	// Public user profile endpoint - no authentication required
+	r.Get("/api/users/public/{userId}", userHandler.GetPublicProfile)
 }
 
 // registerAuthenticatedUserRoutes registers endpoints for authenticated users.

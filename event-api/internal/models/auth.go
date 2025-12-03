@@ -3,7 +3,7 @@ package models
 
 import "time"
 
-// Роли пользователей в системе
+// Роли пользователей в системе.
 const (
 	RoleUser    = "user"    // Обычный пользователь - может просматривать события
 	RoleCreator = "creator" // Создатель - может создавать события
@@ -26,7 +26,7 @@ type User struct {
 // RegisterRequest - запрос для регистрации.
 type RegisterRequest struct {
 	Email            string `json:"email" binding:"required,email"`
-	Phone            string `json:"phone" binding:"required"`
+	Phone            string `json:"phone"` // Опционально, если не указан - отправляем нуль
 	Password         string `json:"password" binding:"required,min=8"`
 	VerificationType string `json:"verification_type,omitempty"` // "email", "sms", "both" (default: "both")
 }
@@ -41,6 +41,19 @@ type VerifyRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
+}
+
+// CheckUserExistsRequest - запрос для проверки существования пользователя.
+type CheckUserExistsRequest struct {
+	Email string `json:"email,omitempty"`
+	Phone string `json:"phone,omitempty"`
+}
+
+// CheckUserExistsResponse - ответ на проверку существования пользователя.
+type CheckUserExistsResponse struct {
+	Exists       bool   `json:"exists"`
+	ConflictType string `json:"conflict_type,omitempty"` // "email", "phone", "both"
+	Message      string `json:"message"`
 }
 
 // AuthResponse - ответ с JWT токеном.
@@ -61,6 +74,20 @@ type VerifyResponse struct {
 // LogoutRequest - запрос для выхода.
 type LogoutRequest struct {
 	Token string `json:"token,omitempty"`
+}
+
+// ResendCodeRequest - запрос для повторной отправки кода верификации.
+type ResendCodeRequest struct {
+	Email            string `json:"email" binding:"required,email"`
+	VerificationType string `json:"verification_type" binding:"required"` // "email", "telegram", "sms"
+}
+
+// ResendCodeResponse - ответ на повторную отправку кода верификации.
+type ResendCodeResponse struct {
+	Message    string `json:"message"`
+	ExpiresIn  int    `json:"expires_in"`            // Время действия кода в секундах
+	VerifyCode string `json:"verify_code,omitempty"` // Только в dev режиме
+	RetryAfter int    `json:"retry_after,omitempty"` // Для rate limit ошибок
 }
 
 // ErrorResponse - стандартный ответ об ошибке.

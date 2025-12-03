@@ -176,6 +176,10 @@ func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
 			"priceType":        evt.PriceType,
 			"needRegistration": evt.NeedRegistration,
 		}
+		// Add creator_id for author lookup
+		if evt.CreatorID != nil && *evt.CreatorID != "" {
+			metadata["creator_id"] = *evt.CreatorID
+		}
 		for k, v := range evt.Details {
 			metadata[k] = v
 		}
