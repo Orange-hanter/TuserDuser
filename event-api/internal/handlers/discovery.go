@@ -1,11 +1,3 @@
-// Package handlers содержит HTTP-обработчики, которые выступают тонким
-// транспортным слоем поверх бизнес-логики. Handlers принимают HTTP-запросы,
-// выполняют базовую валидацию/парсинг, переводят ошибки бизнес-логики в
-// читабельные JSON-ответы и управляют HTTP статус-кодами.
-//
-// Этот файл содержит обработчики для discovery-движка — механизма, который
-// предоставляет пользователю последовательность событий (time-slot discovery),
-// позволяет отдавать реакции (like/dislike), а также бронировать события.
 package handlers
 
 import (
@@ -43,8 +35,8 @@ type DiscoveryHandler struct {
 //   - `service` — реализация discovery-логики, отвечающая за получение событий,
 //     применение действий пользователя и бронирования.
 //   - `userService` — сервис для управления подписками на события (опционально).
-func NewDiscoveryHandler(service *discovery.Service, userService *service.UserService) *DiscoveryHandler {
-	return &DiscoveryHandler{service: service, userService: userService}
+func NewDiscoveryHandler(discoverySvc *discovery.Service, userService *service.UserService) *DiscoveryHandler {
+	return &DiscoveryHandler{service: discoverySvc, userService: userService}
 }
 
 // Next возвращает следующее событие в очереди для текущего пользователя.
