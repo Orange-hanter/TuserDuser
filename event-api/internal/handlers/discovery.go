@@ -9,7 +9,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -100,23 +103,37 @@ func (h *DiscoveryHandler) Next(w http.ResponseWriter, r *http.Request) {
 		Author *models.PublicUserProfile `json:"author,omitempty"`
 	}
 
-	var author *models.PublicUserProfile
-	if h.userService != nil && result.Event.Metadata != nil {
-		// Try both possible keys for creator ID
-		var creatorID string
-		if v, ok := result.Event.Metadata["creator_id"].(string); ok && v != "" {
-			creatorID = v
-		} else if v, ok := result.Event.Metadata["creatorId"].(string); ok && v != "" {
-			creatorID = v
-		}
-		if creatorID != "" {
-			if profile, _, err := h.userService.GetPublicProfile(r.Context(), creatorID); err == nil && profile != nil {
-				author = profile
-			}
-		}
+	author := h.lookupEventAuthor(r.Context(), result.Event.Metadata)
+	respondWithJSON(w, http.StatusOK, nextResponse{NextEvent: result, Author: author})
+}
+
+// lookupEventAuthor retrieves the public profile of the event creator if available.
+func (h *DiscoveryHandler) lookupEventAuthor(ctx context.Context, metadata map[string]any) *models.PublicUserProfile {
+	if h.userService == nil || metadata == nil {
+		return nil
 	}
 
-	respondWithJSON(w, http.StatusOK, nextResponse{NextEvent: result, Author: author})
+	creatorID := extractCreatorID(metadata)
+	if creatorID == "" {
+		return nil
+	}
+
+	profile, _, err := h.userService.GetPublicProfile(ctx, creatorID)
+	if err != nil || profile == nil {
+		return nil
+	}
+	return profile
+}
+
+// extractCreatorID extracts creator ID from event metadata, checking both naming conventions.
+func extractCreatorID(metadata map[string]any) string {
+	if v, ok := metadata["creator_id"].(string); ok && v != "" {
+		return v
+	}
+	if v, ok := metadata["creatorId"].(string); ok && v != "" {
+		return v
+	}
+	return ""
 }
 
 // parseFilterFromQuery extracts discovery filter from query parameters.
@@ -135,18 +152,17 @@ func parseFilterFromQuery(r *http.Request) (discovery.Filter, error) {
 		filter.Places = splitAndTrim(places)
 	}
 
-	// Parse date filters
 	if dateFrom := q.Get("dateFrom"); dateFrom != "" {
 		t, err := time.Parse(time.RFC3339, dateFrom)
 		if err != nil {
-			return filter, err
+			return filter, fmt.Errorf("parse dateFrom: %w", err)
 		}
 		filter.DateFrom = &t
 	}
 	if dateTo := q.Get("dateTo"); dateTo != "" {
 		t, err := time.Parse(time.RFC3339, dateTo)
 		if err != nil {
-			return filter, err
+			return filter, fmt.Errorf("parse dateTo: %w", err)
 		}
 		filter.DateTo = &t
 	}
@@ -309,16 +325,15 @@ func (h *DiscoveryHandler) History(w http.ResponseWriter, r *http.Request) {
 	}
 	respondWithJSON(w, http.StatusOK, entries)
 }
-
 func (h *DiscoveryHandler) handleDomainError(w http.ResponseWriter, err error) {
-	switch err {
-	case discovery.ErrQueueEmpty:
+	switch {
+	case errors.Is(err, discovery.ErrQueueEmpty):
 		respondWithError(w, http.StatusNotFound, "queue_empty", "События для окна не найдены")
-	case discovery.ErrInvalidAction:
+	case errors.Is(err, discovery.ErrInvalidAction):
 		respondWithError(w, http.StatusBadRequest, "invalid_action", err.Error())
-	case discovery.ErrOutOfOrderAction, discovery.ErrNoActiveEvent:
+	case errors.Is(err, discovery.ErrOutOfOrderAction), errors.Is(err, discovery.ErrNoActiveEvent):
 		respondWithError(w, http.StatusConflict, "queue_conflict", err.Error())
-	case discovery.ErrEventNotFound:
+	case errors.Is(err, discovery.ErrEventNotFound):
 		respondWithError(w, http.StatusNotFound, "not_found", err.Error())
 	default:
 		logger.Log.Error("discovery handler error", zap.Error(err))
