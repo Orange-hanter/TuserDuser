@@ -25,7 +25,7 @@ func buildHTTPHandler(
 	discoveryHandler *handlers.DiscoveryHandler,
 	userHandler *handlers.UserHandler,
 	authService *service.AuthService,
-	telegramHandler *handlers.TelegramHandler,
+	telegramHandler *handlers.TelegramGRPCHandler,
 	creatorHandler *handlers.CreatorHandler,
 	adminRoleRequestHandler *handlers.AdminRoleRequestHandler,
 	versionInfo VersionInfo,
@@ -41,12 +41,8 @@ func buildHTTPHandler(
 	r.Get("/version", versionHandler(versionInfo))
 	r.Handle("/metrics", http.HandlerFunc(handlers.MetricsEndpoint))
 
-	// Telegram webhooks
-	if telegramHandler != nil {
-		r.Route("/webhooks/telegram", func(r chi.Router) {
-			r.Post("/{botAlias}", telegramHandler.Webhook)
-		})
-	}
+	// Note: Telegram webhooks are now handled directly by telegram-service.
+	// The /webhooks/telegram route is no longer needed in event-api.
 
 	// API v1 routes
 	r.Route("/v1", func(r chi.Router) {
@@ -124,7 +120,7 @@ func registerAuthenticatedUserRoutes(
 func registerDiscoveryRoutes(
 	r chi.Router,
 	discoveryHandler *handlers.DiscoveryHandler,
-	telegramHandler *handlers.TelegramHandler,
+	telegramHandler *handlers.TelegramGRPCHandler,
 ) {
 	// Telegram notifications (if enabled)
 	if telegramHandler != nil {

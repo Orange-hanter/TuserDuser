@@ -13,7 +13,7 @@ import (
 	redisClient "event-api/internal/redis"
 	"event-api/internal/service"
 	"event-api/internal/sms"
-	"event-api/internal/telegram"
+	"event-api/internal/telegramclient"
 	"event-api/internal/telemetry"
 	"event-api/internal/worker"
 	"time"
@@ -52,7 +52,7 @@ type AppContainer struct {
 	DiscoveryHandler        *handlers.DiscoveryHandler
 	UserHandler             *handlers.UserHandler
 	CreatorHandler          *handlers.CreatorHandler
-	TelegramHandler         *handlers.TelegramHandler
+	TelegramHandler         *handlers.TelegramGRPCHandler
 	AdminRoleRequestHandler *handlers.AdminRoleRequestHandler
 
 	// HTTP components
@@ -132,6 +132,8 @@ func (c *AppContainer) initInfrastructure(ctx context.Context) error {
 
 // initServices initializes all business logic services.
 func (c *AppContainer) initServices(ctx context.Context) error {
+	logger.Log.Info("🔄 Starting services initialization")
+
 	// Auth service
 	c.AuthService = service.NewAuthService(
 		c.Config,
@@ -154,9 +156,13 @@ func (c *AppContainer) initServices(ctx context.Context) error {
 	c.DiscoveryService = discoveryService
 
 	// Bootstrap discovery with approved events
-	if err := refreshDiscoveryState(ctx, c.EventService, c.DiscoveryService); err != nil {
+	logger.Log.Info("🔄 Refreshing discovery state...")
+	refreshCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	if err := refreshDiscoveryState(refreshCtx, c.EventService, c.DiscoveryService); err != nil {
 		logger.Log.Warn("failed to seed discovery engine", zap.Error(err))
 	}
+	cancel()
+	logger.Log.Info("✅ Discovery state refreshed")
 
 	// User service
 	c.UserService = service.NewUserService(c.DB.DB, logger.Log, c.DiscoveryService)
@@ -169,8 +175,33 @@ func (c *AppContainer) initServices(ctx context.Context) error {
 
 // initHandlers initializes all HTTP handlers.
 func (c *AppContainer) initHandlers() {
-	// Auth handler
-	c.AuthHandler = handlers.NewAuthHandler(c.AuthService, nil)
+	logger.Log.Info("🔄 Starting handlers initialization")
+
+	// Initialize Telegram gRPC client (if enabled)
+	var telegramClient *telegramclient.Client
+	if c.Config.TelegramServiceEnabled || c.Config.TelegramEnabled {
+		var err error
+		telegramCfg := telegramclient.Config{
+			Address: c.Config.TelegramServiceAddress,
+			Timeout: time.Duration(c.Config.TelegramServiceTimeout) * time.Millisecond,
+		}
+		if telegramCfg.Address == "" {
+			telegramCfg.Address = "localhost:50051" // default address
+		}
+		telegramClient, err = telegramclient.NewClient(telegramCfg, logger.Log)
+		if err != nil {
+			logger.Log.Warn("failed to connect to telegram-service, continuing without it",
+				zap.String("address", telegramCfg.Address),
+				zap.Error(err))
+			telegramClient = nil
+		} else {
+			logger.Log.Info("connected to telegram-service via gRPC",
+				zap.String("address", telegramCfg.Address))
+		}
+	}
+
+	// Auth handler (with optional telegram client for binding status)
+	c.AuthHandler = handlers.NewAuthHandler(c.AuthService, telegramClient)
 
 	// Discovery notifier
 	var discoveryNotifier func(context.Context, string)
@@ -198,17 +229,15 @@ func (c *AppContainer) initHandlers() {
 	// Admin role request handler
 	c.AdminRoleRequestHandler = handlers.NewAdminRoleRequestHandler(c.UserService, logger.Log)
 
-	// Telegram handler (if enabled)
-	if c.Config.TelegramEnabled {
-		teleSettings := telegram.NewSettingsFrom(c.Config)
-		telStore := telegram.NewStore(c.DB.DB)
-		telClient := telegram.NewHTTPClient(teleSettings.BotToken, teleSettings.APIBaseURL)
-		telService := telegram.NewService(telStore, teleSettings, logger.Log)
-		c.TelegramHandler = handlers.NewTelegramHandler(telService, telStore, teleSettings, telClient, logger.Log)
-		logger.Log.Info("telegram handler enabled", zap.String("bot", teleSettings.BotUsername))
+	// Telegram handler (if enabled and gRPC client connected)
+	if c.Config.TelegramEnabled && telegramClient != nil {
+		c.TelegramHandler = handlers.NewTelegramGRPCHandler(telegramClient, logger.Log)
+		logger.Log.Info("telegram handler enabled via gRPC")
 	} else {
 		logger.Log.Info("telegram handler disabled")
 	}
+
+	logger.Log.Info("✅ All handlers initialized")
 }
 
 // BuildHTTPRouter builds and returns the HTTP router.

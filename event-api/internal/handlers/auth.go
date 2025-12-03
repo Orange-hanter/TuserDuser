@@ -33,7 +33,7 @@ import (
 
 	"event-api/internal/logger"
 	"event-api/internal/models"
-	"event-api/internal/telegram"
+	"event-api/internal/telegramclient"
 
 	"go.uber.org/zap"
 )
@@ -67,28 +67,28 @@ type AuthService interface {
 
 // AuthHandler управляет всеми auth endpoints.
 //
-// Полезная информация о поле `telegramStore`:
-//   - `telegramStore` используется для проверки привязки Telegram к пользователю
-//     (например, в `GetMe`). Может быть nil — handlers должны корректно
-//     обрабатывать этот случай и не приводить к панике.
+// Полезная информация о поле `telegramClient`:
+//   - `telegramClient` используется для проверки привязки Telegram к пользователю
+//     (например, в `GetMe`) через gRPC запрос к telegram-service.
+//     Может быть nil — handlers должны корректно обрабатывать этот случай.
 //   - `authService` содержит бизнес-логику и абстрагирует работу с БД и токенами.
 type AuthHandler struct {
-	authService   AuthService
-	telegramStore *telegram.Store
+	authService    AuthService
+	telegramClient *telegramclient.Client
 }
 
 // NewAuthHandler создает новый auth handler.
 //
 // Параметры:
 // - `authService` — реализация интерфейса `AuthService`, отвечающая за бизнес-логику.
-// - `telegramStore` — (опционально) хранилище привязок Telegram; может быть nil.
+// - `telegramClient` — (опционально) gRPC клиент для telegram-service; может быть nil.
 //
 // Возвращает готовую структуру `AuthHandler`, которую можно использовать при
 // регистрации маршрутов HTTP сервера.
-func NewAuthHandler(authService AuthService, telegramStore *telegram.Store) *AuthHandler {
+func NewAuthHandler(authService AuthService, telegramClient *telegramclient.Client) *AuthHandler {
 	return &AuthHandler{
-		authService:   authService,
-		telegramStore: telegramStore,
+		authService:    authService,
+		telegramClient: telegramClient,
 	}
 }
 
@@ -382,18 +382,18 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	// Ожидается, что модель `models.User` содержит поле `Role string`.
 	response["role"] = user.Role
 
-	if h.telegramStore != nil {
-		// Если telegramStore доступен, пробуем получить привязку. Ошибки при
-		// получении привязки не приводят к фейлу эндпоинта — они логируются
-		// внутри telegramStore или сервисного слоя; здесь мы ведем себя терпимо.
-		binding, err := h.telegramStore.GetBindingByUserID(r.Context(), userID)
-		if err == nil && binding != nil && binding.Status == telegram.BindingStatusActive {
+	if h.telegramClient != nil {
+		// Если telegramClient доступен, пробуем получить привязку через gRPC.
+		// Ошибки при получении привязки не приводят к фейлу эндпоинта —
+		// gRPC запрос non-critical, здесь мы ведем себя терпимо.
+		status, err := h.telegramClient.GetBindingStatus(r.Context(), userID)
+		if err == nil && status != nil && status.Status == "active" {
 			response["telegram_registered"] = true
 			response["telegram_info"] = map[string]interface{}{
-				"username":   binding.Username,
-				"chat_id":    binding.ChatID,
-				"status":     binding.Status,
-				"updated_at": binding.UpdatedAt,
+				"username":   status.Username,
+				"chat_id":    status.ChatID,
+				"status":     status.Status,
+				"updated_at": status.UpdatedAt,
 			}
 		}
 	}

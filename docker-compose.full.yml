@@ -55,6 +55,10 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-devpass}
       REDIS_DB: 0
+      # Telegram service gRPC integration (point to host where telegram-service is exposed)
+      TELEGRAM_SERVICE_ENABLED: ${TELEGRAM_SERVICE_ENABLED:-true}
+      TELEGRAM_SERVICE_ADDRESS: ${TELEGRAM_SERVICE_ADDRESS:-host.docker.internal:50051}
+      TELEGRAM_SERVICE_TIMEOUT_MS: ${TELEGRAM_SERVICE_TIMEOUT_MS:-1000}
 
     depends_on:
       postgres:
