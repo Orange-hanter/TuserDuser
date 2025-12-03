@@ -1,0 +1,76 @@
+version: "3.8"
+
+services:
+  telegram-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram-service
+    restart: unless-stopped
+    ports:
+      - "50051:50051" # gRPC
+      - "8081:8081" # HTTP (webhooks, metrics)
+    environment:
+      - ENV=development
+      - GRPC_PORT=50051
+      - HTTP_PORT=8081
+      - DATABASE_URL=postgres://postgres:postgres@telegram-db:5432/telegram_service?sslmode=disable
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      - TELEGRAM_WEBHOOK_ALIAS=${TELEGRAM_WEBHOOK_ALIAS}
+      - TELEGRAM_BINDING_SECRET=${TELEGRAM_BINDING_SECRET}
+      - TELEGRAM_BINDING_TTL=${TELEGRAM_BINDING_TTL}
+      - TELEGRAM_RATE_LIMIT=${TELEGRAM_RATE_LIMIT}
+      - TELEGRAM_MAX_RETRIES=${TELEGRAM_MAX_RETRIES}
+      - TELEGRAM_RETRY_BASE_SECONDS=${TELEGRAM_RETRY_BASE_SECONDS}
+      - TELEGRAM_UPDATE_MODE=${TELEGRAM_UPDATE_MODE}
+      - TELEGRAM_POLLING_TIMEOUT=${TELEGRAM_POLLING_TIMEOUT}
+      - TELEGRAM_POLLING_RETRY_DELAY=${TELEGRAM_POLLING_RETRY_DELAY}
+      - TELEGRAM_API_BASE_URL=${TELEGRAM_API_BASE_URL}
+    depends_on:
+      telegram-db:
+        condition: service_healthy
+    networks:
+      - telegram-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8081/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  telegram-db:
+    image: postgres:15-alpine
+    container_name: telegram-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=telegram_service
+    volumes:
+      - telegram-db-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # Use different port to avoid conflict with main DB
+    networks:
+      - telegram-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  telegram-network:
+    driver: bridge
+
+volumes:
+  telegram-db-data:

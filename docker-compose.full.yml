@@ -18,6 +18,15 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - event-api
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-event_api}",
+        ]
+      interval: 5s
+      timeout: 2s
+      retries: 10
     restart: unless-stopped
 
   redis:
@@ -30,6 +39,11 @@ services:
     command: redis-server --appendonly yes
     networks:
       - event-api
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
     restart: unless-stopped
 
   event-api:
@@ -55,6 +69,10 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-devpass}
       REDIS_DB: 0
+      # Telegram service gRPC integration (point to host where telegram-service is exposed)
+      TELEGRAM_SERVICE_ENABLED: ${TELEGRAM_SERVICE_ENABLED:-true}
+      TELEGRAM_SERVICE_ADDRESS: ${TELEGRAM_SERVICE_ADDRESS:-host.docker.internal:50051}
+      TELEGRAM_SERVICE_TIMEOUT_MS: ${TELEGRAM_SERVICE_TIMEOUT_MS:-1000}
 
     depends_on:
       postgres:

@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package telegram.v1;
+
+option go_package = "telegram-service/api/proto/telegramv1";
+
+// TelegramService provides Telegram integration capabilities for external services.
+// All Telegram Bot API interactions are encapsulated within this service.
+service TelegramService {
+  // GenerateBindingLink creates a deep link for user to bind their Telegram account.
+  // The link contains an HMAC-signed token with 1h TTL.
+  rpc GenerateBindingLink(GenerateBindingLinkRequest) returns (GenerateBindingLinkResponse);
+
+  // SendVerificationCode sends a verification code to a bound user's Telegram chat.
+  rpc SendVerificationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
+
+  // SendEventReminder sends an event reminder notification to a bound user.
+  rpc SendEventReminder(SendEventReminderRequest) returns (SendEventReminderResponse);
+
+  // SendMessage sends a custom message to a bound user's Telegram chat.
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+
+  // IsUserBound checks if a user has an active Telegram binding.
+  rpc IsUserBound(IsUserBoundRequest) returns (IsUserBoundResponse);
+
+  // GetBindingStatus returns detailed binding status for a user.
+  rpc GetBindingStatus(GetBindingStatusRequest) returns (GetBindingStatusResponse);
+
+  // UnbindUser removes the Telegram binding for a user (admin action).
+  rpc UnbindUser(UnbindUserRequest) returns (UnbindUserResponse);
+}
+
+// GenerateBindingLinkRequest contains the user ID for which to generate a binding link.
+message GenerateBindingLinkRequest {
+  // Opaque user ID from the core service.
+  string user_id = 1;
+}
+
+// GenerateBindingLinkResponse contains the generated deep link and metadata.
+message GenerateBindingLinkResponse {
+  bool success = 1;
+  string error_code = 2;       // Machine-readable: "invalid_user_id", "service_unavailable"
+  string error_message = 3;    // Human-readable description
+  
+  string deeplink = 4;         // Full Telegram deep link (https://t.me/bot?start=token)
+  string token = 5;            // Raw token (for debugging/logging)
+  int64 expires_at_unix = 6;   // Token expiration timestamp
+}
+
+// SendVerificationCodeRequest contains data for sending a verification code.
+message SendVerificationCodeRequest {
+  string user_id = 1;
+  string code = 2;             // The verification code to send
+  int32 expires_in_minutes = 3; // Optional: how long the code is valid
+}
+
+// SendVerificationCodeResponse indicates the result of sending verification code.
+message SendVerificationCodeResponse {
+  bool success = 1;
+  string error_code = 2;       // "user_not_bound", "blocked", "rate_limited", "send_failed"
+  string error_message = 3;
+  
+  int64 sent_at_unix = 4;      // When the message was sent
+  string message_id = 5;       // Telegram message ID (for tracking)
+}
+
+// SendEventReminderRequest contains data for sending an event reminder.
+message SendEventReminderRequest {
+  string user_id = 1;
+  string event_id = 2;
+  string event_title = 3;
+  string event_description = 4;
+  int64 event_start_unix = 5;  // Event start timestamp
+  string event_location = 6;   // Optional location
+  string deeplink_url = 7;     // Optional: link back to event in app
+}
+
+// SendEventReminderResponse indicates the result of sending event reminder.
+message SendEventReminderResponse {
+  bool success = 1;
+  string error_code = 2;       // "user_not_bound", "blocked", "rate_limited", "send_failed"
+  string error_message = 3;
+  
+  int64 sent_at_unix = 4;
+  string message_id = 5;
+}
+
+// SendMessageRequest allows sending a custom formatted message.
+message SendMessageRequest {
+  string user_id = 1;
+  string text = 2;             // Message text
+  string parse_mode = 3;       // "MarkdownV2", "HTML", or empty for plain text
+  bool silent = 4;             // Send without notification sound
+  string reply_markup_json = 5; // Optional: inline keyboard JSON
+}
+
+// SendMessageResponse indicates the result of sending custom message.
+message SendMessageResponse {
+  bool success = 1;
+  string error_code = 2;
+  string error_message = 3;
+  
+  int64 sent_at_unix = 4;
+  string message_id = 5;
+}
+
+// IsUserBoundRequest checks binding status for a user.
+message IsUserBoundRequest {
+  string user_id = 1;
+}
+
+// IsUserBoundResponse indicates whether user has active Telegram binding.
+message IsUserBoundResponse {
+  bool success = 1;
+  string error_code = 2;
+  string error_message = 3;
+  
+  bool is_bound = 4;           // True if user has active binding
+  string status = 5;           // "active", "blocked", "revoked", or empty
+}
+
+// GetBindingStatusRequest retrieves detailed binding information.
+message GetBindingStatusRequest {
+  string user_id = 1;
+}
+
+// GetBindingStatusResponse contains detailed binding information.
+message GetBindingStatusResponse {
+  bool success = 1;
+  string error_code = 2;       // "user_not_bound"
+  string error_message = 3;
+  
+  string status = 4;           // "pending", "active", "blocked", "revoked"
+  string telegram_username = 5;
+  string telegram_first_name = 6;
+  string telegram_last_name = 7;
+  int64 chat_id = 8;
+  int64 created_at_unix = 9;
+  int64 updated_at_unix = 10;
+  string blocked_reason = 11;  // If status is "blocked"
+}
+
+// UnbindUserRequest removes Telegram binding for a user.
+message UnbindUserRequest {
+  string user_id = 1;
+  string reason = 2;           // Optional reason for unbinding
+}
+
+// UnbindUserResponse indicates the result of unbinding operation.
+message UnbindUserResponse {
+  bool success = 1;
+  string error_code = 2;       // "user_not_bound"
+  string error_message = 3;
+}
