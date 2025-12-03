@@ -101,7 +101,17 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, logger *zap.Logger) error 
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 
+		// Short binding codes (user-friendly 6-char codes)
+		`CREATE TABLE IF NOT EXISTS telegram_binding_codes (
+			id SERIAL PRIMARY KEY,
+			code VARCHAR(6) NOT NULL UNIQUE,
+			user_id VARCHAR(255) NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+
 		// Indexes
+		`CREATE INDEX IF NOT EXISTS idx_telegram_binding_codes_expires ON telegram_binding_codes(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_telegram_binding_tokens_expires ON telegram_binding_tokens(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_telegram_bindings_chat_id ON telegram_bindings(chat_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_telegram_bindings_status ON telegram_bindings(status)`,

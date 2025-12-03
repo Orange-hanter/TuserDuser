@@ -56,6 +56,7 @@ func (s *TelegramServiceServer) GenerateBindingLink(ctx context.Context, req *Ge
 		Success:       true,
 		Deeplink:      result.DeepLink,
 		Token:         result.Token,
+		Code:          result.Code,
 		ExpiresAtUnix: result.ExpiresAt.Unix(),
 	}, nil
 }

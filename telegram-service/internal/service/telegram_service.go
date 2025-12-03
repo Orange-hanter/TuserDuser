@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -62,6 +63,7 @@ type ChatMetadata struct {
 type BindingLinkResult struct {
 	DeepLink  string
 	Token     string
+	Code      string // Short 6-character code for manual entry
 	ExpiresAt time.Time
 }
 
@@ -82,6 +84,13 @@ func (s *TelegramService) GenerateBindingLink(ctx context.Context, userID string
 		return nil, fmt.Errorf("save token: %w", err)
 	}
 
+	// Generate short 6-character code
+	shortCode := generateShortCode()
+	if err := s.store.SaveBindingCode(ctx, shortCode, userID, expiresAt); err != nil {
+		s.logger.Error("failed to save binding code", zap.Error(err))
+		// Continue - deep link still works
+	}
+
 	deepLink := fmt.Sprintf("https://t.me/%s?start=%s", s.botUsername, token)
 
 	metrics.BindingLinksGenerated.Inc()
@@ -89,8 +98,58 @@ func (s *TelegramService) GenerateBindingLink(ctx context.Context, userID string
 	return &BindingLinkResult{
 		DeepLink:  deepLink,
 		Token:     token,
+		Code:      shortCode,
 		ExpiresAt: expiresAt,
 	}, nil
+}
+
+// generateShortCode creates a 6-character alphanumeric code (uppercase).
+func generateShortCode() string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // Excluded I,O,0,1 to avoid confusion
+	b := make([]byte, 6)
+	for i := range b {
+		// Use crypto/rand for better randomness
+		n := time.Now().UnixNano() + int64(i*1000)
+		b[i] = charset[n%int64(len(charset))]
+	}
+	return string(b)
+}
+
+// HandleBindingCode processes a 6-character binding code from user input.
+func (s *TelegramService) HandleBindingCode(ctx context.Context, code string, chat ChatMetadata) (*database.Binding, error) {
+	// Normalize code to uppercase
+	code = strings.ToUpper(strings.TrimSpace(code))
+
+	if len(code) != 6 {
+		return nil, ErrInvalidToken
+	}
+
+	userID, err := s.store.ConsumeBindingCode(ctx, code)
+	if err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	binding := database.Binding{
+		UserID:    userID,
+		ChatID:    chat.ChatID,
+		Status:    database.BindingStatusActive,
+		Username:  chat.Username,
+		FirstName: chat.FirstName,
+		LastName:  chat.LastName,
+	}
+
+	if err := s.store.UpsertBinding(ctx, binding); err != nil {
+		return nil, fmt.Errorf("upsert binding: %w", err)
+	}
+
+	metrics.BindingsTotal.WithLabelValues("active").Inc()
+	s.logger.Info("telegram binding activated via code",
+		zap.String("user_id", userID),
+		zap.Int64("chat_id", chat.ChatID),
+		zap.String("code", code),
+	)
+
+	return &binding, nil
 }
 
 // HandleStartCommand processes /start <token> binding from Telegram webhook.
@@ -219,14 +278,40 @@ func (s *TelegramService) HandleIncomingMessage(ctx context.Context, chatID, tel
 
 	// Handle /start without token
 	if text == "/start" {
-		msg := "👋 Привет!\n\nЭтот бот отправляет уведомления о событиях.\n\nДля привязки используйте специальную ссылку из приложения."
+		// Check if user has existing binding (possibly blocked)
+		binding, err := s.store.GetBindingByChatID(ctx, chatID)
+		if err == nil {
+			// User has existing binding
+			if binding.Status == database.BindingStatusBlocked {
+				// Reactivate blocked binding when user starts chat again
+				if err := s.store.SetBindingStatus(ctx, binding.UserID, database.BindingStatusActive, nil, nil); err != nil {
+					s.logger.Error("failed to reactivate binding", zap.Error(err))
+				} else {
+					s.logger.Info("reactivated blocked binding",
+						zap.String("user_id", binding.UserID),
+						zap.Int64("chat_id", chatID),
+					)
+					s.sendSimpleMessage(ctx, chatID, "✅ Привязка восстановлена!\n\nВы снова будете получать уведомления о событиях.")
+					return nil
+				}
+			} else if binding.Status == database.BindingStatusActive {
+				s.sendSimpleMessage(ctx, chatID, "👋 Вы уже привязаны к системе и будете получать уведомления о событиях.\n\nДля отключения: /unsubscribe")
+				return nil
+			} else if binding.Status == database.BindingStatusRevoked {
+				s.sendSimpleMessage(ctx, chatID, "⚠️ Ваша привязка была отключена.\n\nДля повторной привязки введите код из приложения или перейдите по ссылке.")
+				return nil
+			}
+		}
+
+		// No binding found - new user
+		msg := "👋 Привет!\n\nЭтот бот отправляет уведомления о событиях.\n\n📱 Для привязки введите 6-значный код из приложения или перейдите по ссылке."
 		s.sendSimpleMessage(ctx, chatID, msg)
 		return nil
 	}
 
 	// Handle /help
 	if text == "/help" {
-		msg := "📖 *Доступные команды:*\n\n/start — начало работы\n/unsubscribe — отключить уведомления\n/help — эта справка"
+		msg := "📖 *Доступные команды:*\n\n/start — начало работы\n/unsubscribe — отключить уведомления\n/help — эта справка\n\n💡 Для привязки введите 6-значный код из приложения"
 		s.client.SendMessage(ctx, telegram.OutboundMessage{
 			ChatID:    chatID,
 			Text:      msg,
@@ -235,8 +320,47 @@ func (s *TelegramService) HandleIncomingMessage(ctx context.Context, chatID, tel
 		return nil
 	}
 
-	// Unknown message - ignore or send help
+	// Try to handle as 6-character binding code
+	normalizedText := strings.ToUpper(strings.TrimSpace(text))
+	if len(normalizedText) == 6 && isAlphanumeric(normalizedText) {
+		chat := ChatMetadata{
+			ChatID:    chatID,
+			Username:  username,
+			FirstName: firstName,
+			LastName:  lastName,
+		}
+
+		binding, err := s.HandleBindingCode(ctx, normalizedText, chat)
+		if err != nil {
+			if errors.Is(err, ErrInvalidToken) {
+				s.sendSimpleMessage(ctx, chatID, "❌ Код недействителен или истёк.\n\nЗапросите новый код в приложении.")
+			} else {
+				s.logger.Error("failed to process binding code", zap.Error(err))
+				s.sendSimpleMessage(ctx, chatID, "❌ Произошла ошибка. Попробуйте позже.")
+			}
+			return err
+		}
+
+		s.sendSimpleMessage(ctx, chatID, "✅ Telegram успешно привязан!\n\nВы будете получать уведомления о событиях.\n\nДля отключения: /unsubscribe")
+		s.logger.Info("binding activated via short code",
+			zap.String("user_id", binding.UserID),
+			zap.Int64("chat_id", chatID),
+		)
+		return nil
+	}
+
+	// Unknown message - ignore
 	return nil
+}
+
+// isAlphanumeric checks if string contains only letters and digits.
+func isAlphanumeric(s string) bool {
+	for _, c := range s {
+		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 // sendSimpleMessage sends a plain text message without formatting.

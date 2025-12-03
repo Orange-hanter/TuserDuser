@@ -91,7 +91,14 @@ func (s *Store) ConsumeBindingToken(ctx context.Context, nonceHash string) (stri
 }
 
 // UpsertBinding inserts or updates a telegram binding.
+// If chat_id is already bound to a different user, it will be rebound to the new user.
 func (s *Store) UpsertBinding(ctx context.Context, binding Binding) error {
+	// First, delete any existing binding for this chat_id (to allow rebinding to different user)
+	_, _ = s.pool.Exec(ctx,
+		`DELETE FROM telegram_bindings WHERE chat_id = $1 AND user_id != $2`,
+		binding.ChatID, binding.UserID)
+
+	// Now upsert by user_id
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO telegram_bindings (user_id, chat_id, status, telegram_username, telegram_first_name, telegram_last_name, blocked_reason, last_error_code, last_error_at, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
@@ -177,6 +184,46 @@ func (s *Store) RecordWebhookEvent(ctx context.Context, event WebhookEvent) erro
 func (s *Store) CleanupExpiredTokens(ctx context.Context) (int64, error) {
 	result, err := s.pool.Exec(ctx,
 		`DELETE FROM telegram_binding_tokens WHERE expires_at < NOW()`,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+// SaveBindingCode stores a short 6-character binding code.
+func (s *Store) SaveBindingCode(ctx context.Context, code, userID string, expiresAt time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO telegram_binding_codes (code, user_id, expires_at, created_at)
+		 VALUES ($1, $2, $3, NOW())
+		 ON CONFLICT (code) DO UPDATE
+		 SET user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at, created_at = NOW()`,
+		code, userID, expiresAt,
+	)
+	return err
+}
+
+// ConsumeBindingCode validates and consumes a short binding code.
+func (s *Store) ConsumeBindingCode(ctx context.Context, code string) (string, error) {
+	row := s.pool.QueryRow(ctx,
+		`DELETE FROM telegram_binding_codes
+		 WHERE code = $1 AND expires_at > NOW()
+		 RETURNING user_id`, code,
+	)
+	var userID string
+	if err := row.Scan(&userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrTokenExpired
+		}
+		return "", err
+	}
+	return userID, nil
+}
+
+// CleanupExpiredCodes removes expired binding codes.
+func (s *Store) CleanupExpiredCodes(ctx context.Context) (int64, error) {
+	result, err := s.pool.Exec(ctx,
+		`DELETE FROM telegram_binding_codes WHERE expires_at < NOW()`,
 	)
 	if err != nil {
 		return 0, err

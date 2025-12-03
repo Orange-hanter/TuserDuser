@@ -82,8 +82,9 @@ func main() {
 	// Initialize metrics
 	metrics.Register()
 
-	// Create gRPC server
+	// Create gRPC server with JSON codec (for compatibility with clients without proto stubs)
 	grpcServer := grpc.NewServer(
+		grpcserver.JSONCodecOption(),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle:     15 * time.Second,
 			MaxConnectionAge:      30 * time.Second,

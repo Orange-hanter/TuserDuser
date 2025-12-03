@@ -5,112 +5,115 @@ package grpcserver
 
 import (
 	"context"
+	"encoding/json"
 
 	"google.golang.org/grpc"
 )
 
 // Request/Response types matching the proto definitions
+// JSON tags must match the client-side types (snake_case)
 
 type GenerateBindingLinkRequest struct {
-	UserId string
+	UserId string `json:"user_id"`
 }
 
 type GenerateBindingLinkResponse struct {
-	Success       bool
-	ErrorCode     string
-	ErrorMessage  string
-	Deeplink      string
-	Token         string
-	ExpiresAtUnix int64
+	Success       bool   `json:"success"`
+	ErrorCode     string `json:"error_code"`
+	ErrorMessage  string `json:"error_message"`
+	Deeplink      string `json:"deeplink"`
+	Token         string `json:"token"`
+	Code          string `json:"code"` // Short 6-character code for manual entry
+	ExpiresAtUnix int64  `json:"expires_at_unix"`
 }
 
 type SendVerificationCodeRequest struct {
-	UserId           string
-	Code             string
-	ExpiresInMinutes int32
+	UserId           string `json:"user_id"`
+	Code             string `json:"code"`
+	ExpiresInMinutes int32  `json:"expires_in_minutes"`
 }
 
 type SendVerificationCodeResponse struct {
-	Success      bool
-	ErrorCode    string
-	ErrorMessage string
-	SentAtUnix   int64
-	MessageId    string
+	Success      bool   `json:"success"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
+	SentAtUnix   int64  `json:"sent_at_unix"`
+	MessageId    string `json:"message_id"`
 }
 
 type SendEventReminderRequest struct {
-	UserId           string
-	EventId          string
-	EventTitle       string
-	EventDescription string
-	EventStartUnix   int64
-	EventLocation    string
-	DeeplinkUrl      string
+	UserId           string `json:"user_id"`
+	EventId          string `json:"event_id"`
+	EventTitle       string `json:"event_title"`
+	EventDescription string `json:"event_description"`
+	EventStartUnix   int64  `json:"event_start_unix"`
+	EventLocation    string `json:"event_location"`
+	DeeplinkUrl      string `json:"deeplink_url"`
 }
 
 type SendEventReminderResponse struct {
-	Success      bool
-	ErrorCode    string
-	ErrorMessage string
-	SentAtUnix   int64
-	MessageId    string
+	Success      bool   `json:"success"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
+	SentAtUnix   int64  `json:"sent_at_unix"`
+	MessageId    string `json:"message_id"`
 }
 
 type SendMessageRequest struct {
-	UserId          string
-	Text            string
-	ParseMode       string
-	Silent          bool
-	ReplyMarkupJson string
+	UserId          string `json:"user_id"`
+	Text            string `json:"text"`
+	ParseMode       string `json:"parse_mode"`
+	Silent          bool   `json:"silent"`
+	ReplyMarkupJson string `json:"reply_markup_json"`
 }
 
 type SendMessageResponse struct {
-	Success      bool
-	ErrorCode    string
-	ErrorMessage string
-	SentAtUnix   int64
-	MessageId    string
+	Success      bool   `json:"success"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
+	SentAtUnix   int64  `json:"sent_at_unix"`
+	MessageId    string `json:"message_id"`
 }
 
 type IsUserBoundRequest struct {
-	UserId string
+	UserId string `json:"user_id"`
 }
 
 type IsUserBoundResponse struct {
-	Success      bool
-	ErrorCode    string
-	ErrorMessage string
-	IsBound      bool
-	Status       string
+	Success      bool   `json:"success"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
+	IsBound      bool   `json:"is_bound"`
+	Status       string `json:"status"`
 }
 
 type GetBindingStatusRequest struct {
-	UserId string
+	UserId string `json:"user_id"`
 }
 
 type GetBindingStatusResponse struct {
-	Success           bool
-	ErrorCode         string
-	ErrorMessage      string
-	Status            string
-	TelegramUsername  string
-	TelegramFirstName string
-	TelegramLastName  string
-	ChatId            int64
-	CreatedAtUnix     int64
-	UpdatedAtUnix     int64
-	BlockedReason     string
+	Success           bool   `json:"success"`
+	ErrorCode         string `json:"error_code"`
+	ErrorMessage      string `json:"error_message"`
+	Status            string `json:"status"`
+	TelegramUsername  string `json:"telegram_username"`
+	TelegramFirstName string `json:"telegram_first_name"`
+	TelegramLastName  string `json:"telegram_last_name"`
+	ChatId            int64  `json:"chat_id"`
+	CreatedAtUnix     int64  `json:"created_at_unix"`
+	UpdatedAtUnix     int64  `json:"updated_at_unix"`
+	BlockedReason     string `json:"blocked_reason"`
 }
 
 type UnbindUserRequest struct {
-	UserId string
-	Reason string
+	UserId string `json:"user_id"`
+	Reason string `json:"reason"`
 }
 
 type UnbindUserResponse struct {
-	Success      bool
-	ErrorCode    string
-	ErrorMessage string
+	Success      bool   `json:"success"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
 }
 
 // TelegramServiceServer is the server API for TelegramService service.
@@ -324,4 +327,25 @@ func _TelegramService_UnbindUser_Handler(srv interface{}, ctx context.Context, d
 		return srv.(TelegramServiceInterface).UnbindUser(ctx, req.(*UnbindUserRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+// jsonCodec implements grpc.Codec for JSON encoding.
+// This allows using plain structs instead of proto.Message types.
+type jsonCodec struct{}
+
+func (jsonCodec) Marshal(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
+}
+
+func (jsonCodec) Unmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
+func (jsonCodec) Name() string {
+	return "json"
+}
+
+// JSONCodecOption returns a server option that uses JSON instead of protobuf.
+func JSONCodecOption() grpc.ServerOption {
+	return grpc.ForceServerCodec(jsonCodec{})
 }
