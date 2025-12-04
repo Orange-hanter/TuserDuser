@@ -36,4 +36,6 @@
 //     middleware, проверяющего права пользователя (RBAC).
 //   - В development режиме некоторые данные (verify_code) могут возвращаться в ответе
 //     для удобства тестирования; в production это следует отключать.
+//
+// Package handlers provides HTTP handlers that delegate Telegram operations to telegram-service via gRPC.
 package handlers
