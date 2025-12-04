@@ -8,8 +8,8 @@ services:
     container_name: telegram-service
     restart: unless-stopped
     ports:
-      - "50051:50051" # gRPC
-      - "8081:8081" # HTTP (webhooks, metrics)
+      - 50051:50051 # gRPC
+      - 8081:8081 # HTTP (webhooks, metrics)
     environment:
       - ENV=development
       - GRPC_PORT=50051
@@ -33,15 +33,17 @@ services:
         condition: service_healthy
     networks:
       - telegram-network
+    dns:
+      - 8.8.8.8
     healthcheck:
       test:
         [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8081/health",
+          CMD,
+          wget,
+          --no-verbose,
+          --tries=1,
+          --spider,
+          http://localhost:8081/health,
         ]
       interval: 30s
       timeout: 10s
@@ -59,11 +61,11 @@ services:
     volumes:
       - telegram-db-data:/var/lib/postgresql/data
     ports:
-      - "5433:5432" # Use different port to avoid conflict with main DB
+      - 5433:5432 # Use different port to avoid conflict with main DB
     networks:
       - telegram-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [CMD-SHELL, pg_isready -U postgres]
       interval: 10s
       timeout: 5s
       retries: 5
