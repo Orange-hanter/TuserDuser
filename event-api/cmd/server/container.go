@@ -233,12 +233,22 @@ func (c *AppContainer) initHandlers() {
 	// Admin role request handler
 	c.AdminRoleRequestHandler = handlers.NewAdminRoleRequestHandler(c.UserService, logger.Log)
 
-	// Telegram handler (if enabled and gRPC client connected)
-	if c.Config.TelegramEnabled && telegramClient != nil {
+	// Telegram handler (if enabled and gRPC client connected).
+	// Handler should be enabled when either legacy Telegram integration is enabled
+	// (`TelegramEnabled`) or when the external telegram-service gRPC integration is enabled
+	// (`TelegramServiceEnabled`). Previously the code only checked `TelegramEnabled`,
+	// which caused the handler to be disabled when only `TelegramServiceEnabled` was set.
+	if (c.Config.TelegramEnabled || c.Config.TelegramServiceEnabled) && telegramClient != nil {
 		c.TelegramHandler = handlers.NewTelegramGRPCHandler(telegramClient, logger.Log)
-		logger.Log.Info("telegram handler enabled via gRPC")
+		logger.Log.Info("telegram handler enabled via gRPC",
+			zap.Bool("telegram_enabled", c.Config.TelegramEnabled),
+			zap.Bool("telegram_service_enabled", c.Config.TelegramServiceEnabled),
+		)
 	} else {
-		logger.Log.Info("telegram handler disabled")
+		logger.Log.Info("telegram handler disabled",
+			zap.Bool("telegram_enabled", c.Config.TelegramEnabled),
+			zap.Bool("telegram_service_enabled", c.Config.TelegramServiceEnabled),
+		)
 	}
 
 	logger.Log.Info("✅ All handlers initialized")

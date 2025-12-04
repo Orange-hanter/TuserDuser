@@ -149,8 +149,8 @@ func (s *Store) SetBindingStatus(ctx context.Context, userID string, status Bind
 		`UPDATE telegram_bindings
 		 SET status = $2,
 			blocked_reason = $3,
-			last_error_code = $4,
-			last_error_at = CASE WHEN $4 IS NULL THEN NULL ELSE NOW() END,
+			last_error_code = $4::integer,
+			last_error_at = CASE WHEN $4::integer IS NULL THEN NULL ELSE NOW() END,
 			updated_at = NOW()
 		 WHERE user_id = $1`,
 		userID, status, reason, code,

@@ -132,6 +132,11 @@ func registerDiscoveryRoutes(
 		r.Route("/api/notifications/telegram", func(r chi.Router) {
 			r.Post("/link", telegramHandler.IssueLink)
 			r.Get("/status", telegramHandler.BindingStatus)
+			// Lightweight binding check used by frontend to quickly determine if
+			// a user has an active Telegram binding.
+			r.Get("/bound", telegramHandler.IsUserBound)
+			// Endpoint to unbind (remove) Telegram binding for the authenticated user.
+			r.Post("/unbind", telegramHandler.Unbind)
 		})
 	}
 
