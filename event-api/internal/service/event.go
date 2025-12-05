@@ -15,8 +15,9 @@ import (
 
 // EventService управляет событиями.
 type EventService struct {
-	db     *sql.DB
-	logger *zap.Logger
+	db            *sql.DB
+	logger        *zap.Logger
+	adminNotifier *AdminNotifier
 }
 
 // NewEventService создает новый сервис событий.
@@ -25,6 +26,11 @@ func NewEventService(db *sql.DB, logger *zap.Logger) *EventService {
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetAdminNotifier sets the admin notifier for sending notifications about new events.
+func (s *EventService) SetAdminNotifier(notifier *AdminNotifier) {
+	s.adminNotifier = notifier
 }
 
 // GetApprovedEvents получает все одобренные события.
@@ -214,6 +220,23 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 	}
 
 	s.logger.Info("Event submitted for review", zap.String("id", event.ID), zap.String("type", event.Type))
+
+	// Notify admins about the new event (async, don't block the response)
+	if s.adminNotifier != nil {
+		go func() {
+			// Get creator email for the notification
+			creatorEmail := ""
+			if req.CreatorID != "" {
+				var email string
+				queryCtx := context.Background()
+				err := s.db.QueryRowContext(queryCtx, "SELECT email FROM users WHERE id = $1", req.CreatorID).Scan(&email)
+				if err == nil {
+					creatorEmail = email
+				}
+			}
+			s.adminNotifier.NotifyAdminsNewEvent(ctx, &event, creatorEmail)
+		}()
+	}
 
 	return &event, nil
 }

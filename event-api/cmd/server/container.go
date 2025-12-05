@@ -45,6 +45,7 @@ type AppContainer struct {
 	UserService      *service.UserService
 	CreatorService   *service.CreatorService
 	DiscoveryService *discovery.Service
+	AdminNotifier    *service.AdminNotifier
 
 	// Handlers
 	AuthHandler             *handlers.AuthHandler
@@ -202,6 +203,14 @@ func (c *AppContainer) initHandlers() {
 			logger.Log.Info("connected to telegram-service via gRPC",
 				zap.String("address", telegramCfg.Address))
 		}
+	}
+
+	// Initialize AdminNotifier for sending notifications to admins
+	if telegramClient != nil {
+		c.AdminNotifier = service.NewAdminNotifier(c.DB.DB, telegramClient, logger.Log)
+		c.EventService.SetAdminNotifier(c.AdminNotifier)
+		c.UserService.SetAdminNotifier(c.AdminNotifier)
+		logger.Log.Info("admin notifier enabled")
 	}
 
 	// Auth handler (with optional telegram client for binding status)

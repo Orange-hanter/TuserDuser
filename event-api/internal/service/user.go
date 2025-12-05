@@ -19,10 +19,11 @@ import (
 
 // UserService provides user-related functionality.
 type UserService struct {
-	db        *sql.DB
-	logger    *zap.Logger
-	discovery *discovery.Service
-	redis     *redis.Client
+	db            *sql.DB
+	logger        *zap.Logger
+	discovery     *discovery.Service
+	redis         *redis.Client
+	adminNotifier *AdminNotifier
 }
 
 // NewUserService creates a new UserService.
@@ -47,6 +48,11 @@ func NewUserServiceWithRedis(db *sql.DB, logger *zap.Logger, disc *discovery.Ser
 // SetRedisClient sets the Redis client for caching.
 func (s *UserService) SetRedisClient(redisClient *redis.Client) {
 	s.redis = redisClient
+}
+
+// SetAdminNotifier sets the admin notifier for sending notifications about role requests.
+func (s *UserService) SetAdminNotifier(notifier *AdminNotifier) {
+	s.adminNotifier = notifier
 }
 
 // Constants for public profile caching.
@@ -503,8 +509,8 @@ func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) 
 // RequestRole handles a user's request to upgrade their role.
 func (s *UserService) RequestRole(ctx context.Context, userID, role, reason string) (*models.RoleRequestResponse, error) {
 	// Check if user already has the requested role
-	var currentRole string
-	err := s.db.QueryRowContext(ctx, "SELECT role FROM users WHERE id = $1", userID).Scan(&currentRole)
+	var currentRole, userEmail string
+	err := s.db.QueryRowContext(ctx, "SELECT role, email FROM users WHERE id = $1", userID).Scan(&currentRole, &userEmail)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("user not found")
@@ -534,6 +540,11 @@ func (s *UserService) RequestRole(ctx context.Context, userID, role, reason stri
 	}
 
 	s.logger.Info("Role request created", zap.String("user_id", userID), zap.String("role", role))
+
+	// Notify admins about the new role request (async, don't block the response)
+	if s.adminNotifier != nil {
+		go s.adminNotifier.NotifyAdminsRoleRequest(ctx, userID, userEmail, role, reason)
+	}
 
 	return &models.RoleRequestResponse{
 		Message: "Role request submitted successfully. Admins will review your request.",
