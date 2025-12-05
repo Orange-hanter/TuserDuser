@@ -40,12 +40,13 @@ type AppContainer struct {
 	EmailService *email.Service
 
 	// Business services
-	AuthService      *service.AuthService
-	EventService     *service.EventService
-	UserService      *service.UserService
-	CreatorService   *service.CreatorService
-	DiscoveryService *discovery.Service
-	AdminNotifier    *service.AdminNotifier
+	AuthService            *service.AuthService
+	EventService           *service.EventService
+	UserService            *service.UserService
+	CreatorService         *service.CreatorService
+	DiscoveryService       *discovery.Service
+	AdminNotifier          *service.AdminNotifier
+	EventReminderScheduler *service.EventReminderScheduler
 
 	// Handlers
 	AuthHandler             *handlers.AuthHandler
@@ -211,6 +212,19 @@ func (c *AppContainer) initHandlers() {
 		c.EventService.SetAdminNotifier(c.AdminNotifier)
 		c.UserService.SetAdminNotifier(c.AdminNotifier)
 		logger.Log.Info("admin notifier enabled")
+
+		// Initialize EventReminderScheduler for sending event reminders
+		c.EventReminderScheduler = service.NewEventReminderScheduler(
+			c.DB.DB,
+			telegramClient,
+			logger.Log,
+			service.DefaultReminderConfig(),
+		)
+		if err := c.EventReminderScheduler.Start(); err != nil {
+			logger.Log.Error("failed to start event reminder scheduler", zap.Error(err))
+		} else {
+			logger.Log.Info("event reminder scheduler started")
+		}
 	}
 
 	// Auth handler (with optional telegram client for binding status)
@@ -303,6 +317,11 @@ func (c *AppContainer) Close() error {
 		if err := c.Telemetry.Shutdown(context.Background()); err != nil {
 			logger.Log.Error("failed to shutdown telemetry", zap.Error(err))
 		}
+	}
+
+	// Stop event reminder scheduler
+	if c.EventReminderScheduler != nil {
+		c.EventReminderScheduler.Stop()
 	}
 
 	if c.WorkerPool != nil {

@@ -116,6 +116,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   addPublicProfileFields,
 			down: dropPublicProfileFields,
 		},
+		{
+			name: "016_create_event_reminder_log",
+			up:   createEventReminderLog,
+			down: dropEventReminderLog,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -1167,4 +1172,39 @@ ALTER TABLE users DROP COLUMN IF EXISTS country;
 ALTER TABLE users DROP COLUMN IF EXISTS is_verified;
 ALTER TABLE users DROP COLUMN IF EXISTS public_social;
 ALTER TABLE users DROP COLUMN IF EXISTS is_profile_public;
+`
+
+// Migration 016: Create event_reminder_log table
+// Tracks sent reminders to prevent duplicate notifications.
+
+const createEventReminderLog = `
+-- Create event_reminder_log table to track sent reminders
+CREATE TABLE IF NOT EXISTS event_reminder_log (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    event_id UUID NOT NULL,
+    reminder_type VARCHAR(20) NOT NULL,
+    sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, event_id, reminder_type)
+);
+
+-- Index for efficient lookups when checking if reminder was sent
+CREATE INDEX IF NOT EXISTS idx_event_reminder_log_lookup 
+    ON event_reminder_log(user_id, event_id, reminder_type);
+
+-- Index for cleanup of old records
+CREATE INDEX IF NOT EXISTS idx_event_reminder_log_sent_at 
+    ON event_reminder_log(sent_at);
+
+-- Foreign keys (soft - allow orphans for audit purposes)
+-- No CASCADE DELETE - we want to keep history even if event/user is deleted
+
+COMMENT ON TABLE event_reminder_log IS 'Tracks sent event reminders to prevent duplicate notifications';
+COMMENT ON COLUMN event_reminder_log.reminder_type IS 'Type of reminder: 24h, 1h, 15min, etc.';
+`
+
+const dropEventReminderLog = `
+DROP INDEX IF EXISTS idx_event_reminder_log_lookup;
+DROP INDEX IF EXISTS idx_event_reminder_log_sent_at;
+DROP TABLE IF EXISTS event_reminder_log;
 `
