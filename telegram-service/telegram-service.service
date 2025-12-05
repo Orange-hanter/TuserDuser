@@ -1,0 +1,40 @@
+[Unit]
+Description=Telegram Service - gRPC microservice for Telegram Bot API
+Documentation=https://github.com/Orange-hanter/TuserDuser
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=telegramservice
+Group=telegramservice
+WorkingDirectory=/opt/telegram-service
+
+ExecStart=/opt/telegram-service/bin/telegram-service
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Environment
+EnvironmentFile=-/opt/telegram-service/.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/telegram-service/logs
+
+# Logging
+StandardOutput=append:/opt/telegram-service/logs/telegram-service.log
+StandardError=append:/opt/telegram-service/logs/telegram-service.log
+
+# Limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

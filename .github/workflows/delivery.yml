@@ -16,15 +16,13 @@ permissions:
 
 env:
   GO_VERSION: "1.25"
-  SERVICE_NAME: event-api
-  REMOTE_BINARY_PATH: /opt/event-api/bin/event-api
-  REMOTE_OWNER: eventapi
-  REMOTE_GROUP: eventapi
-  HEALTHCHECK_URL: https://api.tuserduser.online/health
   DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
 
 jobs:
-  build:
+  # ============================================
+  # Event API Build & Deploy
+  # ============================================
+  build-event-api:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,11 +47,15 @@ jobs:
           path: event-api/dist/event-api
           if-no-files-found: error
 
-  deploy:
+  deploy-event-api:
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-event-api
     environment:
       name: Staging
+    env:
+      SERVICE_NAME: event-api
+      REMOTE_BINARY_PATH: /opt/event-api/bin/event-api
+      HEALTHCHECK_URL: https://api.tuserduser.online/health
     steps:
       - name: Download binary artifact
         uses: actions/download-artifact@v4
@@ -80,3 +82,88 @@ jobs:
           port: ${{ env.DEPLOY_PORT }}
           script: |
             bash /opt/event-api/scripts/install.sh "${{ env.SERVICE_NAME }}" "${{ env.REMOTE_BINARY_PATH }}" "${{ env.HEALTHCHECK_URL }}"
+
+  # ============================================
+  # Telegram Service Build & Deploy
+  # ============================================
+  build-telegram-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.21"
+          cache: false
+
+      - name: Build Linux binary
+        run: |
+          cd telegram-service
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/telegram-service ./cmd/server
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-service-linux-amd64
+          path: telegram-service/dist/telegram-service
+          if-no-files-found: error
+
+  deploy-telegram-service:
+    runs-on: ubuntu-latest
+    needs: build-telegram-service
+    environment:
+      name: Staging
+    env:
+      SERVICE_NAME: telegram-service
+      REMOTE_BINARY_PATH: /opt/telegram-service/bin/telegram-service
+      HEALTHCHECK_URL: http://localhost:9090/health
+    steps:
+      - name: Checkout (for install script)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            telegram-service/scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: telegram-service-linux-amd64
+          path: dist
+
+      - name: Copy binary and install script to server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
+          source: "dist/telegram-service,telegram-service/scripts/install.sh"
+          target: /tmp/
+
+      - name: Run install script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
+          script: |
+            # First deployment: setup directories and systemd service if not exists
+            if [ ! -d "/opt/telegram-service" ]; then
+              echo "First deployment: setting up telegram-service..."
+              sudo mkdir -p /opt/telegram-service/{bin,logs}
+              sudo useradd -r -s /bin/false telegramservice 2>/dev/null || true
+              sudo chown -R telegramservice:telegramservice /opt/telegram-service
+            fi
+
+            # Copy install script to service directory
+            sudo mkdir -p /opt/telegram-service/scripts
+            sudo cp /tmp/telegram-service/scripts/install.sh /opt/telegram-service/scripts/
+            sudo chmod +x /opt/telegram-service/scripts/install.sh
+
+            # Run install script
+            bash /opt/telegram-service/scripts/install.sh "${{ env.SERVICE_NAME }}" "${{ env.REMOTE_BINARY_PATH }}" "${{ env.HEALTHCHECK_URL }}"
