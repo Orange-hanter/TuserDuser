@@ -110,6 +110,15 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, logger *zap.Logger) error 
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 
+		// Pending verifications for deferred code sending (telegram registration flow)
+		`CREATE TABLE IF NOT EXISTS telegram_pending_verifications (
+			user_id VARCHAR(255) PRIMARY KEY,
+			verification_code VARCHAR(10) NOT NULL,
+			binding_token VARCHAR(512),
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_telegram_binding_codes_expires ON telegram_binding_codes(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_telegram_binding_tokens_expires ON telegram_binding_tokens(expires_at)`,
@@ -118,6 +127,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, logger *zap.Logger) error 
 		`CREATE INDEX IF NOT EXISTS idx_telegram_delivery_status ON telegram_delivery(status, next_attempt_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_telegram_delivery_user ON telegram_delivery(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_telegram_delivery_log_delivery ON telegram_delivery_log(delivery_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_telegram_pending_verifications_expires ON telegram_pending_verifications(expires_at)`,
 	}
 
 	for i, migration := range migrations {

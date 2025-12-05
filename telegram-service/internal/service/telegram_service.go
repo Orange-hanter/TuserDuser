@@ -149,6 +149,15 @@ func (s *TelegramService) HandleBindingCode(ctx context.Context, code string, ch
 		zap.String("code", code),
 	)
 
+	// Check and send pending verification code (deferred flow)
+	if err := s.CheckAndSendPendingVerification(ctx, userID, chat.ChatID); err != nil {
+		s.logger.Warn("failed to send pending verification after code binding",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		// Don't fail the binding - verification can be resent
+	}
+
 	return &binding, nil
 }
 
@@ -184,6 +193,15 @@ func (s *TelegramService) HandleStartCommand(ctx context.Context, token string, 
 		zap.String("user_id", userID),
 		zap.Int64("chat_id", chat.ChatID),
 	)
+
+	// Check and send pending verification code (deferred flow)
+	if err := s.CheckAndSendPendingVerification(ctx, userID, chat.ChatID); err != nil {
+		s.logger.Warn("failed to send pending verification after token binding",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		// Don't fail the binding - verification can be resent
+	}
 
 	return &binding, nil
 }
@@ -579,4 +597,121 @@ func escapeMarkdownV2(text string) string {
 		result = append(result, text[i])
 	}
 	return string(result)
+}
+
+// RegisterPendingVerificationResult contains the result of registering a pending verification.
+type RegisterPendingVerificationResult struct {
+	DeepLink  string
+	Token     string
+	Code      string // 6-char binding code
+	ExpiresAt time.Time
+}
+
+// RegisterPendingVerification creates a binding link and stores the verification code
+// to be sent automatically when user completes the binding.
+// This is the main entry point for the deferred telegram verification flow.
+func (s *TelegramService) RegisterPendingVerification(ctx context.Context, userID, verificationCode string, ttlMinutes int32) (*RegisterPendingVerificationResult, error) {
+	if userID == "" {
+		return nil, ErrInvalidUserID
+	}
+	if verificationCode == "" {
+		return nil, errors.New("verification code is required")
+	}
+
+	// Generate binding link (token + code)
+	bindingResult, err := s.GenerateBindingLink(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("generate binding link: %w", err)
+	}
+
+	// Calculate expiration (use TTL from request or default to 10 minutes)
+	ttl := time.Duration(ttlMinutes) * time.Minute
+	if ttl <= 0 {
+		ttl = 10 * time.Minute
+	}
+	expiresAt := time.Now().Add(ttl)
+
+	// Store pending verification with the code
+	if err := s.store.SavePendingVerification(ctx, userID, verificationCode, bindingResult.Token, expiresAt); err != nil {
+		s.logger.Error("failed to save pending verification",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("save pending verification: %w", err)
+	}
+
+	s.logger.Info("registered pending verification",
+		zap.String("user_id", userID),
+		zap.Time("expires_at", expiresAt),
+	)
+
+	metrics.PendingVerificationsRegistered.Inc()
+
+	return &RegisterPendingVerificationResult{
+		DeepLink:  bindingResult.DeepLink,
+		Token:     bindingResult.Token,
+		Code:      bindingResult.Code,
+		ExpiresAt: bindingResult.ExpiresAt,
+	}, nil
+}
+
+// CheckAndSendPendingVerification checks if user has a pending verification code
+// and sends it via Telegram. Called after successful binding.
+func (s *TelegramService) CheckAndSendPendingVerification(ctx context.Context, userID string, chatID int64) error {
+	// Try to consume pending verification
+	pending, err := s.store.ConsumePendingVerification(ctx, userID)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			// No pending verification - this is normal for regular bindings
+			return nil
+		}
+		s.logger.Error("failed to get pending verification",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// Calculate remaining TTL in minutes
+	remainingMinutes := int32(time.Until(pending.ExpiresAt).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+
+	// Send verification code
+	text := fmt.Sprintf("🔐 *Код подтверждения*\n\n`%s`\n\nКод действителен %d мин.", pending.VerificationCode, remainingMinutes)
+	_, err = s.client.SendMessage(ctx, telegram.OutboundMessage{
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: "MarkdownV2",
+	})
+	if err != nil {
+		s.logger.Error("failed to send pending verification code",
+			zap.String("user_id", userID),
+			zap.Int64("chat_id", chatID),
+			zap.Error(err),
+		)
+		metrics.PendingVerificationsSent.WithLabelValues("failed").Inc()
+		return fmt.Errorf("send verification code: %w", err)
+	}
+
+	s.logger.Info("sent pending verification code after binding",
+		zap.String("user_id", userID),
+		zap.Int64("chat_id", chatID),
+	)
+	metrics.PendingVerificationsSent.WithLabelValues("sent").Inc()
+
+	return nil
+}
+
+// GetPendingVerificationStatus returns info about pending verification for a user.
+func (s *TelegramService) GetPendingVerificationStatus(ctx context.Context, userID string) (hasPending bool, expiresAt time.Time, err error) {
+	pending, err := s.store.GetPendingVerification(ctx, userID)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			return false, time.Time{}, nil
+		}
+		return false, time.Time{}, err
+	}
+	return true, pending.ExpiresAt, nil
 }

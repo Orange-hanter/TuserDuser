@@ -240,6 +240,93 @@ func (s *Store) CountActiveBindings(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+// PendingVerification stores deferred verification code for telegram registration flow.
+type PendingVerification struct {
+	UserID           string
+	VerificationCode string
+	BindingToken     string // Reference to binding token for correlation
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
+}
+
+// SavePendingVerification stores a verification code to be sent after user completes Telegram binding.
+// This is used for the deferred verification flow where:
+// 1. User registers with verification_type=telegram
+// 2. event-api calls RegisterPendingVerification with user_id and code
+// 3. User binds Telegram via deeplink/code
+// 4. telegram-service sends the verification code automatically
+func (s *Store) SavePendingVerification(ctx context.Context, userID, code, bindingToken string, expiresAt time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO telegram_pending_verifications (user_id, verification_code, binding_token, expires_at, created_at)
+		 VALUES ($1, $2, $3, $4, NOW())
+		 ON CONFLICT (user_id) DO UPDATE
+		 SET verification_code = EXCLUDED.verification_code,
+		     binding_token = EXCLUDED.binding_token,
+		     expires_at = EXCLUDED.expires_at,
+		     created_at = NOW()`,
+		userID, code, bindingToken, expiresAt,
+	)
+	return err
+}
+
+// GetPendingVerification retrieves pending verification for a user (does not consume it).
+func (s *Store) GetPendingVerification(ctx context.Context, userID string) (*PendingVerification, error) {
+	row := s.pool.QueryRow(ctx,
+		`SELECT user_id, verification_code, binding_token, expires_at, created_at
+		 FROM telegram_pending_verifications
+		 WHERE user_id = $1 AND expires_at > NOW()`, userID,
+	)
+	var pv PendingVerification
+	err := row.Scan(&pv.UserID, &pv.VerificationCode, &pv.BindingToken, &pv.ExpiresAt, &pv.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &pv, nil
+}
+
+// ConsumePendingVerification retrieves and deletes pending verification.
+// Returns the verification code if found and not expired.
+func (s *Store) ConsumePendingVerification(ctx context.Context, userID string) (*PendingVerification, error) {
+	row := s.pool.QueryRow(ctx,
+		`DELETE FROM telegram_pending_verifications
+		 WHERE user_id = $1 AND expires_at > NOW()
+		 RETURNING user_id, verification_code, binding_token, expires_at, created_at`, userID,
+	)
+	var pv PendingVerification
+	err := row.Scan(&pv.UserID, &pv.VerificationCode, &pv.BindingToken, &pv.ExpiresAt, &pv.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &pv, nil
+}
+
+// CleanupExpiredPendingVerifications removes expired pending verification records.
+func (s *Store) CleanupExpiredPendingVerifications(ctx context.Context) (int64, error) {
+	result, err := s.pool.Exec(ctx,
+		`DELETE FROM telegram_pending_verifications WHERE expires_at < NOW()`,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+// HasPendingVerification checks if user has a pending verification waiting.
+func (s *Store) HasPendingVerification(ctx context.Context, userID string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM telegram_pending_verifications WHERE user_id = $1 AND expires_at > NOW())`,
+		userID,
+	).Scan(&exists)
+	return exists, err
+}
+
 func scanBinding(row pgx.Row) (*Binding, error) {
 	var b Binding
 	var username, firstName, lastName sql.NullString

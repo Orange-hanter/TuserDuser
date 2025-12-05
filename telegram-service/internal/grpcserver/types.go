@@ -116,6 +116,39 @@ type UnbindUserResponse struct {
 	ErrorMessage string `json:"error_message"`
 }
 
+// RegisterPendingVerificationRequest is used to register a pending verification code
+// that will be sent when user completes Telegram binding.
+type RegisterPendingVerificationRequest struct {
+	UserId           string `json:"user_id"`
+	VerificationCode string `json:"verification_code"`
+	TtlMinutes       int32  `json:"ttl_minutes"` // TTL for pending verification (default 10 min)
+}
+
+// RegisterPendingVerificationResponse contains binding link info and status.
+type RegisterPendingVerificationResponse struct {
+	Success       bool   `json:"success"`
+	ErrorCode     string `json:"error_code"`
+	ErrorMessage  string `json:"error_message"`
+	Deeplink      string `json:"deeplink"` // https://t.me/BotName?start=TOKEN
+	Token         string `json:"token"`    // Raw binding token
+	Code          string `json:"code"`     // 6-char binding code for manual entry
+	ExpiresAtUnix int64  `json:"expires_at_unix"`
+}
+
+// GetPendingVerificationStatusRequest checks if user has pending verification.
+type GetPendingVerificationStatusRequest struct {
+	UserId string `json:"user_id"`
+}
+
+// GetPendingVerificationStatusResponse returns pending verification status.
+type GetPendingVerificationStatusResponse struct {
+	Success       bool   `json:"success"`
+	ErrorCode     string `json:"error_code"`
+	ErrorMessage  string `json:"error_message"`
+	HasPending    bool   `json:"has_pending"`
+	ExpiresAtUnix int64  `json:"expires_at_unix"`
+}
+
 // TelegramServiceServer is the server API for TelegramService service.
 type TelegramServiceInterface interface {
 	GenerateBindingLink(context.Context, *GenerateBindingLinkRequest) (*GenerateBindingLinkResponse, error)
@@ -125,6 +158,8 @@ type TelegramServiceInterface interface {
 	IsUserBound(context.Context, *IsUserBoundRequest) (*IsUserBoundResponse, error)
 	GetBindingStatus(context.Context, *GetBindingStatusRequest) (*GetBindingStatusResponse, error)
 	UnbindUser(context.Context, *UnbindUserRequest) (*UnbindUserResponse, error)
+	RegisterPendingVerification(context.Context, *RegisterPendingVerificationRequest) (*RegisterPendingVerificationResponse, error)
+	GetPendingVerificationStatus(context.Context, *GetPendingVerificationStatusRequest) (*GetPendingVerificationStatusResponse, error)
 }
 
 // UnimplementedTelegramServiceServer can be embedded to have forward compatible implementations.
@@ -155,6 +190,14 @@ func (UnimplementedTelegramServiceServer) GetBindingStatus(context.Context, *Get
 }
 
 func (UnimplementedTelegramServiceServer) UnbindUser(context.Context, *UnbindUserRequest) (*UnbindUserResponse, error) {
+	return nil, nil
+}
+
+func (UnimplementedTelegramServiceServer) RegisterPendingVerification(context.Context, *RegisterPendingVerificationRequest) (*RegisterPendingVerificationResponse, error) {
+	return nil, nil
+}
+
+func (UnimplementedTelegramServiceServer) GetPendingVerificationStatus(context.Context, *GetPendingVerificationStatusRequest) (*GetPendingVerificationStatusResponse, error) {
 	return nil, nil
 }
 
@@ -197,6 +240,14 @@ var _TelegramService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnbindUser",
 			Handler:    _TelegramService_UnbindUser_Handler,
+		},
+		{
+			MethodName: "RegisterPendingVerification",
+			Handler:    _TelegramService_RegisterPendingVerification_Handler,
+		},
+		{
+			MethodName: "GetPendingVerificationStatus",
+			Handler:    _TelegramService_GetPendingVerificationStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -325,6 +376,42 @@ func _TelegramService_UnbindUser_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TelegramServiceInterface).UnbindUser(ctx, req.(*UnbindUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramService_RegisterPendingVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterPendingVerificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramServiceInterface).RegisterPendingVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/telegram.v1.TelegramService/RegisterPendingVerification",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramServiceInterface).RegisterPendingVerification(ctx, req.(*RegisterPendingVerificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramService_GetPendingVerificationStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPendingVerificationStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramServiceInterface).GetPendingVerificationStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/telegram.v1.TelegramService/GetPendingVerificationStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramServiceInterface).GetPendingVerificationStatus(ctx, req.(*GetPendingVerificationStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

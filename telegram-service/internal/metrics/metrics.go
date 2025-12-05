@@ -51,6 +51,23 @@ var (
 		},
 		[]string{"method", "status"},
 	)
+
+	// PendingVerificationsRegistered tracks registered pending verifications.
+	PendingVerificationsRegistered = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "telegram_pending_verifications_registered_total",
+			Help: "Total number of pending verifications registered",
+		},
+	)
+
+	// PendingVerificationsSent tracks sent pending verification codes by status.
+	PendingVerificationsSent = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "telegram_pending_verifications_sent_total",
+			Help: "Total number of pending verification codes sent after binding",
+		},
+		[]string{"status"},
+	)
 )
 
 // Register ensures all metrics are registered with Prometheus.

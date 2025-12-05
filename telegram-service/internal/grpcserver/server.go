@@ -267,6 +267,84 @@ func (s *TelegramServiceServer) UnbindUser(ctx context.Context, req *UnbindUserR
 	return &UnbindUserResponse{Success: true}, nil
 }
 
+// RegisterPendingVerification registers a verification code to be sent after user binds Telegram.
+// This is the main entry point for the deferred telegram verification flow:
+// 1. event-api calls this when user registers with verification_type=telegram
+// 2. Returns binding link (deeplink + 6-char code) for user to bind Telegram
+// 3. When user binds, the verification code is automatically sent to their Telegram
+func (s *TelegramServiceServer) RegisterPendingVerification(ctx context.Context, req *RegisterPendingVerificationRequest) (*RegisterPendingVerificationResponse, error) {
+	if req.UserId == "" {
+		return &RegisterPendingVerificationResponse{
+			Success:      false,
+			ErrorCode:    "invalid_user_id",
+			ErrorMessage: "user_id is required",
+		}, nil
+	}
+
+	if req.VerificationCode == "" {
+		return &RegisterPendingVerificationResponse{
+			Success:      false,
+			ErrorCode:    "invalid_code",
+			ErrorMessage: "verification_code is required",
+		}, nil
+	}
+
+	result, err := s.service.RegisterPendingVerification(ctx, req.UserId, req.VerificationCode, req.TtlMinutes)
+	if err != nil {
+		s.logger.Error("failed to register pending verification",
+			zap.String("user_id", req.UserId),
+			zap.Error(err),
+		)
+		return &RegisterPendingVerificationResponse{
+			Success:      false,
+			ErrorCode:    "service_unavailable",
+			ErrorMessage: "failed to register pending verification",
+		}, nil
+	}
+
+	return &RegisterPendingVerificationResponse{
+		Success:       true,
+		Deeplink:      result.DeepLink,
+		Token:         result.Token,
+		Code:          result.Code,
+		ExpiresAtUnix: result.ExpiresAt.Unix(),
+	}, nil
+}
+
+// GetPendingVerificationStatus checks if a user has a pending verification code waiting.
+func (s *TelegramServiceServer) GetPendingVerificationStatus(ctx context.Context, req *GetPendingVerificationStatusRequest) (*GetPendingVerificationStatusResponse, error) {
+	if req.UserId == "" {
+		return &GetPendingVerificationStatusResponse{
+			Success:      false,
+			ErrorCode:    "invalid_user_id",
+			ErrorMessage: "user_id is required",
+		}, nil
+	}
+
+	hasPending, expiresAt, err := s.service.GetPendingVerificationStatus(ctx, req.UserId)
+	if err != nil {
+		s.logger.Error("failed to get pending verification status",
+			zap.String("user_id", req.UserId),
+			zap.Error(err),
+		)
+		return &GetPendingVerificationStatusResponse{
+			Success:      false,
+			ErrorCode:    "service_unavailable",
+			ErrorMessage: "failed to get pending verification status",
+		}, nil
+	}
+
+	resp := &GetPendingVerificationStatusResponse{
+		Success:    true,
+		HasPending: hasPending,
+	}
+	if hasPending {
+		resp.ExpiresAtUnix = expiresAt.Unix()
+	}
+
+	return resp, nil
+}
+
 // handleSendError converts service errors to gRPC response.
 func (s *TelegramServiceServer) handleSendError(err error, userID, operation string) (*SendVerificationCodeResponse, error) {
 	s.logger.Error("failed to "+operation,
