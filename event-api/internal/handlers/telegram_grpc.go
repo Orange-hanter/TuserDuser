@@ -257,3 +257,116 @@ type TelegramUnbindResponse struct {
 	// Confirmation message
 	Message string `json:"message" example:"Telegram binding removed"`
 }
+
+// GetBindingStatusByUserID returns binding info for a specific user_id via query param.
+// Used by frontend during registration flow to poll for Telegram binding completion.
+// @Summary Get Telegram binding status by user ID (for registration flow)
+// @Description Returns binding status for a user by their ID. Used during registration
+// @Description to poll whether the user has completed Telegram binding.
+// @Tags notifications, telegram
+// @Produce json
+// @Param user_id query string true "User ID to check binding for"
+// @Success 200 {object} TelegramBindingStatusPublicResponse "Binding status"
+// @Failure 400 {object} ErrorResponse "Bad request - user_id required"
+// @Failure 404 {object} ErrorResponse "User has no Telegram binding"
+// @Failure 503 {object} ErrorResponse "Telegram service unavailable"
+// @Router /v1/api/telegram/binding/status [get]
+func (h *TelegramGRPCHandler) GetBindingStatusByUserID(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		respondWithError(w, http.StatusBadRequest, "bad_request", "user_id parameter required")
+		return
+	}
+
+	status, err := h.client.GetBindingStatus(r.Context(), userID)
+	if err != nil {
+		var svcErr *telegramclient.ServiceError
+		if errors.As(err, &svcErr) {
+			if svcErr.IsUserNotBound() {
+				// Пользователь ещё не привязал Telegram - возвращаем 200 с is_bound=false
+				respondWithJSON(w, http.StatusOK, map[string]interface{}{
+					"is_bound": false,
+					"status":   "not_bound",
+				})
+				return
+			}
+			respondWithError(w, http.StatusServiceUnavailable, svcErr.Code, svcErr.Message)
+			return
+		}
+
+		h.logger.Error("failed to get binding status by user_id via gRPC",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		respondWithError(w, http.StatusInternalServerError, "telegram_error", "failed to fetch binding")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"is_bound":   status.Status == "active",
+		"status":     status.Status,
+		"username":   status.Username,
+		"first_name": status.FirstName,
+	})
+}
+
+// GetPendingVerificationStatus checks if user has pending verification waiting to be sent.
+// @Summary Get pending verification status
+// @Description Returns whether user has a pending verification code waiting to be sent after Telegram binding.
+// @Tags notifications, telegram
+// @Produce json
+// @Param user_id query string true "User ID to check pending verification for"
+// @Success 200 {object} PendingVerificationStatusResponse "Pending verification status"
+// @Failure 400 {object} ErrorResponse "Bad request - user_id required"
+// @Failure 503 {object} ErrorResponse "Telegram service unavailable"
+// @Router /v1/api/telegram/pending/status [get]
+func (h *TelegramGRPCHandler) GetPendingVerificationStatus(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		respondWithError(w, http.StatusBadRequest, "bad_request", "user_id parameter required")
+		return
+	}
+
+	status, err := h.client.GetPendingVerificationStatus(r.Context(), userID)
+	if err != nil {
+		var svcErr *telegramclient.ServiceError
+		if errors.As(err, &svcErr) {
+			respondWithError(w, http.StatusServiceUnavailable, svcErr.Code, svcErr.Message)
+			return
+		}
+
+		h.logger.Error("failed to get pending verification status via gRPC",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		respondWithError(w, http.StatusInternalServerError, "telegram_error", "failed to fetch pending status")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"has_pending": status.HasPending,
+		"expires_at":  status.ExpiresAt,
+	})
+}
+
+// TelegramBindingStatusPublicResponse represents public binding status response.
+// @Description Response for public binding status check (used during registration)
+type TelegramBindingStatusPublicResponse struct {
+	// Whether user has active Telegram binding
+	IsBound bool `json:"is_bound" example:"true"`
+	// Binding status
+	Status string `json:"status" example:"active"`
+	// Telegram username (without @)
+	Username string `json:"username,omitempty" example:"johndoe"`
+	// User's first name in Telegram
+	FirstName string `json:"first_name,omitempty" example:"John"`
+}
+
+// PendingVerificationStatusResponse represents pending verification status.
+// @Description Response for pending verification status check
+type PendingVerificationStatusResponse struct {
+	// Whether user has pending verification code
+	HasPending bool `json:"has_pending" example:"true"`
+	// Expiration time of pending verification
+	ExpiresAt string `json:"expires_at,omitempty" example:"2025-01-15T12:10:00Z"`
+}

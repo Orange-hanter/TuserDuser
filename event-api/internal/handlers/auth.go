@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -51,8 +52,9 @@ type AuthService interface {
 //     Может быть nil — handlers должны корректно обрабатывать этот случай.
 //   - `authService` содержит бизнес-логику и абстрагирует работу с БД и токенами.
 type AuthHandler struct {
-	authService    AuthService
-	telegramClient *telegramclient.Client
+	authService AuthService
+	// telegramClient is an abstraction over the telegram gRPC client so tests can inject a fake.
+	telegramClient TelegramClient
 }
 
 // NewAuthHandler создает новый auth handler.
@@ -68,6 +70,12 @@ func NewAuthHandler(authService AuthService, telegramClient *telegramclient.Clie
 		authService:    authService,
 		telegramClient: telegramClient,
 	}
+}
+
+// TelegramClient represents the subset of telegramclient.Client used by handlers.
+type TelegramClient interface {
+	RegisterPendingVerification(ctx context.Context, userID, verificationCode string, ttlMinutes int32) (*telegramclient.PendingVerificationResult, error)
+	GetBindingStatus(ctx context.Context, userID string) (*telegramclient.BindingStatus, error)
 }
 
 // respondWithError отправляет JSON ответ с ошибкой.
@@ -113,7 +121,7 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 //	  "email": "user@example.com",
 //	  "password": "securepassword",
 //	  "phone": "+79001234567",
-//	  "verification_type": "email|sms|both" (опционально)
+//	  "verification_type": "email|sms|both|telegram" (опционально)
 //	}
 //
 // Поведение:
@@ -121,6 +129,7 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 //   - Делегирует создание пользователя в `authService.Register`.
 //   - В случае успеха возвращает HTTP 201 и объект с полем `user` и (в dev)
 //     `verify_code` для тестирования.
+//   - При verification_type="telegram" возвращает также `telegram_binding` с deeplink и кодом.
 //   - В случае конфликта (пользователь уже существует) возвращает 409.
 //
 // Безопасность:
@@ -128,13 +137,13 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 // - В production не возвращать `verify_code` в ответе.
 //
 // @Summary Регистрация нового пользователя
-// @Description Создает нового пользователя и отправляет код верификации через email и/или SMS (в зависимости от verification_type: "email", "sms", "both")
+// @Description Создает нового пользователя и отправляет код верификации через email, SMS или Telegram (в зависимости от verification_type: "email", "sms", "both", "telegram")
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body models.RegisterRequest true "Данные для регистрации (verification_type опционален: email/sms/both, по умолчанию both)"
-// @Success 201 {object} map[string]interface{} "user:models.User, verify_code:string"
-// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса"
+// @Param request body models.RegisterRequest true "Данные для регистрации (verification_type опционален: email/sms/both/telegram, по умолчанию both)"
+// @Success 201 {object} models.RegisterResponse "user, verify_code (dev), telegram_binding (при telegram)"
+// @Failure 400 {object} models.ErrorResponse "Неверный формат запроса или telegram недоступен"
 // @Failure 409 {object} models.ErrorResponse "Пользователь уже существует"
 // @Router /v1/api/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +165,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверяем, доступен ли telegram-service для telegram верификации
+	if req.VerificationType == "telegram" && h.telegramClient == nil {
+		respondWithError(w, http.StatusBadRequest, "validation_error", "Telegram верификация недоступна")
+		return
+	}
+
 	// Если телефон не указан, устанавливаем его в "0"
 	if req.Phone == "" {
 		req.Phone = "0"
@@ -171,11 +186,41 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	logger.Log.Info("Новый пользователь зарегистрирован",
 		zap.String("email", user.Email),
 		zap.String("user_id", user.ID),
+		zap.String("verification_type", req.VerificationType),
 	)
 
-	respondWithJSON(w, http.StatusCreated, map[string]interface{}{
-		"user":        user,
-		"verify_code": verifyCode, // В development режиме возвращаем код для тестирования
+	// Для telegram верификации регистрируем pending verification
+	if req.VerificationType == "telegram" {
+		result, err := h.telegramClient.RegisterPendingVerification(r.Context(), user.ID, verifyCode, 10)
+		if err != nil {
+			logger.Log.Error("Ошибка при регистрации pending verification в telegram-service",
+				zap.String("user_id", user.ID),
+				zap.Error(err),
+			)
+			// Не фейлим регистрацию, просто не возвращаем telegram_binding
+			respondWithJSON(w, http.StatusCreated, models.RegisterResponse{
+				User:       user,
+				VerifyCode: verifyCode,
+			})
+			return
+		}
+
+		respondWithJSON(w, http.StatusCreated, models.RegisterResponse{
+			User:       user,
+			VerifyCode: verifyCode, // В development режиме возвращаем код для тестирования
+			TelegramBinding: &models.TelegramBindingInfo{
+				Deeplink:  result.DeepLink,
+				Code:      result.Code,
+				ExpiresAt: result.ExpiresAt.Format(time.RFC3339),
+			},
+		})
+		return
+	}
+
+	// Стандартный ответ для email/sms/both
+	respondWithJSON(w, http.StatusCreated, models.RegisterResponse{
+		User:       user,
+		VerifyCode: verifyCode, // В development режиме возвращаем код для тестирования
 	})
 }
 

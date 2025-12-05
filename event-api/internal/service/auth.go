@@ -16,6 +16,7 @@ import (
 	"event-api/internal/models"
 	redisClient "event-api/internal/redis"
 	"event-api/internal/sms"
+	"event-api/internal/telegramclient"
 	"event-api/internal/worker"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -26,13 +27,14 @@ import (
 
 // AuthService управляет аутентификацией и авторизацией.
 type AuthService struct {
-	cfg        *config.Config
-	db         *sql.DB
-	redis      *redisClient.Client
-	sms        *sms.Service
-	email      *email.Service
-	workerPool *worker.Pool
-	logger     *zap.Logger
+	cfg            *config.Config
+	db             *sql.DB
+	redis          *redisClient.Client
+	sms            *sms.Service
+	email          *email.Service
+	workerPool     *worker.Pool
+	logger         *zap.Logger
+	telegramClient *telegramclient.Client
 }
 
 // VerificationCode хранит информацию о коде верификации.
@@ -73,6 +75,11 @@ func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, s
 		workerPool: workerPool,
 		logger:     logger,
 	}
+}
+
+// SetTelegramClient устанавливает telegram client для отправки кодов через Telegram.
+func (s *AuthService) SetTelegramClient(client *telegramclient.Client) {
+	s.telegramClient = client
 }
 
 // Register регистрирует нового пользователя.
@@ -603,9 +610,17 @@ func (s *AuthService) ResendCode(email, verificationType string) (string, int, e
 			return "", 0, fmt.Errorf("не удалось отправить код верификации")
 		}
 	case "telegram":
-		s.logger.Warn("Отправка кода через Telegram пока не реализована", zap.String("email", normalizedEmail))
-		// TODO: Реализовать отправку через Telegram Bot API
-		return "", 0, fmt.Errorf("отправка через Telegram временно недоступна")
+		if s.telegramClient == nil {
+			return "", 0, fmt.Errorf("telegram-service недоступен")
+		}
+		// Регистрируем pending verification, код будет отправлен после привязки Telegram
+		_, err := s.telegramClient.RegisterPendingVerification(ctx, pending.ID, code, 10)
+		if err != nil {
+			s.logger.Error("Не удалось зарегистрировать pending verification",
+				zap.String("user_id", pending.ID),
+				zap.Error(err))
+			return "", 0, fmt.Errorf("не удалось отправить код через Telegram")
+		}
 	case "sms":
 		if phone == "0" || phone == "" {
 			return "", 0, fmt.Errorf("номер телефона не указан")

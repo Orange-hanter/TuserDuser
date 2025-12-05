@@ -90,6 +90,20 @@ type ResendCodeResponse struct {
 	RetryAfter int    `json:"retry_after,omitempty"` // Для rate limit ошибок
 }
 
+// TelegramBindingInfo - информация для привязки Telegram при регистрации.
+type TelegramBindingInfo struct {
+	Deeplink  string `json:"deeplink"`   // Полная ссылка для открытия в Telegram
+	Code      string `json:"code"`       // 6-символьный код для ручного ввода
+	ExpiresAt string `json:"expires_at"` // RFC3339 формат времени истечения
+}
+
+// RegisterResponse - расширенный ответ на регистрацию.
+type RegisterResponse struct {
+	User            *User                `json:"user"`
+	VerifyCode      string               `json:"verify_code,omitempty"`      // Только в dev режиме
+	TelegramBinding *TelegramBindingInfo `json:"telegram_binding,omitempty"` // При verification_type=telegram
+}
+
 // ErrorResponse - стандартный ответ об ошибке.
 type ErrorResponse struct {
 	Error   string `json:"error"`

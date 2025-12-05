@@ -73,6 +73,16 @@ func (m *mockAuthService) GetAllUsers() ([]*models.User, error) {
 	return nil, errors.New("getAllUsers not implemented")
 }
 
+func (m *mockAuthService) CheckUserExists(email, phone string) (bool, bool, error) {
+	// default stub: return false/false
+	return false, false, nil
+}
+
+func (m *mockAuthService) ResendCode(email, verificationType string) (string, int, error) {
+	// default stub for tests
+	return "", 0, nil
+}
+
 func TestRegisterHandler(t *testing.T) {
 	logger.Log = zap.NewNop()
 

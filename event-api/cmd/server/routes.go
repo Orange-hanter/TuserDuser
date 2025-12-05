@@ -49,6 +49,9 @@ func buildHTTPHandler(
 		// Public auth endpoints
 		registerPublicAuthRoutes(r, authHandler)
 
+		// Public telegram binding status (for registration flow polling)
+		registerPublicTelegramRoutes(r, telegramHandler)
+
 		// Public event endpoints
 		registerPublicEventRoutes(r, eventHandler, userHandler)
 
@@ -84,6 +87,19 @@ func registerPublicAuthRoutes(r chi.Router, authHandler *handlers.AuthHandler) {
 	r.Post("/api/auth/resend-code", authHandler.ResendCode)
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
+}
+
+// registerPublicTelegramRoutes registers telegram endpoints for registration flow (no auth required).
+func registerPublicTelegramRoutes(r chi.Router, telegramHandler *handlers.TelegramGRPCHandler) {
+	if telegramHandler == nil {
+		return
+	}
+	r.Route("/api/telegram", func(r chi.Router) {
+		// Endpoint for frontend to poll binding status during registration
+		r.Get("/binding/status", telegramHandler.GetBindingStatusByUserID)
+		// Endpoint to check if pending verification exists
+		r.Get("/pending/status", telegramHandler.GetPendingVerificationStatus)
+	})
 }
 
 // registerPublicEventRoutes registers event endpoints that are publicly available.

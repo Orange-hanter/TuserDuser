@@ -207,6 +207,11 @@ func (c *AppContainer) initHandlers() {
 	// Auth handler (with optional telegram client for binding status)
 	c.AuthHandler = handlers.NewAuthHandler(c.AuthService, telegramClient)
 
+	// Set telegram client on auth service for resend functionality
+	if telegramClient != nil {
+		c.AuthService.SetTelegramClient(telegramClient)
+	}
+
 	// Discovery notifier
 	var discoveryNotifier func(context.Context, string)
 	if c.Config.DiscoveryUpdatesEnabled && c.Redis != nil {

@@ -282,6 +282,85 @@ func (c *Client) UnbindUser(ctx context.Context, userID, reason string) error {
 	return nil
 }
 
+// PendingVerificationResult contains the result of RegisterPendingVerification.
+type PendingVerificationResult struct {
+	DeepLink  string
+	Token     string
+	Code      string
+	ExpiresAt time.Time
+}
+
+// RegisterPendingVerification регистрирует код верификации для отложенной отправки после привязки Telegram.
+func (c *Client) RegisterPendingVerification(ctx context.Context, userID, verificationCode string, ttlMinutes int32) (*PendingVerificationResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	if ttlMinutes == 0 {
+		ttlMinutes = 10 // default 10 minutes
+	}
+
+	req := &RegisterPendingVerificationRequest{
+		UserId:           userID,
+		VerificationCode: verificationCode,
+		TTLMinutes:       ttlMinutes,
+	}
+	resp, err := c.registerPendingVerification(ctx, req)
+	if err != nil {
+		c.logger.Error("gRPC RegisterPendingVerification failed",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, &ServiceError{Code: "service_unavailable", Message: "failed to connect to telegram service"}
+	}
+
+	if !resp.Success {
+		return nil, &ServiceError{Code: resp.ErrorCode, Message: resp.ErrorMessage}
+	}
+
+	return &PendingVerificationResult{
+		DeepLink:  resp.Deeplink,
+		Token:     resp.Token,
+		Code:      resp.Code,
+		ExpiresAt: time.Unix(resp.ExpiresAtUnix, 0),
+	}, nil
+}
+
+// PendingVerificationStatus contains the status of a pending verification.
+type PendingVerificationStatus struct {
+	HasPending bool
+	ExpiresAt  time.Time
+}
+
+// GetPendingVerificationStatus проверяет статус отложенной верификации.
+func (c *Client) GetPendingVerificationStatus(ctx context.Context, userID string) (*PendingVerificationStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	req := &GetPendingVerificationStatusRequest{UserId: userID}
+	resp, err := c.getPendingVerificationStatus(ctx, req)
+	if err != nil {
+		c.logger.Error("gRPC GetPendingVerificationStatus failed",
+			zap.String("user_id", userID),
+			zap.Error(err),
+		)
+		return nil, &ServiceError{Code: "service_unavailable", Message: "failed to connect to telegram service"}
+	}
+
+	if !resp.Success {
+		return nil, &ServiceError{Code: resp.ErrorCode, Message: resp.ErrorMessage}
+	}
+
+	var expiresAt time.Time
+	if resp.ExpiresAtUnix > 0 {
+		expiresAt = time.Unix(resp.ExpiresAtUnix, 0)
+	}
+
+	return &PendingVerificationStatus{
+		HasPending: resp.HasPending,
+		ExpiresAt:  expiresAt,
+	}, nil
+}
+
 // ServiceError represents an error from the telegram service.
 type ServiceError struct {
 	Code    string

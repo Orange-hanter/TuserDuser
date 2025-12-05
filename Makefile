@@ -19,6 +19,7 @@ help:
 	@echo "  make build-event-api       - Build event-api"
 	@echo "  make build-linux           - Cross-compile all services for linux/amd64"
 	@echo "  make build-linux-strip     - Build and strip linux binaries"
+	@echo "  make update-containers     - Pull images and recreate docker containers for the whole system"
 	@echo ""
 	@echo "Code quality:"
 	@echo "  make test                  - Run tests for all services"
@@ -58,6 +59,32 @@ build-linux-strip: build-linux
 			echo "  Stripped $$binary"; \
 		fi; \
 	done
+
+# ============================================================================
+# Docker / Deployment
+# ============================================================================
+
+.PHONY: update-containers
+update-containers:
+	@echo "🔄 Updating all Docker containers (pull + recreate)..."
+	@if [ -f docker-compose.full.yml ]; then \
+		echo "Using docker-compose.full.yml"; \
+		docker compose -f docker-compose.full.yml pull --ignore-pull-failures; \
+		docker compose -f docker-compose.full.yml up -d --remove-orphans --build; \
+	else \
+		echo "docker-compose.full.yml not found, scanning subfolders for docker-compose.yml..."; \
+		found=false; \
+		for d in */ ; do \
+			if [ -f "$$d/docker-compose.yml" ]; then \
+				found=true; \
+				echo "Updating $$d"; \
+				( cd "$$d" && docker compose pull --ignore-pull-failures && docker compose up -d --remove-orphans --build ); \
+			fi; \
+		done; \
+		if [ "$${found}" = false ]; then \
+			echo "No docker-compose files found in subfolders."; \
+		fi; \
+	fi
 
 # ============================================================================
 # Testing & Quality

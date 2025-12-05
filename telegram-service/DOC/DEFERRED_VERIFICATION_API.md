@@ -425,13 +425,13 @@ telegram_binding_links_generated_total
 
 ## Чеклист интеграции
 
-### event-api
+### event-api ✅
 
-- [ ] Добавить обработку `verification_type: "telegram"` в `Register`
-- [ ] Вызывать `telegramClient.RegisterPendingVerification()` вместо отправки кода
-- [ ] Возвращать `telegram_binding` в ответе
-- [ ] Добавить endpoint `/v1/api/telegram/binding/status` (proxy к gRPC)
-- [ ] Обновить `/v1/api/auth/resend` для поддержки telegram
+- [x] Добавить обработку `verification_type: "telegram"` в `Register`
+- [x] Вызывать `telegramClient.RegisterPendingVerification()` вместо отправки кода
+- [x] Возвращать `telegram_binding` в ответе
+- [x] Добавить endpoint `/v1/api/telegram/binding/status` (proxy к gRPC)
+- [x] Обновить `/v1/api/auth/resend` для поддержки telegram
 
 ### Frontend
 

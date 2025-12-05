@@ -114,6 +114,38 @@ type UnbindUserResponse struct {
 	ErrorMessage string `json:"error_message"`
 }
 
+// RegisterPendingVerificationRequest - запрос для регистрации отложенной верификации.
+type RegisterPendingVerificationRequest struct {
+	UserId           string `json:"user_id"`
+	VerificationCode string `json:"verification_code"`
+	TTLMinutes       int32  `json:"ttl_minutes,omitempty"`
+}
+
+// RegisterPendingVerificationResponse - ответ на регистрацию отложенной верификации.
+type RegisterPendingVerificationResponse struct {
+	Success       bool   `json:"success"`
+	ErrorCode     string `json:"error_code"`
+	ErrorMessage  string `json:"error_message"`
+	Deeplink      string `json:"deeplink"`
+	Token         string `json:"token"`
+	Code          string `json:"code"`
+	ExpiresAtUnix int64  `json:"expires_at_unix"`
+}
+
+// GetPendingVerificationStatusRequest - запрос статуса pending verification.
+type GetPendingVerificationStatusRequest struct {
+	UserId string `json:"user_id"`
+}
+
+// GetPendingVerificationStatusResponse - ответ статуса pending verification.
+type GetPendingVerificationStatusResponse struct {
+	Success       bool   `json:"success"`
+	ErrorCode     string `json:"error_code"`
+	ErrorMessage  string `json:"error_message"`
+	HasPending    bool   `json:"has_pending"`
+	ExpiresAtUnix int64  `json:"expires_at_unix"`
+}
+
 // gRPC method implementations using the connection
 // These use manual invocation since we don't have generated stubs
 
@@ -156,6 +188,18 @@ func (c *Client) getBindingStatus(ctx context.Context, req *GetBindingStatusRequ
 func (c *Client) unbindUser(ctx context.Context, req *UnbindUserRequest) (*UnbindUserResponse, error) {
 	resp := &UnbindUserResponse{}
 	err := c.conn.Invoke(ctx, "/telegram.v1.TelegramService/UnbindUser", req, resp)
+	return resp, err
+}
+
+func (c *Client) registerPendingVerification(ctx context.Context, req *RegisterPendingVerificationRequest) (*RegisterPendingVerificationResponse, error) {
+	resp := &RegisterPendingVerificationResponse{}
+	err := c.conn.Invoke(ctx, "/telegram.v1.TelegramService/RegisterPendingVerification", req, resp)
+	return resp, err
+}
+
+func (c *Client) getPendingVerificationStatus(ctx context.Context, req *GetPendingVerificationStatusRequest) (*GetPendingVerificationStatusResponse, error) {
+	resp := &GetPendingVerificationStatusResponse{}
+	err := c.conn.Invoke(ctx, "/telegram.v1.TelegramService/GetPendingVerificationStatus", req, resp)
 	return resp, err
 }
 

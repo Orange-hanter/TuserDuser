@@ -679,7 +679,8 @@ func (s *TelegramService) CheckAndSendPendingVerification(ctx context.Context, u
 	}
 
 	// Send verification code
-	text := fmt.Sprintf("🔐 *Код подтверждения*\n\n`%s`\n\nКод действителен %d мин.", pending.VerificationCode, remainingMinutes)
+	// Note: MarkdownV2 requires escaping special chars like . - ( ) etc.
+	text := fmt.Sprintf("🔐 *Код подтверждения*\n\n`%s`\n\nКод действителен %d мин\\.", pending.VerificationCode, remainingMinutes)
 	_, err = s.client.SendMessage(ctx, telegram.OutboundMessage{
 		ChatID:    chatID,
 		Text:      text,
