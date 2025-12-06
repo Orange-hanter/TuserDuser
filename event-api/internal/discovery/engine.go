@@ -279,6 +279,31 @@ func (e *Engine) RegisterBooking(ctx context.Context, userID, eventID string) (B
 	return BookingResult{BookedEvent: event, ConflictedEventIDs: conflictedIDs}, nil
 }
 
+// CancelBooking removes the booking record for a user/event pair.
+// This allows the event to reappear in the user's discovery queue.
+func (e *Engine) CancelBooking(ctx context.Context, userID, eventID string) error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	unlock := e.lock(userID)
+	defer unlock()
+
+	// Remove booking from history if repository supports it
+	if remover, ok := e.history.(BookingRemover); ok {
+		if err := remover.RemoveBooking(ctx, userID, eventID); err != nil {
+			return fmt.Errorf("failed to remove booking: %w", err)
+		}
+	}
+
+	// Reset user's queue to force rebuild on next request
+	// This ensures the event will appear again
+	if err := e.queues.Clear(ctx, userID); err != nil {
+		return fmt.Errorf("failed to clear queue: %w", err)
+	}
+
+	return nil
+}
+
 // History returns chronological entries for the user.
 func (e *Engine) History(ctx context.Context, userID string) ([]HistoryEntry, error) {
 	return e.history.List(ctx, userID)

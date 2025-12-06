@@ -447,6 +447,98 @@ func (s *UserService) SubscribeToEvent(ctx context.Context, userID, eventID stri
 	}, nil
 }
 
+// ErrSubscriptionNotFound indicates that no subscription was found for the user and event.
+var ErrSubscriptionNotFound = errors.New("subscription_not_found")
+
+// ErrEventAlreadyStarted indicates that the event has already started and cannot be unsubscribed from.
+var ErrEventAlreadyStarted = errors.New("event_already_started")
+
+// UnsubscribeFromEvent handles user unsubscription from an event.
+// It cancels the subscription by updating the status to 'cancelled'.
+func (s *UserService) UnsubscribeFromEvent(ctx context.Context, userID, eventID string) error {
+	// Transaction for safety
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			s.logger.Error("failed to rollback transaction", zap.Error(err))
+		}
+	}()
+
+	// Check if event exists and hasn't started yet
+	var startTime time.Time
+	err = tx.QueryRowContext(ctx, `
+		SELECT start_time 
+		FROM events 
+		WHERE id = $1
+	`, eventID).Scan(&startTime)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("event not found")
+		}
+		return fmt.Errorf("failed to fetch event: %w", err)
+	}
+
+	// Check if event has already started
+	if time.Now().After(startTime) {
+		return ErrEventAlreadyStarted
+	}
+
+	// Check if subscription exists and is not already cancelled
+	var currentStatus string
+	err = tx.QueryRowContext(ctx, `
+		SELECT status FROM event_subscriptions WHERE user_id = $1 AND event_id = $2
+	`, userID, eventID).Scan(&currentStatus)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrSubscriptionNotFound
+		}
+		return fmt.Errorf("failed to check subscription: %w", err)
+	}
+
+	if currentStatus == string(models.SubscriptionStatusCancelled) {
+		// Already cancelled, return success (idempotent)
+		return nil
+	}
+
+	// Cancel the subscription
+	_, err = tx.ExecContext(ctx, `
+		UPDATE event_subscriptions 
+		SET status = $1, updated_at = $2
+		WHERE user_id = $3 AND event_id = $4
+	`, models.SubscriptionStatusCancelled, time.Now(), userID, eventID)
+	if err != nil {
+		return fmt.Errorf("failed to cancel subscription: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Remove booking from discovery to allow event to reappear in queue
+	if s.discovery != nil {
+		if err := s.discovery.CancelBooking(ctx, userID, eventID); err != nil {
+			// Log error but don't fail - subscription is already cancelled
+			s.logger.Error("failed to cancel booking in discovery engine",
+				zap.Error(err),
+				zap.String("user_id", userID),
+				zap.String("event_id", eventID),
+			)
+		}
+	}
+
+	s.logger.Info("user unsubscribed from event",
+		zap.String("user_id", userID),
+		zap.String("event_id", eventID),
+	)
+
+	return nil
+}
+
 // GetEventParticipants returns a list of participants for a specific event.
 // Returns participants sorted by registration time.
 //

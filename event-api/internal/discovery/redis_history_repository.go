@@ -123,3 +123,50 @@ func (r *RedisHistoryRepository) GetExcludedEventIDs(ctx context.Context, userID
 
 	return excluded, nil
 }
+
+// RemoveBooking removes the booking action for a user/event pair from Redis.
+func (r *RedisHistoryRepository) RemoveBooking(ctx context.Context, userID, eventID string) error {
+	historyKey := fmt.Sprintf("history:user:%s", userID)
+	lastActionKey := fmt.Sprintf("last-action:user:%s:event:%s", userID, eventID)
+
+	// Get all entries
+	results, err := r.client.LRange(ctx, historyKey, 0, -1).Result()
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("redis lrange error: %w", err)
+	}
+
+	// Filter out book actions for this event
+	filtered := make([]interface{}, 0, len(results))
+	for _, data := range results {
+		var entry HistoryEntry
+		if err := json.Unmarshal([]byte(data), &entry); err != nil {
+			continue
+		}
+		if entry.EventID == eventID && entry.Action == ActionBook {
+			continue // Skip booking entries for this event
+		}
+		filtered = append(filtered, data)
+	}
+
+	// Use pipeline to replace list and delete last action key
+	pipe := r.client.Pipeline()
+
+	// Delete old list
+	pipe.Del(ctx, historyKey)
+
+	// Add filtered entries back (if any)
+	if len(filtered) > 0 {
+		pipe.RPush(ctx, historyKey, filtered...)
+		pipe.Expire(ctx, historyKey, r.ttl)
+	}
+
+	// Delete last action key for this event (if it was a book action)
+	pipe.Del(ctx, lastActionKey)
+
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("redis pipeline error: %w", err)
+	}
+
+	return nil
+}

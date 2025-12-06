@@ -40,6 +40,11 @@ func (s *Service) RegisterBooking(ctx context.Context, userID, eventID string) (
 	return s.engine.RegisterBooking(ctx, userID, eventID)
 }
 
+// CancelBooking removes a booking record, allowing the event to reappear in discovery.
+func (s *Service) CancelBooking(ctx context.Context, userID, eventID string) error {
+	return s.engine.CancelBooking(ctx, userID, eventID)
+}
+
 // History returns chronological user actions.
 func (s *Service) History(ctx context.Context, userID string) ([]HistoryEntry, error) {
 	return s.engine.History(ctx, userID)

@@ -35,6 +35,12 @@ type ExcludedEventsProvider interface {
 	GetExcludedEventIDs(ctx context.Context, userID string) (map[string]bool, error)
 }
 
+// BookingRemover is an optional interface for removing booking records.
+// Allows events to reappear in discovery after unsubscribe.
+type BookingRemover interface {
+	RemoveBooking(ctx context.Context, userID, eventID string) error
+}
+
 // ErrQueueStateNotFound indicates missing state for provided user.
 var ErrQueueStateNotFound = errors.New("queue state not found")
 
@@ -198,6 +204,32 @@ func (r *InMemoryHistoryRepository) LastAction(_ context.Context, userID, eventI
 		return HistoryEntry{}, false, nil
 	}
 	return cloneHistoryEntry(entry), true, nil
+}
+
+// RemoveBooking removes the booking action for a user/event pair from history.
+func (r *InMemoryHistoryRepository) RemoveBooking(_ context.Context, userID, eventID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Remove from lastByKey if it's a book action
+	if perUser, ok := r.lastByKey[userID]; ok {
+		if entry, ok := perUser[eventID]; ok && entry.Action == ActionBook {
+			delete(perUser, eventID)
+		}
+	}
+
+	// Remove book entries from entries list
+	if entries, ok := r.entries[userID]; ok {
+		filtered := make([]HistoryEntry, 0, len(entries))
+		for _, entry := range entries {
+			if !(entry.EventID == eventID && entry.Action == ActionBook) {
+				filtered = append(filtered, entry)
+			}
+		}
+		r.entries[userID] = filtered
+	}
+
+	return nil
 }
 
 func cloneHistoryEntry(entry HistoryEntry) HistoryEntry {

@@ -247,6 +247,56 @@ func (h *UserHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Unsubscribe godoc
+// @Summary Unsubscribe from an event
+// @Description Cancels a user's subscription to an event. Idempotent - returns success if already unsubscribed.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param event_id path string true "Event ID"
+// @Success 200 {object} map[string]string "Successfully unsubscribed"
+// @Success 204 "Already unsubscribed (no content)"
+// @Failure 400 {object} models.ErrorResponse "Event has already started"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 404 {object} models.ErrorResponse "Subscription not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/users/me/events/{event_id}/subscribe [delete]
+func (h *UserHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		respondWithError(w, http.StatusUnauthorized, "unauthorized", "User ID not found")
+		return
+	}
+	eventID := chi.URLParam(r, "event_id")
+	if eventID == "" {
+		respondWithError(w, http.StatusBadRequest, "bad_request", "Event ID is required")
+		return
+	}
+
+	err := h.userService.UnsubscribeFromEvent(r.Context(), userID, eventID)
+	if err != nil {
+		if errors.Is(err, service.ErrSubscriptionNotFound) {
+			respondWithError(w, http.StatusNotFound, "not_found", "Subscription not found")
+			return
+		}
+		if errors.Is(err, service.ErrEventAlreadyStarted) {
+			respondWithError(w, http.StatusBadRequest, "event_started", "Cannot unsubscribe from an event that has already started")
+			return
+		}
+		if err.Error() == "event not found" {
+			respondWithError(w, http.StatusNotFound, "not_found", "Event not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "internal_error", "Failed to unsubscribe from event")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{
+		"message": "Successfully unsubscribed from event",
+	})
+}
+
 // GetEventParticipants godoc
 // @Summary Get event participants
 // @Description Returns a list of confirmed participants for a specific event.

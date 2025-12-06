@@ -140,3 +140,17 @@ func (r *PostgresHistoryRepository) GetExcludedEventIDs(ctx context.Context, use
 
 	return excluded, rows.Err()
 }
+
+// RemoveBooking removes the booking action for a user/event pair from history.
+// This allows the event to reappear in discovery after unsubscribe.
+func (r *PostgresHistoryRepository) RemoveBooking(ctx context.Context, userID, eventID string) error {
+	_, err := r.db.ExecContext(ctx, `
+		DELETE FROM discovery_actions
+		WHERE user_id = $1 AND event_id = $2 AND action = 'book'
+	`, userID, eventID)
+
+	if err != nil {
+		return fmt.Errorf("delete booking action: %w", err)
+	}
+	return nil
+}

@@ -130,6 +130,7 @@ func registerAuthenticatedUserRoutes(
 	r.Get("/api/users/me/events/upcoming", userHandler.GetUpcomingEvents)
 	r.Get("/api/users/me/events/history", userHandler.GetEventHistory)
 	r.Post("/api/users/me/events/{event_id}/subscribe", userHandler.Subscribe)
+	r.Delete("/api/users/me/events/{event_id}/subscribe", userHandler.Unsubscribe)
 
 	// Role request endpoints
 	r.Post("/api/users/request-role", userHandler.RequestRole)
