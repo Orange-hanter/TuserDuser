@@ -566,9 +566,9 @@ func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) 
 			NULL::text AS avatar_url,
 			es.status
 		FROM event_subscriptions es
-		LEFT JOIN telegram_bindings tb ON tb.user_id = es.user_id::text
+		LEFT JOIN telegram_bindings tb ON tb.user_id = es.user_id
 		LEFT JOIN users u ON u.id = es.user_id
-		WHERE es.event_id::text = $1::text AND es.status = 'confirmed'
+		WHERE es.event_id = $1 AND es.status = 'confirmed'
 		ORDER BY es.subscribed_at ASC
 	`
 
