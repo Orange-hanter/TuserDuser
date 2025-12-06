@@ -50,7 +50,10 @@ const (
 	errEmailRequired = "email не указан"
 )
 
-var errPendingUserNotFound = errors.New("pending user not found")
+var (
+	errPendingUserNotFound = errors.New("pending user not found")
+	errRedisUnavailable    = errors.New("redis unavailable")
+)
 
 type pendingUser struct {
 	ID                string    `json:"id"`
@@ -80,6 +83,11 @@ func NewAuthService(cfg *config.Config, db *sql.DB, redis *redisClient.Client, s
 // SetTelegramClient устанавливает telegram client для отправки кодов через Telegram.
 func (s *AuthService) SetTelegramClient(client *telegramclient.Client) {
 	s.telegramClient = client
+}
+
+// isRedisAvailable проверяет доступность Redis клиента.
+func (s *AuthService) isRedisAvailable() bool {
+	return s.redis != nil
 }
 
 // Register регистрирует нового пользователя.
@@ -118,8 +126,8 @@ func (s *AuthService) ensureRegisterDependencies() error {
 	if s.db == nil {
 		return fmt.Errorf("database клиент не инициализирован")
 	}
-	if s.redis == nil {
-		return fmt.Errorf("redis клиент не инициализирован")
+	if !s.isRedisAvailable() {
+		return errRedisUnavailable
 	}
 	return nil
 }
@@ -137,6 +145,10 @@ func (s *AuthService) ensureUserDoesNotExist(ctx context.Context, email string) 
 }
 
 func (s *AuthService) ensureNoPendingRegistration(ctx context.Context, email string) error {
+	if !s.isRedisAvailable() {
+		// Без Redis не можем проверить pending регистрации, пропускаем проверку
+		return nil
+	}
 	pendingKey := pendingUserKey(email)
 	pendingExists, err := s.redis.Exists(ctx, pendingKey)
 	if err != nil {
@@ -200,8 +212,8 @@ func (s *AuthService) dispatchVerificationTasks(email, phone, verificationType, 
 
 // VerifyCode проверяет код верификации и подтверждает email.
 func (s *AuthService) VerifyCode(email, code string) error {
-	if s.redis == nil {
-		return fmt.Errorf("redis клиент не инициализирован")
+	if !s.isRedisAvailable() {
+		return errRedisUnavailable
 	}
 
 	ctx := context.Background()
@@ -352,6 +364,11 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 
 // Logout добавляет токен в черный список.
 func (s *AuthService) Logout(token string) error {
+	if !s.isRedisAvailable() {
+		s.logger.Warn("Redis недоступен, logout выполнен без добавления токена в blacklist")
+		return nil
+	}
+
 	ctx := context.Background()
 	blacklistKey := fmt.Sprintf("blacklist:%s", token)
 
@@ -395,6 +412,11 @@ func (s *AuthService) GetUserByID(userID string) (*models.User, error) {
 
 // IsTokenBlacklisted проверяет, находится ли токен в черном списке.
 func (s *AuthService) IsTokenBlacklisted(token string) bool {
+	if !s.isRedisAvailable() {
+		// Без Redis считаем токен не в blacklist
+		return false
+	}
+
 	ctx := context.Background()
 	blacklistKey := fmt.Sprintf("blacklist:%s", token)
 
@@ -547,17 +569,20 @@ func (s *AuthService) ResendCode(email, verificationType string) (string, int, e
 
 	// Rate limiting: проверяем количество попыток
 	rateLimitKey := fmt.Sprintf("resend_rate:%s", normalizedEmail)
-	attempts, err := s.redis.Get(ctx, rateLimitKey)
-	if err == nil {
-		// Ключ существует, проверяем количество попыток
-		var count int
-		if _, parseErr := fmt.Sscanf(attempts, "%d", &count); parseErr == nil && count >= maxAttempts {
-			ttl, _ := s.redis.TTL(ctx, rateLimitKey)
-			retryAfter := int(ttl.Seconds())
-			if retryAfter <= 0 {
-				retryAfter = 60
+	var attempts string
+	if s.isRedisAvailable() {
+		attempts, err = s.redis.Get(ctx, rateLimitKey)
+		if err == nil {
+			// Ключ существует, проверяем количество попыток
+			var count int
+			if _, parseErr := fmt.Sscanf(attempts, "%d", &count); parseErr == nil && count >= maxAttempts {
+				ttl, _ := s.redis.TTL(ctx, rateLimitKey)
+				retryAfter := int(ttl.Seconds())
+				if retryAfter <= 0 {
+					retryAfter = 60
+				}
+				return "", 0, fmt.Errorf("превышен лимит запросов. Повторите через %d секунд", retryAfter)
 			}
-			return "", 0, fmt.Errorf("превышен лимит запросов. Повторите через %d секунд", retryAfter)
 		}
 	}
 
@@ -576,21 +601,23 @@ func (s *AuthService) ResendCode(email, verificationType string) (string, int, e
 		return "", 0, fmt.Errorf("не удалось сохранить новый код: %w", err)
 	}
 
-	// Увеличиваем счетчик попыток
-	if attempts == "" {
-		// Первая попытка, создаем счетчик
-		if err := s.redis.Set(ctx, rateLimitKey, "1", rateLimitWindow); err != nil {
-			s.logger.Warn("Не удалось установить rate limit счетчик", zap.Error(err))
-		}
-	} else {
-		// Инкрементируем счетчик
-		var count int
-		fmt.Sscanf(attempts, "%d", &count)
-		count++
-		ttl, _ := s.redis.TTL(ctx, rateLimitKey)
-		if ttl > 0 {
-			if err := s.redis.Set(ctx, rateLimitKey, fmt.Sprintf("%d", count), ttl); err != nil {
-				s.logger.Warn("Не удалось обновить rate limit счетчик", zap.Error(err))
+	// Увеличиваем счетчик попыток (только если Redis доступен)
+	if s.isRedisAvailable() {
+		if attempts == "" {
+			// Первая попытка, создаем счетчик
+			if err := s.redis.Set(ctx, rateLimitKey, "1", rateLimitWindow); err != nil {
+				s.logger.Warn("Не удалось установить rate limit счетчик", zap.Error(err))
+			}
+		} else {
+			// Инкрементируем счетчик
+			var count int
+			fmt.Sscanf(attempts, "%d", &count)
+			count++
+			ttl, _ := s.redis.TTL(ctx, rateLimitKey)
+			if ttl > 0 {
+				if err := s.redis.Set(ctx, rateLimitKey, fmt.Sprintf("%d", count), ttl); err != nil {
+					s.logger.Warn("Не удалось обновить rate limit счетчик", zap.Error(err))
+				}
 			}
 		}
 	}
@@ -779,6 +806,9 @@ func (p *pendingUser) toModel(verified bool) *models.User {
 }
 
 func (s *AuthService) savePendingUser(ctx context.Context, pending *pendingUser) error {
+	if !s.isRedisAvailable() {
+		return errRedisUnavailable
+	}
 	data, err := json.Marshal(pending)
 	if err != nil {
 		return fmt.Errorf("не удалось сериализовать данные пользователя для Redis: %w", err)
@@ -790,6 +820,9 @@ func (s *AuthService) savePendingUser(ctx context.Context, pending *pendingUser)
 }
 
 func (s *AuthService) loadPendingUser(ctx context.Context, email string) (*pendingUser, error) {
+	if !s.isRedisAvailable() {
+		return nil, errRedisUnavailable
+	}
 	key := pendingUserKey(email)
 	exists, err := s.redis.Exists(ctx, key)
 	if err != nil {
@@ -810,6 +843,9 @@ func (s *AuthService) loadPendingUser(ctx context.Context, email string) (*pendi
 }
 
 func (s *AuthService) deletePendingUser(ctx context.Context, email string) {
+	if !s.isRedisAvailable() {
+		return
+	}
 	if err := s.redis.Del(ctx, pendingUserKey(email)); err != nil {
 		s.logger.Warn("Не удалось удалить незавершенную регистрацию", zap.String("email", email), zap.Error(err))
 	}
