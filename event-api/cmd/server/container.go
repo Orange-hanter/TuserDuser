@@ -47,6 +47,7 @@ type AppContainer struct {
 	DiscoveryService       *discovery.Service
 	AdminNotifier          *service.AdminNotifier
 	EventReminderScheduler *service.EventReminderScheduler
+	FeedbackService        *service.FeedbackService
 
 	// Handlers
 	AuthHandler             *handlers.AuthHandler
@@ -56,6 +57,7 @@ type AppContainer struct {
 	CreatorHandler          *handlers.CreatorHandler
 	TelegramHandler         *handlers.TelegramGRPCHandler
 	AdminRoleRequestHandler *handlers.AdminRoleRequestHandler
+	FeedbackHandler         *handlers.FeedbackHandler
 
 	// HTTP components
 	HTTPServer *http.Server
@@ -261,6 +263,13 @@ func (c *AppContainer) initHandlers() {
 	// Admin role request handler
 	c.AdminRoleRequestHandler = handlers.NewAdminRoleRequestHandler(c.UserService, logger.Log)
 
+	// Feedback service and handler
+	c.FeedbackService = service.NewFeedbackService(c.DB.DB, logger.Log)
+	if c.AdminNotifier != nil {
+		c.FeedbackService.SetAdminNotifier(c.AdminNotifier)
+	}
+	c.FeedbackHandler = handlers.NewFeedbackHandler(c.FeedbackService)
+
 	// Telegram handler (if enabled and gRPC client connected).
 	// Handler should be enabled when either legacy Telegram integration is enabled
 	// (`TelegramEnabled`) or when the external telegram-service gRPC integration is enabled
@@ -294,6 +303,7 @@ func (c *AppContainer) BuildHTTPRouter(versionInfo VersionInfo) http.Handler {
 		c.TelegramHandler,
 		c.CreatorHandler,
 		c.AdminRoleRequestHandler,
+		c.FeedbackHandler,
 		versionInfo,
 	)
 }

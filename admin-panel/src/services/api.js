@@ -1,14 +1,21 @@
 import axios from "axios";
 import { Platform } from "react-native";
 
-// Use localhost for iOS/Web and 10.0.2.2 for Android Emulator
-const BASE_URL =
-  Platform.OS === "android" || Platform.OS === "ios"
-    ? "https://api.tuserduser.online"
-    : "http://localhost:8080";
+// Use local API during development. For Android emulator use 10.0.2.2.
+let BASE_URL;
+if (typeof __DEV__ !== "undefined" && __DEV__) {
+  BASE_URL =
+    Platform.OS === "android"
+      ? "http://10.0.2.2:8080"
+      : "http://localhost:8080";
+} else {
+  BASE_URL = "https://api.tuserduser.online";
+}
 
-// Log selected API on startup
-console.info(`API base URL: ${BASE_URL} (Platform: ${Platform.OS})`);
+// Log selected API on startup for easier debugging
+console.info(
+  `API base URL: ${BASE_URL} (Platform: ${Platform.OS}, __DEV__=${typeof __DEV__ !== "undefined" ? __DEV__ : "unknown"})`,
+);
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
@@ -143,6 +150,40 @@ export const rejectRoleRequest = async (requestId, reason) => {
       reason,
     },
   );
+  return response.data;
+};
+
+// Feedback API
+export const getFeedbackList = async (
+  page = 1,
+  pageSize = 20,
+  unreadOnly = false,
+) => {
+  const response = await api.get("/v1/api/admin/feedback", {
+    params: { page, pageSize, unreadOnly },
+  });
+  return response.data;
+};
+
+export const getFeedbackById = async (id) => {
+  const response = await api.get(`/v1/api/admin/feedback/${id}`);
+  return response.data;
+};
+
+export const markFeedbackRead = async (id, isRead) => {
+  const response = await api.put(`/v1/api/admin/feedback/${id}/read`, {
+    isRead,
+  });
+  return response.data;
+};
+
+export const deleteFeedback = async (id) => {
+  const response = await api.delete(`/v1/api/admin/feedback/${id}`);
+  return response.data;
+};
+
+export const getUnreadFeedbackCount = async () => {
+  const response = await api.get("/v1/api/admin/feedback/unread/count");
   return response.data;
 };
 

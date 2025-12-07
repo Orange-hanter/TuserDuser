@@ -124,6 +124,16 @@ curl -X GET "http://localhost:8080/v1/api/discovery/next?dateFrom=2025-12-01T00:
 }
 ```
 
+### Примечание о полях `title`/`description`
+
+- Discovery отдаёт `event.title` и `event.description` как top-level поля в ответе. При формировании этих полей сервер предпочитает значения в следующем порядке:
+
+1. Top-level поля запроса: `title`, `description` (если присутствуют в теле POST при создании события).
+2. Поля внутри `details`: `details.title`, `details.description`.
+3. Фоллбэк: `type` и комбинация `type @ place`.
+
+Если вы отправляете события с фронтенда, рекомендуем указывать `title` и/или `description` либо как top-level поля, либо внутри `details.title`/`details.description`. Сейчас discovery уже извлекает `details.title`/`details.description`, поэтому старые клиенты, которые кладут название в `details`, продолжат работать.
+
 ### Очередь пуста (404)
 
 Возвращается когда нет событий, соответствующих фильтру:

@@ -168,6 +168,12 @@ definitions:
     type: object
   models.CreateEventRequest:
     properties:
+      title:
+        type: string
+        description: "(optional) Human-readable title. If omitted, server will try to use `details.title` when building discovery/response objects."
+      description:
+        type: string
+        description: "(optional) Longer description. If omitted, server may use `details.description` or a fallback composed from `type` and `place`."
       details:
         additionalProperties: true
         type: object

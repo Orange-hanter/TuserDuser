@@ -6,7 +6,7 @@ version: "3.8"
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: event-api-postgres
     environment:
       POSTGRES_USER: postgres
@@ -15,7 +15,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     networks:
       - event-api
     healthcheck:
@@ -116,7 +116,7 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./event-api/monitoring/loki-config.yml:/etc/loki/local-config.yml
+      - ./event-api/monitoring/loki/loki-config.yml:/etc/loki/local-config.yml
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yml
     networks:

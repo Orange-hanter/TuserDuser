@@ -198,6 +198,72 @@ func (n *AdminNotifier) sendToAdmins(ctx context.Context, adminIDs []string, mes
 	)
 }
 
+// NotifyAdminsFeedback sends a notification to all admins about new user feedback.
+func (n *AdminNotifier) NotifyAdminsFeedback(ctx context.Context, feedback *models.Feedback) {
+	if n.telegramClient == nil {
+		n.logger.Debug("telegram client not configured, skipping feedback notification")
+		return
+	}
+
+	adminIDs, err := n.GetAdminUserIDs(ctx)
+	if err != nil {
+		n.logger.Error("failed to get admin user IDs for feedback notification", zap.Error(err))
+		return
+	}
+
+	if len(adminIDs) == 0 {
+		n.logger.Debug("no admin users found, skipping feedback notification")
+		return
+	}
+
+	// Build notification message
+	categoryDisplay := string(feedback.Category)
+	switch feedback.Category {
+	case models.FeedbackCategoryBug:
+		categoryDisplay = "🐛 Баг"
+	case models.FeedbackCategoryFeature:
+		categoryDisplay = "✨ Запрос функции"
+	case models.FeedbackCategoryInconvenience:
+		categoryDisplay = "😤 Неудобство"
+	case models.FeedbackCategoryOther:
+		categoryDisplay = "📝 Другое"
+	}
+
+	userEmail := feedback.UserInfo.Email
+	if userEmail == "" {
+		userEmail = "Не указан"
+	}
+
+	// Truncate message if too long
+	msgPreview := feedback.Message
+	if len(msgPreview) > 200 {
+		msgPreview = msgPreview[:200] + "..."
+	}
+
+	osInfo := feedback.Environment.OS
+	if osInfo == "" {
+		osInfo = "Неизвестно"
+	}
+
+	message := fmt.Sprintf(
+		"📬 *Новый фидбек*\n\n"+
+			"📋 *Категория:* %s\n"+
+			"👤 *Email:* %s\n"+
+			"💻 *ОС:* %s\n"+
+			"📱 *Размер экрана:* %s\n"+
+			"🆔 *ID:* `%s`\n\n"+
+			"💬 *Сообщение:*\n%s",
+		escapeMarkdownV2(categoryDisplay),
+		escapeMarkdownV2(userEmail),
+		escapeMarkdownV2(osInfo),
+		escapeMarkdownV2(feedback.Environment.ScreenSize),
+		feedback.ID,
+		escapeMarkdownV2(msgPreview),
+	)
+
+	n.sendToAdmins(ctx, adminIDs, message)
+}
+
 // escapeMarkdownV2 escapes special characters for Telegram MarkdownV2.
 func escapeMarkdownV2(text string) string {
 	special := []byte{'_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'}

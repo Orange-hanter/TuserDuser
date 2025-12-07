@@ -28,6 +28,7 @@ func buildHTTPHandler(
 	telegramHandler *handlers.TelegramGRPCHandler,
 	creatorHandler *handlers.CreatorHandler,
 	adminRoleRequestHandler *handlers.AdminRoleRequestHandler,
+	feedbackHandler *handlers.FeedbackHandler,
 	versionInfo VersionInfo,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -55,6 +56,9 @@ func buildHTTPHandler(
 		// Public event endpoints
 		registerPublicEventRoutes(r, eventHandler, userHandler)
 
+		// Public feedback endpoint (accepts both authenticated and anonymous)
+		r.Post("/api/feedback", feedbackHandler.CreateFeedback)
+
 		// Authenticated user endpoints
 		authenticated := r.With(middleware.AuthMiddleware(authService))
 
@@ -67,7 +71,7 @@ func buildHTTPHandler(
 
 		// Admin-only endpoints
 		adminOnly := authenticated.With(middleware.RequireAdmin)
-		registerAdminRoutes(adminOnly, eventHandler, creatorHandler, authHandler, adminRoleRequestHandler)
+		registerAdminRoutes(adminOnly, eventHandler, creatorHandler, authHandler, adminRoleRequestHandler, feedbackHandler)
 	})
 
 	// Swagger documentation
@@ -190,6 +194,7 @@ func registerAdminRoutes(
 	creatorHandler *handlers.CreatorHandler,
 	authHandler *handlers.AuthHandler,
 	adminRoleRequestHandler *handlers.AdminRoleRequestHandler,
+	feedbackHandler *handlers.FeedbackHandler,
 ) {
 	// Event moderation
 	r.Get("/api/events/pending", eventHandler.GetPendingEvents)
@@ -208,6 +213,13 @@ func registerAdminRoutes(
 	r.Get("/api/admin/role-requests/pending", adminRoleRequestHandler.GetPendingRoleRequests)
 	r.Post("/api/admin/role-requests/{requestId}/approve", adminRoleRequestHandler.ApproveRoleRequest)
 	r.Post("/api/admin/role-requests/{requestId}/reject", adminRoleRequestHandler.RejectRoleRequest)
+
+	// Feedback management (admin only)
+	r.Get("/api/admin/feedback", feedbackHandler.GetFeedbackList)
+	r.Get("/api/admin/feedback/unread/count", feedbackHandler.GetUnreadCount)
+	r.Get("/api/admin/feedback/{id}", feedbackHandler.GetFeedbackByID)
+	r.Put("/api/admin/feedback/{id}/read", feedbackHandler.MarkFeedbackRead)
+	r.Delete("/api/admin/feedback/{id}", feedbackHandler.DeleteFeedback)
 }
 
 // wrapWithCORS applies CORS configuration to the router.

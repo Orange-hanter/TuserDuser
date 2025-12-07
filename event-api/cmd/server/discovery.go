@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"event-api/internal/config"
@@ -184,10 +185,21 @@ func toDiscoveryEvents(now time.Time, src []*models.Event) []discovery.Event {
 			metadata[k] = v
 		}
 
+		// Prefer explicit title/description from details when available.
+		title := evt.Type
+		if t, ok := evt.Details["title"].(string); ok && strings.TrimSpace(t) != "" {
+			title = t
+		}
+
+		description := fmt.Sprintf("%s @ %s", evt.Type, evt.Place)
+		if d, ok := evt.Details["description"].(string); ok && strings.TrimSpace(d) != "" {
+			description = d
+		}
+
 		result = append(result, discovery.Event{
 			ID:          evt.ID,
-			Title:       evt.Type,
-			Description: fmt.Sprintf("%s @ %s", evt.Type, evt.Place),
+			Title:       title,
+			Description: description,
 			Slot: discovery.TimeSlot{
 				Start: evt.StartTime,
 				End:   evt.EndTime,

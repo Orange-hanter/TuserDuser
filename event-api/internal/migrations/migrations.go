@@ -121,6 +121,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createEventReminderLog,
 			down: dropEventReminderLog,
 		},
+		{
+			name: "017_create_feedback_table",
+			up:   createFeedbackTable,
+			down: dropFeedbackTable,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -1207,4 +1212,48 @@ const dropEventReminderLog = `
 DROP INDEX IF EXISTS idx_event_reminder_log_lookup;
 DROP INDEX IF EXISTS idx_event_reminder_log_sent_at;
 DROP TABLE IF EXISTS event_reminder_log;
+`
+
+// Migration 017: Create feedback table for user feedback/bug reports
+
+const createFeedbackTable = `
+-- Create feedback table for user feedback and bug reports
+CREATE TABLE IF NOT EXISTS feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    category VARCHAR(50) NOT NULL DEFAULT 'other',
+    message TEXT NOT NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+    environment JSONB NOT NULL DEFAULT '{}'::jsonb,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Index for filtering by read status
+CREATE INDEX IF NOT EXISTS idx_feedback_is_read ON feedback(is_read);
+
+-- Index for sorting by creation time (newest first)
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at DESC);
+
+-- Index for filtering by category
+CREATE INDEX IF NOT EXISTS idx_feedback_category ON feedback(category);
+
+-- Index for user lookup
+CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id) WHERE user_id IS NOT NULL;
+
+COMMENT ON TABLE feedback IS 'User feedback and bug reports from the application';
+COMMENT ON COLUMN feedback.category IS 'Type of feedback: bug, feature, inconvenience, other';
+COMMENT ON COLUMN feedback.message IS 'The feedback message from user';
+COMMENT ON COLUMN feedback.user_info IS 'JSONB with user info from form (userId, email, firstName, lastName)';
+COMMENT ON COLUMN feedback.environment IS 'JSONB with environment info (userAgent, screenSize, url, pwa, os)';
+COMMENT ON COLUMN feedback.is_read IS 'Whether the feedback has been read by admin';
+`
+
+const dropFeedbackTable = `
+DROP INDEX IF EXISTS idx_feedback_is_read;
+DROP INDEX IF EXISTS idx_feedback_created_at;
+DROP INDEX IF EXISTS idx_feedback_category;
+DROP INDEX IF EXISTS idx_feedback_user_id;
+DROP TABLE IF EXISTS feedback;
 `

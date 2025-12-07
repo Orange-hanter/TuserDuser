@@ -439,6 +439,60 @@ curl -X POST http://localhost:8080/v1/api/creator/events/{eventId}/comments \
 
 ## Примечания для фронтенда
 
+### Пример: Создание события (POST /v1/api/events)
+
+Рекомендуется указывать `title` и/или `description` явно. Сервер также извлекает значения из `details.title`/`details.description` для обратной совместимости.
+
+Пример (рекомендуемый — top-level `title`):
+
+```bash
+curl -X POST http://localhost:8080/v1/api/events \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "start":"2025-12-08T15:00:00.000Z",
+    "end":"2025-12-08T16:30:00.000Z",
+    "duration":90,
+    "type":"sports",
+    "priceType":"paid",
+    "place":"МФит, улица Гоголя, 61, Центр, Брест",
+    "needReg":false,
+    "title":"Качаeм мышцы",
+    "description":"Тренировка для всех уровней",
+    "details":{
+      "sportType":"джим",
+      "organizer_contact":"1234567892",
+      "price_value":"13"
+    }
+  }'
+```
+
+Пример (альтернативный — старые клиенты кладу́т название в `details`):
+
+```bash
+curl -X POST http://localhost:8080/v1/api/events \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "start":"2025-12-08T15:00:00.000Z",
+    "end":"2025-12-08T16:30:00.000Z",
+    "duration":90,
+    "type":"sports",
+    "priceType":"paid",
+    "place":"МФит, улица Гоголя, 61, Центр, Брест",
+    "needReg":false,
+    "details":{
+      "title":"Качаeм мышцы (в details)",
+      "description":"Описание внутри details",
+      "sportType":"джим",
+      "organizer_contact":"1234567892",
+      "price_value":"13"
+    }
+  }'
+```
+
+Ответ: после публикации и одобрения (discovery) поле `event.title` в discovery будет заполнено из top-level `title` или `details.title` по приоритету.
+
 ### UI компоненты для реализации:
 
 1. **Таб "Мои события"** → Показывает три категории:
