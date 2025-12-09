@@ -633,9 +633,13 @@ func (s *UserService) RequestRole(ctx context.Context, userID, role, reason stri
 
 	s.logger.Info("Role request created", zap.String("user_id", userID), zap.String("role", role))
 
-	// Notify admins about the new role request (async, don't block the response)
+	// Notify admins about the new role request (async, decoupled from HTTP request context)
 	if s.adminNotifier != nil {
-		go s.adminNotifier.NotifyAdminsRoleRequest(ctx, userID, userEmail, role, reason)
+		go func(uid, email, r, rsn string) {
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.adminNotifier.NotifyAdminsRoleRequest(notifyCtx, uid, email, r, rsn)
+		}(userID, userEmail, role, reason)
 	}
 
 	return &models.RoleRequestResponse{

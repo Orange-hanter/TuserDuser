@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"event-api/internal/models"
 
@@ -103,9 +104,13 @@ func (s *FeedbackService) CreateFeedback(ctx context.Context, req *models.Create
 		zap.String("category", string(feedback.Category)),
 	)
 
-	// Notify admins asynchronously
+	// Notify admins asynchronously with context decoupled from HTTP request
 	if s.adminNotifier != nil {
-		go s.adminNotifier.NotifyAdminsFeedback(ctx, &feedback)
+		go func(fb models.Feedback) {
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.adminNotifier.NotifyAdminsFeedback(notifyCtx, &fb)
+		}(feedback)
 	}
 
 	return &feedback, nil

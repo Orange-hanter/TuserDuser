@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"event-api/internal/models"
 
@@ -234,7 +235,9 @@ func (s *EventService) CreateEvent(ctx context.Context, req *models.CreateEventR
 					creatorEmail = email
 				}
 			}
-			s.adminNotifier.NotifyAdminsNewEvent(ctx, &event, creatorEmail)
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.adminNotifier.NotifyAdminsNewEvent(notifyCtx, &event, creatorEmail)
 		}()
 	}
 
