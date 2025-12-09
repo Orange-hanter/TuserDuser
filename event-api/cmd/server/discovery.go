@@ -74,7 +74,15 @@ func startDiscoveryUpdateWorker(
 		backoff := 5 * time.Second
 		for {
 			if err := runDiscoveryUpdateLoop(ctx, redis, channel, eventService, discoveryService); err != nil {
-				logger.Log.Error("discovery update worker exited", zap.Error(err))
+				// Treat context cancellation as normal shutdown
+				switch {
+				case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+					logger.Log.Info("discovery update worker stopped (context done)", zap.Error(err))
+				case errors.Is(err, errRedisPubsubClosed):
+					logger.Log.Info("discovery update worker stopped (redis pubsub closed)")
+				default:
+					logger.Log.Error("discovery update worker exited", zap.Error(err))
+				}
 			}
 			select {
 			case <-ctx.Done():

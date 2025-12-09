@@ -13,12 +13,13 @@ type Task func(ctx context.Context) error
 
 // Pool представляет пул воркеров для асинхронной обработки задач.
 type Pool struct {
-	ctx       context.Context
-	taskQueue chan Task
-	cancel    context.CancelFunc
-	logger    *zap.Logger
-	wg        sync.WaitGroup
-	workers   int
+	ctx          context.Context
+	taskQueue    chan Task
+	cancel       context.CancelFunc
+	logger       *zap.Logger
+	wg           sync.WaitGroup
+	workers      int
+	shutdownOnce sync.Once
 }
 
 // NewPool создает новый пул воркеров.
@@ -80,9 +81,11 @@ func (p *Pool) Submit(task Task) error {
 
 // Shutdown завершает работу пула воркеров.
 func (p *Pool) Shutdown() {
-	p.logger.Info("Shutting down worker pool...")
-	close(p.taskQueue)
-	p.cancel()
-	p.wg.Wait()
-	p.logger.Info("Worker pool shutdown complete")
+	p.shutdownOnce.Do(func() {
+		p.logger.Info("Shutting down worker pool...")
+		close(p.taskQueue)
+		p.cancel()
+		p.wg.Wait()
+		p.logger.Info("Worker pool shutdown complete")
+	})
 }
