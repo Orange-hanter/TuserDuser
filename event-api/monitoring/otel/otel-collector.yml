@@ -2,9 +2,9 @@ receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:4317
+        endpoint: "0.0.0.0:4317"
       http:
-        endpoint: 0.0.0.0:4318
+        endpoint: "0.0.0.0:4318"
 
 processors:
   batch:
@@ -23,9 +23,14 @@ exporters:
     namespace: event_api
 
   otlp/tempo:
-    endpoint: tempo:4317
+    endpoint: "tempo:4317"
     tls:
       insecure: true
+
+  file:
+    path: /var/log/agent/otel-logs.jsonl
+  file/traces:
+    path: /var/log/agent/otel-traces.jsonl
 
 service:
   pipelines:
@@ -37,7 +42,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch, resource]
-      exporters: [otlp/tempo]
+      exporters: [otlp/tempo, file/traces]
+
+    logs:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [file]
 
   telemetry:
     logs:

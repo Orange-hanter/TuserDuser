@@ -17,6 +17,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./monitoring/postgres/pg_hba.conf:/var/lib/postgresql/18/docker/pg_hba.conf
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-devuser}"]
@@ -42,7 +43,7 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-devpass}
 
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: [CMD, redis-cli, --raw, incr, ping]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -103,7 +104,7 @@ services:
     restart: always
 
     ports:
-      - "3100:3100"
+      - 3100:3100
 
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/config.yml:ro
@@ -147,6 +148,7 @@ services:
 
     volumes:
       - ./monitoring/otel/otel-collector.yml:/etc/otel-collector.yml:ro
+      - ./monitoring/agent/logs:/var/log/agent
 
     networks:
       - event_api_network
@@ -154,6 +156,19 @@ services:
     depends_on:
       - loki
       - tempo
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: event_api_promtail
+    restart: always
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ./monitoring/agent/logs:/var/log/agent:ro
+    command: -config.file=/etc/promtail/promtail-config.yml
+    networks:
+      - event_api_network
+    depends_on:
+      - loki
 
   # Grafana - Visualization & Dashboards
   grafana:
@@ -168,6 +183,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_INSTALL_PLUGINS: grafana-piechart-panel
+      GF_LOG_LEVEL: info
       GF_PATHS_PROVISIONING: /etc/grafana/provisioning
 
     volumes:

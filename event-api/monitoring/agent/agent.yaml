@@ -1,0 +1,64 @@
+server:
+  http_listen_port: 12345
+
+otelcol:
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1000
+      resource:
+        attributes:
+          - key: service.name
+            action: upsert
+            value: event-api
+
+    exporters:
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: event_api
+
+      otlp/tempo:
+        endpoint: "tempo:4317"
+        tls:
+          insecure: true
+
+      file:
+        path: /var/log/agent/otel-logs.jsonl
+        # JSON lines for logs/OTLP; promtail will tail this file and push to Loki
+
+    service:
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [prometheus]
+
+        traces:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [otlp/tempo]
+
+        logs:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [file]
+
+prometheus:
+  wal_directory: /tmp/agent/wal
+  global:
+    scrape_interval: 15s
+  configs:
+    - name: default
+      scrape_configs:
+        - job_name: "agent"
+          static_configs:
+            - targets: ["0.0.0.0:8889"]

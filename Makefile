@@ -6,13 +6,17 @@ SHELL := /bin/zsh
 EVENT_API_DIR := event-api
 BIN_DIR := bin
 
-.PHONY: help all build build-linux build-linux-strip build-backends build-event-api clean test lint vet fmt
+.PHONY: help all build build-linux build-linux-strip build-backends build-event-api clean test lint vet fmt run-event-api
 
 help:
 	@echo "TuserDuser - Multi-service Backend Project"
 	@echo ""
 	@echo "Available services:"
 	@echo "  - event-api           (event management API)"
+	@echo "  - admin-panel         (React Native / Expo admin app)"
+	@echo ""
+	@echo "Run targets:"
+	@echo "  make run-admin             - Start admin-panel (Expo dev server)"
 	@echo ""
 	@echo "Build targets:"
 	@echo "  make build                 - Build all services (native)"
@@ -44,6 +48,12 @@ build-event-api:
 	@echo "📦 Building event-api..."
 	cd $(EVENT_API_DIR) && go build -o ../$(BIN_DIR)/event-api ./cmd/server || true
 
+# Run event-api service (builds and runs using the service's Makefile)
+.PHONY: run-event-api
+run-event-api:
+	@echo "🚀 Starting event-api service..."
+	cd $(EVENT_API_DIR) && make run
+
 build-linux: build-linux-event-api
 	@echo "✅ All linux/amd64 binaries built"
 
@@ -67,7 +77,7 @@ build-linux-strip: build-linux
 .PHONY: update-containers
 update-containers:
 	@echo "🔄 Updating all Docker containers (pull + recreate)..."
-	@if [ -f docker-compose.full.yml ]; then \
+	@if [ -f docker-compose.full.yml ] && grep -q '^[[:space:]]*services:' docker-compose.full.yml; then \
 		echo "Using docker-compose.full.yml"; \
 		docker compose -f docker-compose.full.yml pull --ignore-pull-failures; \
 		docker compose -f docker-compose.full.yml up -d --remove-orphans --build; \
@@ -111,6 +121,29 @@ fmt:
 vet:
 	@echo "🔍 Running vet on all services..."
 	cd $(EVENT_API_DIR) && go vet ./... || true
+
+# ============================================================================
+# Admin Panel
+# ============================================================================
+
+ADMIN_PANEL_DIR := admin-panel
+
+.PHONY: run-admin
+run-admin:
+	@echo "🚀 Starting admin-panel (Expo)..."
+	cd $(ADMIN_PANEL_DIR) && npm start
+
+.PHONY: build-admin-web serve-admin-web run-admin-prod
+build-admin-web:
+	@echo "🔧 Building admin-panel for web (production)..."
+	cd $(ADMIN_PANEL_DIR) && npx expo export:web --no-interactive --output-dir web-build
+
+serve-admin-web:
+	@echo "📡 Serving admin-panel production web build on http://localhost:5000"
+	cd $(ADMIN_PANEL_DIR) && npx serve -s web-build -l 5000
+
+run-admin-prod: build-admin-web serve-admin-web
+	@echo "✅ admin-panel is running in production mode at http://localhost:5000"
 
 # ============================================================================
 # Cleanup
