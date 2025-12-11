@@ -187,4 +187,36 @@ export const getUnreadFeedbackCount = async () => {
   return response.data;
 };
 
+// Published Events API
+export const getPublishedEvents = async () => {
+  const response = await api.get("/v1/api/events/published");
+  return response.data;
+};
+
+export const unpublishEvent = async (eventId, reason) => {
+  const response = await api.post(`/v1/api/admin/events/${eventId}/unpublish`, {
+    reason,
+  });
+  return response.data;
+};
+
+// Admin Chats API
+export const getAdminChats = async (topic = null) => {
+  const params = topic ? { topic } : {};
+  const response = await api.get("/v1/api/admin/chats", { params });
+  return response.data;
+};
+
+export const getChatMessages = async (chatId) => {
+  const response = await api.get(`/v1/api/admin/chats/${chatId}/messages`);
+  return response.data;
+};
+
+export const sendChatMessage = async (chatId, message) => {
+  const response = await api.post(`/v1/api/admin/chats/${chatId}/messages`, {
+    message,
+  });
+  return response.data;
+};
+
 export default api;

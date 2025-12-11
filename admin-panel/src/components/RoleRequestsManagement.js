@@ -38,10 +38,7 @@ const RoleRequestsManagement = () => {
       setRequests(data.requests || []);
       setTotal(data.total || 0);
     } catch (error) {
-      Alert.alert(
-        "Error",
-        "Failed to fetch pending role requests: " + error.message,
-      );
+      Alert.alert("Ошибка", "Не удалось загрузить заявки: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -58,7 +55,7 @@ const RoleRequestsManagement = () => {
       setRequests(data.requests || []);
       setTotal(data.total || 0);
     } catch (error) {
-      Alert.alert("Error", "Failed to refresh: " + error.message);
+      Alert.alert("Ошибка", "Не удалось обновить: " + error.message);
     } finally {
       setRefreshing(false);
     }
@@ -70,13 +67,13 @@ const RoleRequestsManagement = () => {
     try {
       setProcessing(true);
       await approveRoleRequest(selectedRequest.id, notes);
-      Alert.alert("Success", "Role request approved successfully");
+      Alert.alert("Успешно", "Заявка одобрена");
       setModalVisible(false);
       setNotes("");
       setSelectedRequest(null);
       await fetchRequests();
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to approve request");
+      Alert.alert("Ошибка", error.message || "Не удалось одобрить заявку");
     } finally {
       setProcessing(false);
     }
@@ -86,20 +83,20 @@ const RoleRequestsManagement = () => {
     if (!selectedRequest) return;
 
     if (!notes.trim()) {
-      Alert.alert("Error", "Please provide a reason for rejection");
+      Alert.alert("Ошибка", "Укажите причину отказа");
       return;
     }
 
     try {
       setProcessing(true);
       await rejectRoleRequest(selectedRequest.id, notes);
-      Alert.alert("Success", "Role request rejected successfully");
+      Alert.alert("Успешно", "Заявка отклонена");
       setModalVisible(false);
       setNotes("");
       setSelectedRequest(null);
       await fetchRequests();
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to reject request");
+      Alert.alert("Ошибка", error.message || "Не удалось отклонить заявку");
     } finally {
       setProcessing(false);
     }
@@ -112,23 +109,32 @@ const RoleRequestsManagement = () => {
     setModalVisible(true);
   };
 
+  const getRoleLabel = (role) => {
+    const labels = {
+      creator: "✍️ Создатель",
+      support: "🛠 Поддержка",
+      admin: "👑 Администратор",
+    };
+    return labels[role] || role;
+  };
+
   const renderRequestItem = ({ item }) => (
     <View style={styles.requestCard}>
       <View style={styles.requestHeader}>
         <View>
           <Text style={styles.roleLabel}>
-            {item.requested_role.toUpperCase()}
+            {getRoleLabel(item.requested_role)}
           </Text>
           <Text style={styles.requestId}>ID: {item.id.substring(0, 8)}...</Text>
         </View>
-        <Text style={styles.statusBadge}>⏳ PENDING</Text>
+        <Text style={styles.statusBadge}>⏳ Ожидает</Text>
       </View>
 
-      <Text style={styles.reasonTitle}>Reason:</Text>
+      <Text style={styles.reasonTitle}>Причина:</Text>
       <Text style={styles.reason}>{item.reason}</Text>
 
       <Text style={styles.timestamp}>
-        📅 Requested: {new Date(item.created_at).toLocaleDateString()}
+        📅 Создано: {new Date(item.created_at).toLocaleDateString("ru-RU")}
       </Text>
 
       <View style={styles.actionButtons}>
@@ -137,14 +143,14 @@ const RoleRequestsManagement = () => {
           onPress={() => openActionModal(item, "approve")}
           disabled={processing}
         >
-          <Text style={styles.buttonText}>✅ Approve</Text>
+          <Text style={styles.buttonText}>✅ Одобрить</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.button, styles.rejectButton]}
           onPress={() => openActionModal(item, "reject")}
           disabled={processing}
         >
-          <Text style={styles.buttonText}>❌ Reject</Text>
+          <Text style={styles.buttonText}>❌ Отклонить</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -167,15 +173,16 @@ const RoleRequestsManagement = () => {
         }
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Role Requests Management</Text>
-          <Text style={styles.subtitle}>
-            {total} pending request{total !== 1 ? "s" : ""}
-          </Text>
+          <Text style={styles.title}>Заявки на доступ</Text>
+          <Text style={styles.subtitle}>Ожидает рассмотрения: {total}</Text>
         </View>
 
         {requests.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No pending role requests</Text>
+            <Text style={styles.emptyStateIcon}>📭</Text>
+            <Text style={styles.emptyStateText}>
+              Нет заявок на рассмотрение
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -193,8 +200,8 @@ const RoleRequestsManagement = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {actionType === "approve"
-                  ? "Approve Request"
-                  : "Reject Request"}
+                  ? "Одобрить заявку"
+                  : "Отклонить заявку"}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -209,28 +216,29 @@ const RoleRequestsManagement = () => {
             {selectedRequest && (
               <>
                 <View style={styles.modalBody}>
-                  <Text style={styles.modalLabel}>Role Requested:</Text>
+                  <Text style={styles.modalLabel}>Запрашиваемая роль:</Text>
                   <Text style={styles.modalValue}>
-                    {selectedRequest.requested_role.toUpperCase()}
-                  </Text>
-
-                  <Text style={styles.modalLabel}>User Reason:</Text>
+                    {selectedRequest.requested_role === "creator"
+                      ? "✍️ Создатель"
+                      : selectedRequest.requested_role === "support"
+                        ? "🛠 Поддержка"
+                        : selectedRequest.requested_role}
+                  </Text>{" "}
+                  <Text style={styles.modalLabel}>Причина пользователя:</Text>
                   <Text style={styles.modalValue}>
                     {selectedRequest.reason}
                   </Text>
-
                   <Text style={styles.modalLabel}>
                     {actionType === "approve"
-                      ? "Approval Notes"
-                      : "Rejection Reason"}
-                    (Optional)
+                      ? "Комментарий (необязательно)"
+                      : "Причина отказа"}
                   </Text>
                   <TextInput
                     style={styles.notesInput}
                     placeholder={
                       actionType === "approve"
-                        ? "Add optional approval notes..."
-                        : "Explain why you're rejecting..."
+                        ? "Добавьте комментарий..."
+                        : "Объясните причину отказа..."
                     }
                     value={notes}
                     onChangeText={setNotes}
@@ -250,7 +258,7 @@ const RoleRequestsManagement = () => {
                       disabled={processing}
                     >
                       <Text style={styles.modalButtonText}>
-                        {processing ? "Approving..." : "✅ Approve"}
+                        {processing ? "Одобряем..." : "✅ Одобрить"}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -260,7 +268,7 @@ const RoleRequestsManagement = () => {
                       disabled={processing || !notes.trim()}
                     >
                       <Text style={styles.modalButtonText}>
-                        {processing ? "Rejecting..." : "❌ Reject"}
+                        {processing ? "Отклоняем..." : "❌ Отклонить"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -274,7 +282,7 @@ const RoleRequestsManagement = () => {
                     }}
                     disabled={processing}
                   >
-                    <Text style={styles.modalButtonText}>Cancel</Text>
+                    <Text style={styles.modalButtonText}>Отмена</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -311,6 +319,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 40,
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 12,
   },
   emptyStateText: {
     fontSize: 16,
