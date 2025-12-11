@@ -238,9 +238,11 @@ func (s *EventReminderScheduler) getUpcomingEventSubscribers(ctx context.Context
 			e.start_time
 		FROM event_subscriptions es
 		INNER JOIN events e ON e.id = es.event_id
-		INNER JOIN telegram_bindings tb ON tb.user_id = es.user_id AND tb.status = 'active'
-		LEFT JOIN event_reminder_log erl ON erl.user_id = es.user_id 
-			AND erl.event_id = e.id 
+		-- Ensure type alignment: telegram_bindings.user_id stored as text in some deployments
+		INNER JOIN telegram_bindings tb ON tb.user_id::uuid = es.user_id AND tb.status = 'active'
+		-- Prevent duplicates per reminder type; align types for erl.* if stored as text
+		LEFT JOIN event_reminder_log erl ON erl.user_id::uuid = es.user_id
+			AND erl.event_id::uuid = e.id
 			AND erl.reminder_type = $3
 		WHERE es.status = 'confirmed'
 			AND e.start_time >= $1
@@ -417,7 +419,7 @@ func (s *EventReminderScheduler) SendImmediateReminder(ctx context.Context, even
 			e.start_time
 		FROM event_subscriptions es
 		INNER JOIN events e ON e.id = es.event_id
-		INNER JOIN telegram_bindings tb ON tb.user_id = es.user_id AND tb.status = 'active'
+		INNER JOIN telegram_bindings tb ON tb.user_id::uuid = es.user_id AND tb.status = 'active'
 		WHERE es.status = 'confirmed'
 			AND e.id = $1
 		ORDER BY es.subscribed_at ASC

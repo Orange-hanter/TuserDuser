@@ -15,6 +15,11 @@ import (
 // Log is the global zap.Logger used by the application.
 var Log *zap.Logger
 
+// includeTraceFields controls whether trace_id/span_id are added to log entries.
+var includeTraceFields bool
+
+// currentLevel stores parsed log level string (e.g., "trace", "debug", "info").
+
 // ANSI цвета для консоли.
 const (
 	ColorReset   = "\033[0m"
@@ -35,7 +40,7 @@ const bottomLine = "╚═══════════════════
 const template = "%s%s%s%s\n"
 
 // drowHeaderLine рисует верхнюю часть рамки с заголовком.
-func drowHeaderLine(output *strings.Builder, title string, color string) {
+func drowHeaderLine(output *strings.Builder, title, color string) {
 	fmt.Fprintf(output, template, color, color, topLine, ColorReset)
 	output.WriteString(title)
 	fmt.Fprintf(output, template, color, color, midLine, ColorReset)
@@ -51,10 +56,26 @@ func Init() {
 		env = "development"
 	}
 
+	// Читаем уровень логирования: trace | debug | info | warn | error
+	lvlStr := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
+	if lvlStr == "" {
+		// По умолчанию не светим трасс-идентификаторы и логируем на info в проде, debug в деве
+		if env == "development" {
+			lvlStr = "debug"
+		} else {
+			lvlStr = "info"
+		}
+	}
+	level := parseLevel(lvlStr)
+	includeTraceFields = (lvlStr == "trace")
+
 	if env == "development" {
-		Log, err = createDevelopmentLogger()
+		Log, err = createDevelopmentLogger(level)
 	} else {
-		Log, err = zap.NewProduction()
+		// production config with selected level
+		cfg := zap.NewProductionConfig()
+		cfg.Level = zap.NewAtomicLevelAt(level)
+		Log, err = cfg.Build()
 	}
 
 	if err != nil {
@@ -63,8 +84,9 @@ func Init() {
 }
 
 // createDevelopmentLogger создает логгер для разработки с красивым выводом.
-func createDevelopmentLogger() (*zap.Logger, error) {
+func createDevelopmentLogger(level zapcore.Level) (*zap.Logger, error) {
 	config := zap.NewDevelopmentConfig()
+	config.Level = zap.NewAtomicLevelAt(level)
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	config.EncoderConfig.TimeKey = "time"
 	config.EncoderConfig.NameKey = "logger"
@@ -108,6 +130,11 @@ func WithContext(ctx context.Context) *zap.Logger {
 		return Log
 	}
 
+	if !includeTraceFields {
+		// Трасс-идентификаторы публикуем только на уровне trace
+		return Log
+	}
+
 	return Log.With(
 		zap.String("trace_id", span.SpanContext().TraceID().String()),
 		zap.String("span_id", span.SpanContext().SpanID().String()),
@@ -132,6 +159,30 @@ func WarnCtx(ctx context.Context, msg string, fields ...zap.Field) {
 // DebugCtx logs a debug message with trace context.
 func DebugCtx(ctx context.Context, msg string, fields ...zap.Field) {
 	WithContext(ctx).Debug(msg, fields...)
+}
+
+// parseLevel maps string level to zapcore.Level. "trace" maps to Debug.
+func parseLevel(lvl string) zapcore.Level {
+	switch strings.ToLower(lvl) {
+	case "trace":
+		return zapcore.DebugLevel
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn", "warning":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	case "dpanic":
+		return zapcore.DPanicLevel
+	case "panic":
+		return zapcore.PanicLevel
+	case "fatal":
+		return zapcore.FatalLevel
+	default:
+		return zapcore.InfoLevel
+	}
 }
 
 // FormatError форматирует ошибку с красивым выводом.

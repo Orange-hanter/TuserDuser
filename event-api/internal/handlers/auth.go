@@ -66,9 +66,14 @@ type AuthHandler struct {
 // Возвращает готовую структуру `AuthHandler`, которую можно использовать при
 // регистрации маршрутов HTTP сервера.
 func NewAuthHandler(authService AuthService, telegramClient *telegramclient.Client) *AuthHandler {
+	// Avoid wrapping a typed-nil *Client into a non-nil interface value.
+	var tg TelegramClient
+	if telegramClient != nil {
+		tg = telegramClient
+	}
 	return &AuthHandler{
 		authService:    authService,
-		telegramClient: telegramClient,
+		telegramClient: tg,
 	}
 }
 
@@ -178,8 +183,23 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	user, verifyCode, err := h.authService.Register(&req)
 	if err != nil {
-		logger.Log.Error("Ошибка при регистрации", zap.Error(err))
-		respondWithError(w, http.StatusConflict, "conflict", err.Error())
+		// Определяем корректный HTTP статус для различных типов ошибок
+		errMsg := err.Error()
+		status := http.StatusInternalServerError
+		errType := "internal_error"
+
+		// Конфликтные ситуации: пользователь уже существует или есть незавершенная регистрация
+		if strings.Contains(strings.ToLower(errMsg), "существует") || strings.Contains(strings.ToLower(errMsg), "ожидает подтверждения") {
+			status = http.StatusConflict
+			errType = "conflict"
+		} else if strings.Contains(strings.ToLower(errMsg), "redis") {
+			// Зависимость (Redis) недоступна — считаем это временной проблемой сервиса
+			status = http.StatusServiceUnavailable
+			errType = "service_unavailable"
+		}
+
+		logger.Log.Error("Ошибка при регистрации", zap.String("error", errMsg))
+		respondWithError(w, status, errType, errMsg)
 		return
 	}
 

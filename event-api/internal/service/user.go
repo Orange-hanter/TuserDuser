@@ -556,7 +556,7 @@ func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) 
 	// and JOIN telegram_bindings/users for public_name display.
 	query := `
 		SELECT 
-			es.user_id,
+			es.user_id::uuid,
 			COALESCE(
 				NULLIF(TRIM(CONCAT(tb.telegram_first_name, ' ', tb.telegram_last_name)), ''),
 				tb.telegram_username,
@@ -566,7 +566,7 @@ func (s *UserService) GetEventParticipants(ctx context.Context, eventID string) 
 			NULL::text AS avatar_url,
 			es.status
 		FROM event_subscriptions es
-		LEFT JOIN telegram_bindings tb ON tb.user_id = es.user_id
+		LEFT JOIN telegram_bindings tb ON tb.user_id::uuid = es.user_id
 		LEFT JOIN users u ON u.id = es.user_id
 		WHERE es.event_id = $1 AND es.status = 'confirmed'
 		ORDER BY es.subscribed_at ASC
