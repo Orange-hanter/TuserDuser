@@ -84,6 +84,11 @@ type Config struct {
 	DiscoveryHistoryTTL int
 	DiscoveryQueueTTL   int
 
+	// Discovery history persistence (Redis Stream -> Postgres)
+	DiscoveryHistoryPersistEnabled     bool
+	DiscoveryHistoryPersistStream      string
+	DiscoveryHistoryPersistStreamGroup string
+
 	// OpenTelemetry config
 	OTelEnabled     bool
 	OTelEndpoint    string
@@ -106,8 +111,8 @@ func Load() *Config {
 		Env:                getEnv("ENV", "development"),
 		CORSAllowedOrigins: origins,
 		JWTSecret:          getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-		JWTExpiration:      getEnvAsDuration("JWT_EXPIRATION", 24*time.Hour), // по умолчанию 24 часа
-		ShutdownTimeout:    getEnvAsInt("SHUTDOWN_TIMEOUT", 30),              // 30 секунд
+		JWTExpiration:      getEnvAsDuration("JWT_EXPIRATION", 1*time.Hour), // по умолчанию 1 час
+		ShutdownTimeout:    getEnvAsInt("SHUTDOWN_TIMEOUT", 30),             // 30 секунд
 
 		// Database config
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -165,6 +170,11 @@ func Load() *Config {
 		// Discovery Redis TTL config (in seconds)
 		DiscoveryHistoryTTL: getEnvAsInt("DISCOVERY_HISTORY_TTL", 7*24*3600), // 7 days
 		DiscoveryQueueTTL:   getEnvAsInt("DISCOVERY_QUEUE_TTL", 30*24*3600),  // 30 days
+
+		// Discovery history persistence (Redis Stream -> Postgres)
+		DiscoveryHistoryPersistEnabled:     getEnvAsBool("DISCOVERY_HISTORY_PERSIST_ENABLED", true),
+		DiscoveryHistoryPersistStream:      getEnv("DISCOVERY_HISTORY_PERSIST_STREAM", "discovery:history:stream"),
+		DiscoveryHistoryPersistStreamGroup: getEnv("DISCOVERY_HISTORY_PERSIST_STREAM_GROUP", "discovery-history"),
 
 		// OpenTelemetry config
 		OTelEnabled:     getEnvAsBool("OTEL_ENABLED", true),

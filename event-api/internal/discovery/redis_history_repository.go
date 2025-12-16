@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -15,6 +16,10 @@ type RedisHistoryRepository struct {
 	client *redis.Client
 	ttl    time.Duration
 	limit  int // Maximum entries per user to keep in Redis
+
+	// Optional: publish changes to a Redis Stream for durable persistence.
+	streamName  string
+	streamGroup string
 }
 
 // NewRedisHistoryRepository creates a new Redis-backed history repository.
@@ -31,6 +36,17 @@ func NewRedisHistoryRepository(client *redis.Client, ttl time.Duration, limit in
 	}
 }
 
+// EnablePersistenceStream enables publishing history changes to a Redis Stream.
+// The consumer group is not required for publishing, but stored for observability/debugging.
+func (r *RedisHistoryRepository) EnablePersistenceStream(streamName, streamGroup string) {
+	r.streamName = streamName
+	r.streamGroup = streamGroup
+}
+
+func (r *RedisHistoryRepository) streamEnabled() bool {
+	return r.streamName != ""
+}
+
 // Append adds a new history entry for a user.
 func (r *RedisHistoryRepository) Append(ctx context.Context, entry HistoryEntry) error {
 	historyKey := fmt.Sprintf("history:user:%s", entry.UserID)
@@ -41,8 +57,8 @@ func (r *RedisHistoryRepository) Append(ctx context.Context, entry HistoryEntry)
 		return fmt.Errorf("failed to marshal history entry: %w", err)
 	}
 
-	// Use Redis transaction to ensure consistency
-	pipe := r.client.Pipeline()
+	// Use MULTI/EXEC to keep state and stream publish consistent.
+	pipe := r.client.TxPipeline()
 
 	// Add to history list (LPUSH for newest first)
 	pipe.LPush(ctx, historyKey, data)
@@ -55,6 +71,29 @@ func (r *RedisHistoryRepository) Append(ctx context.Context, entry HistoryEntry)
 
 	// Store last action for this event (overwrites previous)
 	pipe.Set(ctx, lastActionKey, data, r.ttl)
+
+	// Publish to stream for durable persistence (optional)
+	if r.streamEnabled() {
+		contextJSON, err := json.Marshal(entry.Context)
+		if err != nil {
+			contextJSON = []byte("{}")
+		}
+		opID := uuid.NewString()
+		pipe.XAdd(ctx, &redis.XAddArgs{
+			Stream: r.streamName,
+			Values: map[string]interface{}{
+				"kind":          "append",
+				"op_id":         opID,
+				"user_id":       entry.UserID,
+				"event_id":      entry.EventID,
+				"action":        string(entry.Action),
+				"ts_unix_nano":  entry.Timestamp.UnixNano(),
+				"context_json":  string(contextJSON),
+				"stream_group":  r.streamGroup,
+				"stream_source": "redis_history_repository",
+			},
+		})
+	}
 
 	_, err = pipe.Exec(ctx)
 	if err != nil {
@@ -116,7 +155,7 @@ func (r *RedisHistoryRepository) GetExcludedEventIDs(ctx context.Context, userID
 
 	excluded := make(map[string]bool)
 	for _, entry := range entries {
-		if entry.Action == "reject" || entry.Action == "book" {
+		if entry.Action == ActionDislike || entry.Action == ActionBook {
 			excluded[entry.EventID] = true
 		}
 	}
@@ -148,8 +187,8 @@ func (r *RedisHistoryRepository) RemoveBooking(ctx context.Context, userID, even
 		filtered = append(filtered, data)
 	}
 
-	// Use pipeline to replace list and delete last action key
-	pipe := r.client.Pipeline()
+	// Use MULTI/EXEC to keep state and stream publish consistent.
+	pipe := r.client.TxPipeline()
 
 	// Delete old list
 	pipe.Del(ctx, historyKey)
@@ -162,6 +201,23 @@ func (r *RedisHistoryRepository) RemoveBooking(ctx context.Context, userID, even
 
 	// Delete last action key for this event (if it was a book action)
 	pipe.Del(ctx, lastActionKey)
+
+	// Publish to stream for durable persistence (optional)
+	if r.streamEnabled() {
+		opID := uuid.NewString()
+		pipe.XAdd(ctx, &redis.XAddArgs{
+			Stream: r.streamName,
+			Values: map[string]interface{}{
+				"kind":          "remove_booking",
+				"op_id":         opID,
+				"user_id":       userID,
+				"event_id":      eventID,
+				"ts_unix_nano":  time.Now().UTC().UnixNano(),
+				"stream_group":  r.streamGroup,
+				"stream_source": "redis_history_repository",
+			},
+		})
+	}
 
 	_, err = pipe.Exec(ctx)
 	if err != nil {

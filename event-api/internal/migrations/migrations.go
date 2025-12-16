@@ -126,6 +126,11 @@ func (m *Migrator) RunMigrations() error {
 			up:   createFeedbackTable,
 			down: dropFeedbackTable,
 		},
+		{
+			name: "018_add_op_id_to_discovery_actions",
+			up:   addOpIDToDiscoveryActions,
+			down: dropOpIDFromDiscoveryActions,
+		},
 	}
 
 	// Запускаем каждую миграцию
@@ -548,6 +553,23 @@ COMMENT ON COLUMN discovery_actions.context IS 'Additional metadata: conflictedE
 // dropDiscoveryActions - SQL для удаления таблицы discovery_actions.
 const dropDiscoveryActions = `
 DROP TABLE IF EXISTS discovery_actions;
+`
+
+// addOpIDToDiscoveryActions adds an idempotency key for async persistence pipelines.
+// This allows stream consumers to safely retry without duplicating rows.
+const addOpIDToDiscoveryActions = `
+ALTER TABLE discovery_actions ADD COLUMN IF NOT EXISTS op_id VARCHAR(64);
+
+-- Unique idempotency key.
+-- Note: Postgres UNIQUE indexes allow multiple NULLs, so this stays compatible with legacy inserts.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_discovery_actions_op_id
+	ON discovery_actions(op_id);
+`
+
+// dropOpIDFromDiscoveryActions removes the idempotency key.
+const dropOpIDFromDiscoveryActions = `
+DROP INDEX IF EXISTS ux_discovery_actions_op_id;
+ALTER TABLE discovery_actions DROP COLUMN IF EXISTS op_id;
 `
 
 // addCreatorIdToEvents добавляет creator_id и расширяет статусы событий.

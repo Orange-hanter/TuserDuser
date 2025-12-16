@@ -35,6 +35,8 @@ func TestEventHandler_CreateEvent_ReturnsPendingEvent(t *testing.T) {
 	handler, mock, cleanup := setupEventHandlerTest(t)
 	defer cleanup()
 
+	creatorID := "creator-1"
+
 	startTime := time.Date(2024, 8, 10, 9, 0, 0, 0, time.UTC)
 	endTime := startTime.Add(2 * time.Hour)
 	reqPayload := models.CreateEventRequest{
@@ -80,8 +82,8 @@ func TestEventHandler_CreateEvent_ReturnsPendingEvent(t *testing.T) {
 	)
 
 	insertQuery := regexp.QuoteMeta(`
-		INSERT INTO events_pending (type, start_time, end_time, duration, place, price_type, need_registration, details)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO events_pending (type, start_time, end_time, duration, place, price_type, need_registration, details, creator_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, type, start_time, end_time, duration, place, price_type, need_registration, details, status, review_comment, created_at, updated_at, reviewed_at
 	`)
 
@@ -95,10 +97,12 @@ func TestEventHandler_CreateEvent_ReturnsPendingEvent(t *testing.T) {
 			reqPayload.PriceType,
 			reqPayload.NeedRegistration,
 			sqlmock.AnyArg(),
+			creatorID,
 		).
 		WillReturnRows(rows)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/api/events", bytes.NewReader(body))
+	req.Header.Set("X-User-ID", creatorID)
 	resp := httptest.NewRecorder()
 	handler.CreateEvent(resp, req)
 

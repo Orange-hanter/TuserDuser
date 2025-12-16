@@ -121,8 +121,9 @@ func TestBookingConflictPropagation(t *testing.T) {
 	if second.Event.ID != "b3" {
 		t.Fatalf("expected non-conflict event b3 next, got %s", second.Event.ID)
 	}
-	if _, err := engine.ApplyAction(ctx, "booking-user", second.Event.ID, ActionLike); err != nil {
-		t.Fatalf("like b3 failed: %v", err)
+	// Like requeues to the end (same as neutral), so use dislike to advance.
+	if _, err := engine.ApplyAction(ctx, "booking-user", second.Event.ID, ActionDislike); err != nil {
+		t.Fatalf("dislike b3 failed: %v", err)
 	}
 	third, err := engine.NextEvent(ctx, "booking-user")
 	if err != nil {
@@ -157,8 +158,9 @@ func TestNeutralOnConflictKeepsOrdering(t *testing.T) {
 	if second.Event.ID != "c3" {
 		t.Fatalf("expected c3 first, got %s", second.Event.ID)
 	}
-	if _, err := engine.ApplyAction(ctx, "conflict-neutral", second.Event.ID, ActionLike); err != nil {
-		t.Fatalf("like c3 failed: %v", err)
+	// Like requeues to the end (same as neutral), so use dislike to advance.
+	if _, err := engine.ApplyAction(ctx, "conflict-neutral", second.Event.ID, ActionDislike); err != nil {
+		t.Fatalf("dislike c3 failed: %v", err)
 	}
 	third, err := engine.NextEvent(ctx, "conflict-neutral")
 	if err != nil {
@@ -167,8 +169,8 @@ func TestNeutralOnConflictKeepsOrdering(t *testing.T) {
 	if third.Event.ID != "c4" {
 		t.Fatalf("expected c4 next, got %s", third.Event.ID)
 	}
-	if _, err := engine.ApplyAction(ctx, "conflict-neutral", third.Event.ID, ActionLike); err != nil {
-		t.Fatalf("like c4 failed: %v", err)
+	if _, err := engine.ApplyAction(ctx, "conflict-neutral", third.Event.ID, ActionDislike); err != nil {
+		t.Fatalf("dislike c4 failed: %v", err)
 	}
 	fourth, err := engine.NextEvent(ctx, "conflict-neutral")
 	if err != nil {
@@ -198,8 +200,13 @@ func TestQueueExhaustion(t *testing.T) {
 	if _, err := engine.ApplyAction(ctx, "exhaust-user", first.Event.ID, ActionLike); err != nil {
 		t.Fatalf("like failed: %v", err)
 	}
-	if _, err := engine.NextEvent(ctx, "exhaust-user"); !errors.Is(err, ErrQueueEmpty) {
-		t.Fatalf("expected queue empty error, got %v", err)
+	// Like requeues to the end (same as neutral), so with a single event it reappears.
+	second, err := engine.NextEvent(ctx, "exhaust-user")
+	if err != nil {
+		t.Fatalf("expected next event, got error %v", err)
+	}
+	if second.Event.ID != "q1" {
+		t.Fatalf("expected q1 to reappear, got %s", second.Event.ID)
 	}
 }
 
@@ -273,17 +280,15 @@ func TestConcurrencySafety(t *testing.T) {
 	}
 	engine := newTestEngine(events)
 	const workers = 10
+	const stepsPerWorker = 100
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
 			userID := fmt.Sprintf("parallel-%d", idx)
-			for {
+			for step := 0; step < stepsPerWorker; step++ {
 				res, err := engine.NextEvent(ctx, userID)
-				if errors.Is(err, ErrQueueEmpty) {
-					return
-				}
 				if err != nil {
 					t.Errorf("user %s next failed: %v", userID, err)
 					return

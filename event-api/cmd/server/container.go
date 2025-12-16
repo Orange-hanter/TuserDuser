@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"event-api/internal/config"
@@ -398,7 +399,28 @@ func initDiscoveryService(
 
 		// Use Redis for hot history data
 		historyTTL := time.Duration(cfg.DiscoveryHistoryTTL) * time.Second
-		discoveryHistoryRepo = discovery.NewRedisHistoryRepository(redis.GetClient(), historyTTL, 100)
+		redisHistoryRepo := discovery.NewRedisHistoryRepository(redis.GetClient(), historyTTL, 100)
+		if cfg.DiscoveryHistoryPersistEnabled {
+			redisStream := cfg.DiscoveryHistoryPersistStream
+			streamGroup := cfg.DiscoveryHistoryPersistStreamGroup
+			redisHistoryRepo.EnablePersistenceStream(redisStream, streamGroup)
+
+			// Start consumer to persist Redis Stream history to Postgres.
+			consumerName := fmt.Sprintf("event-api-%d", time.Now().UnixNano())
+			consumer := discovery.NewHistoryStreamConsumer(redis.GetClient(), db.DB, logger.Log, redisStream, streamGroup, consumerName)
+			go func() {
+				if err := consumer.Run(ctx); err != nil {
+					logger.Log.Warn("discovery history stream consumer stopped", zap.Error(err))
+				}
+			}()
+			logger.Log.Info("✅ Discovery history persistence enabled",
+				zap.String("stream", redisStream),
+				zap.String("group", streamGroup),
+				zap.String("consumer", consumerName),
+			)
+		}
+
+		discoveryHistoryRepo = redisHistoryRepo
 		logger.Log.Info("✅ Redis history repository initialized", zap.Int("ttl_seconds", cfg.DiscoveryHistoryTTL))
 	} else {
 		// Fallback to in-memory

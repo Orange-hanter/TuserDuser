@@ -37,6 +37,26 @@ func (r *PostgresHistoryRepository) Append(ctx context.Context, entry HistoryEnt
 	return nil
 }
 
+// AppendWithOpID stores a history entry in the database with an idempotency key.
+// Intended for async pipelines (e.g., Redis Stream consumer) where retries are expected.
+func (r *PostgresHistoryRepository) AppendWithOpID(ctx context.Context, opID string, entry HistoryEntry) error {
+	contextJSON, err := json.Marshal(entry.Context)
+	if err != nil {
+		contextJSON = []byte("{}")
+	}
+
+	_, err = r.db.ExecContext(ctx, `
+		INSERT INTO discovery_actions (op_id, user_id, event_id, action, context, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (op_id) DO NOTHING
+	`, opID, entry.UserID, entry.EventID, string(entry.Action), contextJSON, entry.Timestamp)
+
+	if err != nil {
+		return fmt.Errorf("insert discovery action (op_id=%s): %w", opID, err)
+	}
+	return nil
+}
+
 // List returns user history in chronological order.
 func (r *PostgresHistoryRepository) List(ctx context.Context, userID string) ([]HistoryEntry, error) {
 	rows, err := r.db.QueryContext(ctx, `
@@ -122,7 +142,7 @@ func (r *PostgresHistoryRepository) GetExcludedEventIDs(ctx context.Context, use
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT DISTINCT event_id
 		FROM discovery_actions
-		WHERE user_id = $1 AND action IN ('like', 'dislike', 'book')
+		WHERE user_id = $1 AND action IN ('dislike', 'book')
 	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query excluded events: %w", err)

@@ -18,7 +18,6 @@ import (
 	_ "event-api/docs" // This is required for Swagger
 )
 
-// TODO: create cron (or smth like tasks manager) to manage events notification
 // TODO: configure NGINX to navigate telegramm webhooks
 
 // @title Event API

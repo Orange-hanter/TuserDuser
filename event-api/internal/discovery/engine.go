@@ -60,7 +60,8 @@ func NewEngineWithRedis(
 }
 
 // NextEvent returns the next item for a user, lazily initializing their queue.
-// Deprecated: Use NextEventFiltered with empty filter instead.
+// Deprecated:
+// Use NextEventFiltered with empty filter instead.
 func (e *Engine) NextEvent(ctx context.Context, userID string) (NextEvent, error) {
 	return e.NextEventFiltered(ctx, userID, Filter{})
 }
@@ -134,10 +135,10 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 	}
 
 	// Idempotency check AFTER verifying event is current.
-	// This prevents stale history from blocking actions after queue refresh.
-	if last, ok, _ := e.history.LastAction(ctx, userID, eventID); ok && last.Action == action {
-		return last, nil
-	}
+	// Important: even if the same action was already recorded, we still must
+	// advance the queue state to avoid getting stuck on the same current event.
+	last, ok, _ := e.history.LastAction(ctx, userID, eventID)
+	skipHistoryAppend := ok && last.Action == action
 
 	if action != ActionLike && action != ActionDislike && action != ActionNeutral {
 		return HistoryEntry{}, ErrInvalidAction
@@ -157,6 +158,15 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 		state.DropCurrent()
 		state.AppendNeutral(eventID, conflict)
 	}
+
+	// Always persist queue state; append to history only when not idempotent.
+	if skipHistoryAppend {
+		if err := e.queues.Save(ctx, userID, state); err != nil {
+			return HistoryEntry{}, err
+		}
+		return last, nil
+	}
+
 	entry := HistoryEntry{
 		UserID:    userID,
 		EventID:   eventID,
@@ -426,7 +436,7 @@ func (e *Engine) getExcludedEvents(ctx context.Context, userID string) (map[stri
 		return excluded, nil // Don't fail, just return empty
 	}
 	for _, entry := range history {
-		if entry.Action == ActionDislike || entry.Action == ActionLike || entry.Action == ActionBook {
+		if entry.Action == ActionDislike || entry.Action == ActionBook {
 			excluded[entry.EventID] = true
 		}
 	}

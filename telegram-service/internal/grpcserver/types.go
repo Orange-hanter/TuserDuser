@@ -254,7 +254,7 @@ var _TelegramService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "api/proto/telegram_service.proto",
 }
 
-func _TelegramService_GenerateBindingLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_GenerateBindingLink_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GenerateBindingLinkRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -266,13 +266,13 @@ func _TelegramService_GenerateBindingLink_Handler(srv interface{}, ctx context.C
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/GenerateBindingLink",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).GenerateBindingLink(ctx, req.(*GenerateBindingLinkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_SendVerificationCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_SendVerificationCode_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(SendVerificationCodeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -284,13 +284,13 @@ func _TelegramService_SendVerificationCode_Handler(srv interface{}, ctx context.
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/SendVerificationCode",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).SendVerificationCode(ctx, req.(*SendVerificationCodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_SendEventReminder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_SendEventReminder_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(SendEventReminderRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -302,13 +302,13 @@ func _TelegramService_SendEventReminder_Handler(srv interface{}, ctx context.Con
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/SendEventReminder",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).SendEventReminder(ctx, req.(*SendEventReminderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_SendMessage_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(SendMessageRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -320,13 +320,13 @@ func _TelegramService_SendMessage_Handler(srv interface{}, ctx context.Context, 
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/SendMessage",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).SendMessage(ctx, req.(*SendMessageRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_IsUserBound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_IsUserBound_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(IsUserBoundRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -338,13 +338,13 @@ func _TelegramService_IsUserBound_Handler(srv interface{}, ctx context.Context, 
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/IsUserBound",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).IsUserBound(ctx, req.(*IsUserBoundRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_GetBindingStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_GetBindingStatus_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetBindingStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -356,13 +356,13 @@ func _TelegramService_GetBindingStatus_Handler(srv interface{}, ctx context.Cont
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/GetBindingStatus",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).GetBindingStatus(ctx, req.(*GetBindingStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_UnbindUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_UnbindUser_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(UnbindUserRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -374,13 +374,13 @@ func _TelegramService_UnbindUser_Handler(srv interface{}, ctx context.Context, d
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/UnbindUser",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).UnbindUser(ctx, req.(*UnbindUserRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_RegisterPendingVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_RegisterPendingVerification_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(RegisterPendingVerificationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -392,13 +392,13 @@ func _TelegramService_RegisterPendingVerification_Handler(srv interface{}, ctx c
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/RegisterPendingVerification",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).RegisterPendingVerification(ctx, req.(*RegisterPendingVerificationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TelegramService_GetPendingVerificationStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _TelegramService_GetPendingVerificationStatus_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(GetPendingVerificationStatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -410,7 +410,7 @@ func _TelegramService_GetPendingVerificationStatus_Handler(srv interface{}, ctx 
 		Server:     srv,
 		FullMethod: "/telegram.v1.TelegramService/GetPendingVerificationStatus",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(TelegramServiceInterface).GetPendingVerificationStatus(ctx, req.(*GetPendingVerificationStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
@@ -420,11 +420,11 @@ func _TelegramService_GetPendingVerificationStatus_Handler(srv interface{}, ctx 
 // This allows using plain structs instead of proto.Message types.
 type jsonCodec struct{}
 
-func (jsonCodec) Marshal(v interface{}) ([]byte, error) {
+func (jsonCodec) Marshal(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (jsonCodec) Unmarshal(data []byte, v interface{}) error {
+func (jsonCodec) Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 

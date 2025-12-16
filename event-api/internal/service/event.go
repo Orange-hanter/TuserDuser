@@ -100,7 +100,8 @@ func (s *EventService) GetApprovedEvents(ctx context.Context) ([]*models.Event, 
 }
 
 // GetAllEvents оставлен для обратной совместимости.
-// Deprecated: используйте GetApprovedEvents вместо него.
+// Deprecated:
+// Используйте GetApprovedEvents вместо него.
 func (s *EventService) GetAllEvents(ctx context.Context) ([]*models.Event, error) {
 	return s.GetApprovedEvents(ctx)
 }
