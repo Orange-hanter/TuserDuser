@@ -80,6 +80,18 @@ type BookingResult struct {
 	ConflictedEventIDs []string `json:"conflictedEventIds"`
 }
 
+// LikedEvent represents an event liked by the user during the current queue session.
+type LikedEvent struct {
+	Event   Event     `json:"event"`
+	LikedAt time.Time `json:"likedAt"`
+}
+
+// SessionLikes groups liked events by the current queue session.
+type SessionLikes struct {
+	SessionID string       `json:"sessionId"`
+	Likes     []LikedEvent `json:"likes"`
+}
+
 // QueueState represents the deterministic structure used by the engine.
 //
 // QueueState maintains the following invariants:
@@ -93,6 +105,10 @@ type QueueState struct {
 	ConflictRegistry  map[string]ConflictFlag `json:"conflictRegistry"`
 	CurrentEventID    string                  `json:"currentEventId"`
 	CurrentIsConflict bool                    `json:"currentIsConflict"`
+
+	// SessionID identifies the current "queue session" for the user.
+	// It changes when the queue state expires (Redis TTL) or is cleared/reset.
+	SessionID string `json:"sessionId"`
 }
 
 // Clone returns a deep copy so repositories can protect their state.
@@ -103,6 +119,7 @@ func (s QueueState) Clone() QueueState {
 		ConflictRegistry:  make(map[string]ConflictFlag, len(s.ConflictRegistry)),
 		CurrentEventID:    s.CurrentEventID,
 		CurrentIsConflict: s.CurrentIsConflict,
+		SessionID:         s.SessionID,
 	}
 	for k, v := range s.ConflictRegistry {
 		clone.ConflictRegistry[k] = v

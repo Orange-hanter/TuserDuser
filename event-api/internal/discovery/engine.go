@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // EngineConfig configures runtime behavior.
@@ -173,6 +176,9 @@ func (e *Engine) ApplyAction(ctx context.Context, userID, eventID string, action
 		Action:    action,
 		Timestamp: e.cfg.Now(),
 	}
+	if action == ActionLike {
+		entry.Context = map[string]any{"session_id": state.SessionID}
+	}
 	if err := e.persist(ctx, userID, state, entry); err != nil {
 		return HistoryEntry{}, err
 	}
@@ -319,6 +325,71 @@ func (e *Engine) History(ctx context.Context, userID string) ([]HistoryEntry, er
 	return e.history.List(ctx, userID)
 }
 
+// SessionLikes returns liked events for the user's current queue session.
+// A "session" is defined by the persisted queue state: once it expires (TTL) or is cleared,
+// a new session starts and likes are collected separately.
+func (e *Engine) SessionLikes(ctx context.Context, userID string) (SessionLikes, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	unlock := e.lock(userID)
+	defer unlock()
+
+	state, err := e.ensureState(ctx, userID)
+	if err != nil {
+		return SessionLikes{}, err
+	}
+	sessionID := state.SessionID
+	if sessionID == "" {
+		// Should not happen (ensureState backfills), but keep it safe.
+		sessionID = uuid.NewString()
+		state.SessionID = sessionID
+		_ = e.queues.Save(ctx, userID, state)
+	}
+
+	var entries []HistoryEntry
+	if provider, ok := e.history.(SessionLikesProvider); ok {
+		entries, err = provider.ListLikesBySession(ctx, userID, sessionID)
+	} else {
+		var history []HistoryEntry
+		history, err = e.history.List(ctx, userID)
+		if err == nil {
+			entries = make([]HistoryEntry, 0)
+			for _, entry := range history {
+				if entry.Action != ActionLike {
+					continue
+				}
+				if entry.Context == nil {
+					continue
+				}
+				if sid, ok := entry.Context["session_id"].(string); ok && sid == sessionID {
+					entries = append(entries, entry)
+				}
+			}
+		}
+	}
+	if err != nil {
+		return SessionLikes{}, err
+	}
+
+	// Sort by time desc to keep stable across repositories.
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp.After(entries[j].Timestamp)
+	})
+
+	likes := make([]LikedEvent, 0, len(entries))
+	for _, entry := range entries {
+		event, err := e.events.Get(ctx, entry.EventID)
+		if err != nil {
+			// Skip missing events (e.g., catalog refresh) to keep API resilient.
+			continue
+		}
+		likes = append(likes, LikedEvent{Event: event, LikedAt: entry.Timestamp})
+	}
+
+	return SessionLikes{SessionID: sessionID, Likes: likes}, nil
+}
+
 // ReplaceEvents swaps entire candidate pool atomically.
 func (e *Engine) ReplaceEvents(ctx context.Context, events []Event) error {
 	e.mu.Lock()
@@ -363,6 +434,11 @@ func (e *Engine) ensureStateFiltered(ctx context.Context, userID string, filter 
 	if filter.IsEmpty() {
 		state, err := e.queues.Get(ctx, userID)
 		if err == nil {
+			// Backfill session id for older persisted states.
+			if state.SessionID == "" {
+				state.SessionID = uuid.NewString()
+				_ = e.queues.Save(ctx, userID, state)
+			}
 			return state, nil
 		}
 		if !errors.Is(err, ErrQueueStateNotFound) {
@@ -392,6 +468,9 @@ func (e *Engine) ensureStateFiltered(ctx context.Context, userID string, filter 
 		ConflictRegistry:  map[string]ConflictFlag{},
 		CurrentEventID:    "",
 		CurrentIsConflict: false,
+	}
+	if filter.IsEmpty() {
+		state.SessionID = uuid.NewString()
 	}
 
 	for _, evt := range events {

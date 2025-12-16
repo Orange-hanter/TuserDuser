@@ -167,6 +167,7 @@ func registerDiscoveryRoutes(
 		r.Post("/action", discoveryHandler.Action)
 		r.Post("/book", discoveryHandler.Book)
 		r.Get("/history", discoveryHandler.History)
+		r.Get("/likes", discoveryHandler.SessionLikes)
 	})
 }
 

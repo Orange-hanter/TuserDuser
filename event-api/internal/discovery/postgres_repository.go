@@ -174,3 +174,44 @@ func (r *PostgresHistoryRepository) RemoveBooking(ctx context.Context, userID, e
 	}
 	return nil
 }
+
+// ListLikesBySession returns like actions for a given queue session.
+// This is used by the "session likes" API to avoid scanning full history.
+func (r *PostgresHistoryRepository) ListLikesBySession(ctx context.Context, userID, sessionID string) ([]HistoryEntry, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT event_id, context, created_at
+		FROM discovery_actions
+		WHERE user_id = $1
+		  AND action = 'like'
+		  AND context->>'session_id' = $2
+		ORDER BY created_at DESC
+	`, userID, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query session likes: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]HistoryEntry, 0)
+	for rows.Next() {
+		var (
+			eventID     string
+			contextJSON []byte
+			createdAt   time.Time
+		)
+		if err := rows.Scan(&eventID, &contextJSON, &createdAt); err != nil {
+			return nil, fmt.Errorf("scan session like: %w", err)
+		}
+		entry := HistoryEntry{
+			UserID:    userID,
+			EventID:   eventID,
+			Action:    ActionLike,
+			Timestamp: createdAt,
+		}
+		if len(contextJSON) > 0 {
+			_ = json.Unmarshal(contextJSON, &entry.Context)
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, rows.Err()
+}

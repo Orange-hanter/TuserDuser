@@ -41,6 +41,12 @@ type BookingRemover interface {
 	RemoveBooking(ctx context.Context, userID, eventID string) error
 }
 
+// SessionLikesProvider is an optional optimization interface for fetching likes from the current queue session.
+// Implementations may query storage directly instead of scanning full history.
+type SessionLikesProvider interface {
+	ListLikesBySession(ctx context.Context, userID, sessionID string) ([]HistoryEntry, error)
+}
+
 // ErrQueueStateNotFound indicates missing state for provided user.
 var ErrQueueStateNotFound = errors.New("queue state not found")
 

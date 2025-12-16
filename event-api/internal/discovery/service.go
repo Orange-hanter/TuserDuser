@@ -50,6 +50,11 @@ func (s *Service) History(ctx context.Context, userID string) ([]HistoryEntry, e
 	return s.engine.History(ctx, userID)
 }
 
+// SessionLikes returns liked events for the user's current queue session.
+func (s *Service) SessionLikes(ctx context.Context, userID string) (SessionLikes, error) {
+	return s.engine.SessionLikes(ctx, userID)
+}
+
 // ReplaceEvents refreshes runtime event catalog.
 func (s *Service) ReplaceEvents(ctx context.Context, events []Event) error {
 	return s.engine.ReplaceEvents(ctx, events)

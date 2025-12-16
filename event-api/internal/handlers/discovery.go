@@ -317,6 +317,39 @@ func (h *DiscoveryHandler) History(w http.ResponseWriter, r *http.Request) {
 	}
 	respondWithJSON(w, http.StatusOK, entries)
 }
+
+// SessionLikes returns events liked by the user during the current discovery queue session.
+//
+// A "session" is defined by the persisted queue state lifetime (e.g. Redis TTL). When the queue
+// state expires or is reset, a new session starts and likes are collected separately.
+//
+// @Summary Лайки за текущую сессию
+// @Description Возвращает события, которые пользователь лайкнул в рамках текущей сессии очереди discovery
+// @Tags discovery
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} discovery.SessionLikes
+// @Failure 401 {object} models.ErrorResponse "Нет авторизации"
+// @Failure 500 {object} models.ErrorResponse "Внутренняя ошибка"
+// @Router /v1/api/discovery/likes [get]
+func (h *DiscoveryHandler) SessionLikes(w http.ResponseWriter, r *http.Request) {
+	userID, ok := extractUserID(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.service.SessionLikes(r.Context(), userID)
+	if err != nil {
+		// Likes endpoint should be safe to call even when the queue is empty.
+		if errors.Is(err, discovery.ErrQueueEmpty) {
+			respondWithJSON(w, http.StatusOK, discovery.SessionLikes{SessionID: "", Likes: []discovery.LikedEvent{}})
+			return
+		}
+		h.handleDomainError(w, err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, result)
+}
+
 func (h *DiscoveryHandler) handleDomainError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, discovery.ErrQueueEmpty):
